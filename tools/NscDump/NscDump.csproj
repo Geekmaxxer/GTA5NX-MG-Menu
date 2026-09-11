@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\CodePath.cs" Link="CodePath.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Function.cs" Link="Function.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Hashes.cs" Link="Hashes.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\IO.cs" Link="IO.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Instruction.cs" Link="Instruction.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\NativeFiles.cs" Link="NativeFiles.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Native Param Info.cs" Link="Native Param Info.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\NativeTables.cs" Link="NativeTables.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\ScriptFile.cs" Link="ScriptFile.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\ScriptHeaders.cs" Link="ScriptHeaders.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Stack.cs" Link="Stack.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\StringTable.cs" Link="StringTable.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Utils.cs" Link="Utils.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Vars Info.cs" Link="Vars Info.cs" />
+    <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Properties\Resources.Designer.cs" Link="Resources.Designer.cs" />
+    <EmbeddedResource Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Properties\Resources.resx" Link="Resources.resx" LogicalName="Decompiler.Properties.Resources.resources" />
+  </ItemGroup>
+</Project>
