@@ -65,6 +65,7 @@ BOOL g_thermal_vision = FALSE
 BOOL g_motion_blur = FALSE
 BOOL g_camera_shake = FALSE
 BOOL g_vehicle_auto_repair = FALSE
+BOOL g_vehicle_quick_entry_exit = FALSE
 BOOL g_vehicle_turbo = FALSE
 INT g_vehicle_acceleration_level = 0
 INT g_vehicle_top_speed_level = 0
@@ -72,6 +73,8 @@ BOOL g_vehicle_cornering = FALSE
 BOOL g_vehicle_bulletproof_tyres = FALSE
 BOOL g_vehicle_speedometer = FALSE
 INT g_vehicle_speed_unit = 0
+VEHICLE_INDEX g_performance_vehicle
+INT g_applied_top_speed_level = -1
 BOOL g_lsc_open = FALSE
 INT g_lsc_slot_choice = 0
 INT g_lsc_mod_choice = -1
@@ -591,7 +594,7 @@ FUNC INT ITEM_COUNT()
         CASE 0 RETURN 16 BREAK
         CASE 1 RETURN 6 BREAK
         CASE 2 RETURN 6 BREAK
-        CASE 3 RETURN 16 BREAK
+        CASE 3 RETURN 19 BREAK
         CASE 4 RETURN 6 BREAK
         CASE 5 RETURN 3 BREAK
         CASE 6 RETURN 23 BREAK
@@ -801,6 +804,113 @@ PROC REFILL_ALL_OWNED_WEAPONS(PED_INDEX ped)
     REFILL_OWNED_WEAPON(ped, WEAPONTYPE_PETROLCAN)
 ENDPROC
 
+PROC GIVE_ALL_MENU_WEAPONS(PED_INDEX ped)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_PISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_COMBATPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_APPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_PISTOL50, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_SNSPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_HEAVYPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_VINTAGEPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_MARKSMANPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_REVOLVER, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_SNSPISTOL_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_REVOLVER_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_MICROSMG, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_SMG, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_ASSAULTSMG, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_COMBATPDW, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_MACHINEPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_MINISMG, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_GUSENBERG, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_ASSAULTRIFLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_CARBINERIFLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_ADVANCEDRIFLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_SPECIALCARBINE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_BULLPUPRIFLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_COMPACTRIFLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_ASSAULTRIFLE_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_CARBINERIFLE_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_SPECIALCARBINE_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_MG, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_COMBATMG, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_COMBATMG_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_PUMPSHOTGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_SAWNOFFSHOTGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_ASSAULTSHOTGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_BULLPUPSHOTGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_HEAVYSHOTGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_DBSHOTGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_AUTOSHOTGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_PUMPSHOTGUN_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_SNIPERRIFLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_HEAVYSNIPER, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_MARKSMANRIFLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_HEAVYSNIPER_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_MARKSMANRIFLE_MK2, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_GRENADELAUNCHER, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_RPG, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_MINIGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_HOMINGLAUNCHER, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_COMPACTLAUNCHER, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_RAILGUN, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_FIREWORK, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_MUSKET, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_GRENADE, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_SMOKEGRENADE, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_BZGAS, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_STICKYBOMB, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_MOLOTOV, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_PROXMINE, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_PIPEBOMB, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_SNOWBALL, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_FLAREGUN, 25, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_STUNGUN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_FIREEXTINGUISHER, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_PETROLCAN, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_KNIFE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_NIGHTSTICK, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_HAMMER, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_BAT, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_CROWBAR, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_GOLFCLUB, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_BOTTLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_DAGGER, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_KNUCKLE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_MACHETE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_SWITCHBLADE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_BATTLEAXE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_HATCHET, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_POOLCUE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_WRENCH, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_RAYPISTOL, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_RAYCARBINE, 9999, TRUE)
+    GIVE_DELAYED_WEAPON_TO_PED(ped, WEAPONTYPE_DLC_RAYMINIGUN, 9999, TRUE)
+ENDPROC
+
+PROC WARP_INTO_LAST_PLAYER_VEHICLE()
+    VEHICLE_INDEX vehicle = GET_PLAYERS_LAST_VEHICLE()
+    IF DOES_ENTITY_EXIST(vehicle) AND NOT IS_ENTITY_DEAD(vehicle)
+        SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), vehicle, VS_DRIVER)
+    ENDIF
+ENDPROC
+
+PROC PROCESS_QUICK_VEHICLE_ENTRY_EXIT()
+    PED_INDEX playerPed = PLAYER_PED_ID()
+    IF NOT g_vehicle_quick_entry_exit OR g_open EXIT ENDIF
+    IF IS_CONTROL_JUST_PRESSED(PLAYER_CONTROL, INPUT_ENTER)
+        DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_ENTER, TRUE)
+        IF IS_PED_IN_ANY_VEHICLE(playerPed)
+            TASK_LEAVE_ANY_VEHICLE(playerPed, 0, ECF_WARP_PED | ECF_DONT_WAIT_FOR_VEHICLE_TO_STOP)
+        ELSE
+            VEHICLE_INDEX nearbyVehicle = GET_CLOSEST_VEHICLE(GET_ENTITY_COORDS(playerPed), 5.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES | VEHICLE_SEARCH_FLAG_RETURN_LAW_ENFORCER_VEHICLES | VEHICLE_SEARCH_FLAG_RETURN_MISSION_VEHICLES)
+            IF DOES_ENTITY_EXIST(nearbyVehicle)
+                SET_PED_INTO_VEHICLE(playerPed, nearbyVehicle, VS_DRIVER)
+            ENDIF
+        ENDIF
+    ENDIF
+ENDPROC
+
 PROC MENU_CAPTURE_INPUT()
 
     SET_INPUT_EXCLUSIVE(FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT)
@@ -916,6 +1026,14 @@ PROC ADJUST_VEHICLE_SPAWN_CHOICE(INT direction)
         first = 23
         last = 25
     ENDIF
+    IF g_vehicle_spawn_category = 3
+        first = 26
+        last = 70
+    ENDIF
+    IF g_vehicle_spawn_category = 4
+        first = 71
+        last = 87
+    ENDIF
     g_vehicle_spawn_choice = g_vehicle_spawn_choice + direction
     IF g_vehicle_spawn_choice < first g_vehicle_spawn_choice = last ENDIF
     IF g_vehicle_spawn_choice > last g_vehicle_spawn_choice = first ENDIF
@@ -932,8 +1050,8 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
     IF g_tab = 4
         IF g_item = 0 OR g_item = 1 RETURN TRUE ENDIF
     ENDIF
-    IF g_tab = 3 AND g_item = 15 AND NOT g_lsc_open RETURN TRUE ENDIF
-    IF g_tab = 3 AND NOT g_lsc_open AND (g_item = 8 OR g_item = 9) RETURN TRUE ENDIF
+    IF g_tab = 3 AND g_item = 5 AND NOT g_lsc_open RETURN TRUE ENDIF
+    IF g_tab = 3 AND NOT g_lsc_open AND (g_item = 13 OR g_item = 14) RETURN TRUE ENDIF
     IF g_tab = 3 AND g_lsc_open
         IF g_item = 1 OR g_item = 3 OR g_item = 4 OR g_item = 8 RETURN TRUE ENDIF
     ENDIF
@@ -951,11 +1069,13 @@ PROC ADJUST_SELECTOR(INT direction)
     IF g_tab = 3 AND g_spawner_open
         IF g_item = 1
             g_vehicle_spawn_category = g_vehicle_spawn_category + direction
-            IF g_vehicle_spawn_category < 0 g_vehicle_spawn_category = 2 ENDIF
-            IF g_vehicle_spawn_category > 2 g_vehicle_spawn_category = 0 ENDIF
+            IF g_vehicle_spawn_category < 0 g_vehicle_spawn_category = 4 ENDIF
+            IF g_vehicle_spawn_category > 4 g_vehicle_spawn_category = 0 ENDIF
             IF g_vehicle_spawn_category = 0 g_vehicle_spawn_choice = 0 ENDIF
             IF g_vehicle_spawn_category = 1 g_vehicle_spawn_choice = 18 ENDIF
             IF g_vehicle_spawn_category = 2 g_vehicle_spawn_choice = 23 ENDIF
+            IF g_vehicle_spawn_category = 3 g_vehicle_spawn_choice = 26 ENDIF
+            IF g_vehicle_spawn_category = 4 g_vehicle_spawn_choice = 71 ENDIF
         ELIF g_item = 2
             ADJUST_VEHICLE_SPAWN_CHOICE(direction)
         ELIF g_item = 3
@@ -1019,16 +1139,16 @@ PROC ADJUST_SELECTOR(INT direction)
         IF g_lsc_wheel_type > 9 g_lsc_wheel_type = 0 ENDIF
         SET_VEHICLE_WHEEL_TYPE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_WHEEL_TYPE, g_lsc_wheel_type))
     ENDIF
-    IF g_tab = 3 AND g_item = 15
+    IF g_tab = 3 AND g_item = 5
         g_vehicle_speed_unit = 1 - g_vehicle_speed_unit
     ENDIF
     IF g_tab = 3 AND NOT g_spawner_open AND NOT g_lsc_open
-        IF g_item = 8
+        IF g_item = 13
             g_vehicle_acceleration_level = g_vehicle_acceleration_level + direction
             IF g_vehicle_acceleration_level < 0 g_vehicle_acceleration_level = 9 ENDIF
             IF g_vehicle_acceleration_level > 9 g_vehicle_acceleration_level = 0 ENDIF
         ENDIF
-        IF g_item = 9
+        IF g_item = 14
             g_vehicle_top_speed_level = g_vehicle_top_speed_level + direction
             IF g_vehicle_top_speed_level < 0 g_vehicle_top_speed_level = 9 ENDIF
             IF g_vehicle_top_speed_level > 9 g_vehicle_top_speed_level = 0 ENDIF
@@ -1138,6 +1258,8 @@ PROC DRAW_VEHICLE_CATEGORY_SELECTOR(FLOAT y, BOOL selected)
     IF g_vehicle_spawn_category = 0 DRAW_OPTION(y, "Vehicle Type:", "< Cars >", selected, 3) ENDIF
     IF g_vehicle_spawn_category = 1 DRAW_OPTION(y, "Vehicle Type:", "< Bikes >", selected, 3) ENDIF
     IF g_vehicle_spawn_category = 2 DRAW_OPTION(y, "Vehicle Type:", "< Aircraft >", selected, 3) ENDIF
+    IF g_vehicle_spawn_category = 3 DRAW_OPTION(y, "Vehicle Type:", "< DLC vehicles >", selected, 3) ENDIF
+    IF g_vehicle_spawn_category = 4 DRAW_OPTION(y, "Vehicle Type:", "< Boats >", selected, 3) ENDIF
 ENDPROC
 
 PROC DRAW_VEHICLE_SPAWN_SELECTOR(FLOAT y, BOOL selected)
@@ -1168,6 +1290,68 @@ PROC DRAW_VEHICLE_SPAWN_SELECTOR(FLOAT y, BOOL selected)
         CASE 23 DRAW_OPTION(y, "Vehicle:", "< Buzzard >", selected, 3) BREAK
         CASE 24 DRAW_OPTION(y, "Vehicle:", "< Duster >", selected, 3) BREAK
         CASE 25 DRAW_OPTION(y, "Vehicle:", "< Cargobob >", selected, 3) BREAK
+        CASE 26 DRAW_OPTION(y, "Vehicle:", "< Avarus >", selected, 3) BREAK
+        CASE 27 DRAW_OPTION(y, "Vehicle:", "< Blazer Custom >", selected, 3) BREAK
+        CASE 28 DRAW_OPTION(y, "Vehicle:", "< Chimera >", selected, 3) BREAK
+        CASE 29 DRAW_OPTION(y, "Vehicle:", "< Daemon Custom >", selected, 3) BREAK
+        CASE 30 DRAW_OPTION(y, "Vehicle:", "< Defiler >", selected, 3) BREAK
+        CASE 31 DRAW_OPTION(y, "Vehicle:", "< Esskey >", selected, 3) BREAK
+        CASE 32 DRAW_OPTION(y, "Vehicle:", "< Faggio 3 >", selected, 3) BREAK
+        CASE 33 DRAW_OPTION(y, "Vehicle:", "< Hakuchou Drag >", selected, 3) BREAK
+        CASE 34 DRAW_OPTION(y, "Vehicle:", "< Manchez >", selected, 3) BREAK
+        CASE 35 DRAW_OPTION(y, "Vehicle:", "< Nightblade >", selected, 3) BREAK
+        CASE 36 DRAW_OPTION(y, "Vehicle:", "< Raptor >", selected, 3) BREAK
+        CASE 37 DRAW_OPTION(y, "Vehicle:", "< Rat Bike >", selected, 3) BREAK
+        CASE 38 DRAW_OPTION(y, "Vehicle:", "< Sanctus >", selected, 3) BREAK
+        CASE 39 DRAW_OPTION(y, "Vehicle:", "< Shotaro >", selected, 3) BREAK
+        CASE 40 DRAW_OPTION(y, "Vehicle:", "< Tornado Custom >", selected, 3) BREAK
+        CASE 41 DRAW_OPTION(y, "Vehicle:", "< Vortex >", selected, 3) BREAK
+        CASE 42 DRAW_OPTION(y, "Vehicle:", "< Wolfsbane >", selected, 3) BREAK
+        CASE 43 DRAW_OPTION(y, "Vehicle:", "< Youga Classic >", selected, 3) BREAK
+        CASE 44 DRAW_OPTION(y, "Vehicle:", "< Zombie A >", selected, 3) BREAK
+        CASE 45 DRAW_OPTION(y, "Vehicle:", "< Zombie B >", selected, 3) BREAK
+        CASE 46 DRAW_OPTION(y, "Vehicle:", "< Jester Racecar >", selected, 3) BREAK
+        CASE 47 DRAW_OPTION(y, "Vehicle:", "< Massacro Racecar >", selected, 3) BREAK
+        CASE 48 DRAW_OPTION(y, "Vehicle:", "< Rat Loader Custom >", selected, 3) BREAK
+        CASE 49 DRAW_OPTION(y, "Vehicle:", "< Slamvan Custom >", selected, 3) BREAK
+        CASE 50 DRAW_OPTION(y, "Vehicle:", "< Barracks Custom >", selected, 3) BREAK
+        CASE 51 DRAW_OPTION(y, "Vehicle:", "< Boxville Armoured >", selected, 3) BREAK
+        CASE 52 DRAW_OPTION(y, "Vehicle:", "< Casco >", selected, 3) BREAK
+        CASE 53 DRAW_OPTION(y, "Vehicle:", "< Dinghy >", selected, 3) BREAK
+        CASE 54 DRAW_OPTION(y, "Vehicle:", "< Enduro >", selected, 3) BREAK
+        CASE 55 DRAW_OPTION(y, "Vehicle:", "< GBurrito >", selected, 3) BREAK
+        CASE 56 DRAW_OPTION(y, "Vehicle:", "< Guardian >", selected, 3) BREAK
+        CASE 57 DRAW_OPTION(y, "Vehicle:", "< Hydra >", selected, 3) BREAK
+        CASE 58 DRAW_OPTION(y, "Vehicle:", "< Insurgent >", selected, 3) BREAK
+        CASE 59 DRAW_OPTION(y, "Vehicle:", "< Insurgent Pick-Up >", selected, 3) BREAK
+        CASE 60 DRAW_OPTION(y, "Vehicle:", "< Kuruma >", selected, 3) BREAK
+        CASE 61 DRAW_OPTION(y, "Vehicle:", "< Kuruma Armoured >", selected, 3) BREAK
+        CASE 62 DRAW_OPTION(y, "Vehicle:", "< Lectro >", selected, 3) BREAK
+        CASE 63 DRAW_OPTION(y, "Vehicle:", "< Mule Custom >", selected, 3) BREAK
+        CASE 64 DRAW_OPTION(y, "Vehicle:", "< Savage >", selected, 3) BREAK
+        CASE 65 DRAW_OPTION(y, "Vehicle:", "< Slamvan >", selected, 3) BREAK
+        CASE 66 DRAW_OPTION(y, "Vehicle:", "< Tanker >", selected, 3) BREAK
+        CASE 67 DRAW_OPTION(y, "Vehicle:", "< Technical >", selected, 3) BREAK
+        CASE 68 DRAW_OPTION(y, "Vehicle:", "< Trashmaster >", selected, 3) BREAK
+        CASE 69 DRAW_OPTION(y, "Vehicle:", "< Valkyrie >", selected, 3) BREAK
+        CASE 70 DRAW_OPTION(y, "Vehicle:", "< Velum >", selected, 3) BREAK
+        CASE 71 DRAW_OPTION(y, "Vehicle:", "< Dinghy >", selected, 3) BREAK
+        CASE 72 DRAW_OPTION(y, "Vehicle:", "< Dinghy 2 >", selected, 3) BREAK
+        CASE 73 DRAW_OPTION(y, "Vehicle:", "< Dinghy 3 >", selected, 3) BREAK
+        CASE 74 DRAW_OPTION(y, "Vehicle:", "< Jetmax >", selected, 3) BREAK
+        CASE 75 DRAW_OPTION(y, "Vehicle:", "< Marquis >", selected, 3) BREAK
+        CASE 76 DRAW_OPTION(y, "Vehicle:", "< Seashark / Jetski >", selected, 3) BREAK
+        CASE 77 DRAW_OPTION(y, "Vehicle:", "< Seashark Lifeguard >", selected, 3) BREAK
+        CASE 78 DRAW_OPTION(y, "Vehicle:", "< Seashark Custom >", selected, 3) BREAK
+        CASE 79 DRAW_OPTION(y, "Vehicle:", "< Speeder >", selected, 3) BREAK
+        CASE 80 DRAW_OPTION(y, "Vehicle:", "< Speeder 2 >", selected, 3) BREAK
+        CASE 81 DRAW_OPTION(y, "Vehicle:", "< Squalo >", selected, 3) BREAK
+        CASE 82 DRAW_OPTION(y, "Vehicle:", "< Submersible >", selected, 3) BREAK
+        CASE 83 DRAW_OPTION(y, "Vehicle:", "< Suntrap >", selected, 3) BREAK
+        CASE 84 DRAW_OPTION(y, "Vehicle:", "< Toro >", selected, 3) BREAK
+        CASE 85 DRAW_OPTION(y, "Vehicle:", "< Toro 2 >", selected, 3) BREAK
+        CASE 86 DRAW_OPTION(y, "Vehicle:", "< Tropic >", selected, 3) BREAK
+        CASE 87 DRAW_OPTION(y, "Vehicle:", "< Tug >", selected, 3) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -1199,6 +1383,68 @@ PROC START_SELECTED_VEHICLE_SPAWN()
         CASE 23 g_pending_vehicle_model = BUZZARD BREAK
         CASE 24 g_pending_vehicle_model = DUSTER BREAK
         CASE 25 g_pending_vehicle_model = CARGOBOB BREAK
+        CASE 26 g_pending_vehicle_model = AVARUS BREAK
+        CASE 27 g_pending_vehicle_model = BLAZER4 BREAK
+        CASE 28 g_pending_vehicle_model = CHIMERA BREAK
+        CASE 29 g_pending_vehicle_model = DAEMON2 BREAK
+        CASE 30 g_pending_vehicle_model = DEFILER BREAK
+        CASE 31 g_pending_vehicle_model = ESSKEY BREAK
+        CASE 32 g_pending_vehicle_model = FAGGIO3 BREAK
+        CASE 33 g_pending_vehicle_model = HAKUCHOU2 BREAK
+        CASE 34 g_pending_vehicle_model = MANCHEZ BREAK
+        CASE 35 g_pending_vehicle_model = NIGHTBLADE BREAK
+        CASE 36 g_pending_vehicle_model = RAPTOR BREAK
+        CASE 37 g_pending_vehicle_model = RATBIKE BREAK
+        CASE 38 g_pending_vehicle_model = SANCTUS BREAK
+        CASE 39 g_pending_vehicle_model = SHOTARO BREAK
+        CASE 40 g_pending_vehicle_model = TORNADO6 BREAK
+        CASE 41 g_pending_vehicle_model = VORTEX BREAK
+        CASE 42 g_pending_vehicle_model = WOLFSBANE BREAK
+        CASE 43 g_pending_vehicle_model = YOUGA2 BREAK
+        CASE 44 g_pending_vehicle_model = ZOMBIEA BREAK
+        CASE 45 g_pending_vehicle_model = ZOMBIEB BREAK
+        CASE 46 g_pending_vehicle_model = JESTER2 BREAK
+        CASE 47 g_pending_vehicle_model = MASSACRO2 BREAK
+        CASE 48 g_pending_vehicle_model = RATLOADER2 BREAK
+        CASE 49 g_pending_vehicle_model = SLAMVAN BREAK
+        CASE 50 g_pending_vehicle_model = BARRACKS3 BREAK
+        CASE 51 g_pending_vehicle_model = BOXVILLE4 BREAK
+        CASE 52 g_pending_vehicle_model = CASCO BREAK
+        CASE 53 g_pending_vehicle_model = DINGHY3 BREAK
+        CASE 54 g_pending_vehicle_model = ENDURO BREAK
+        CASE 55 g_pending_vehicle_model = GBURRITO2 BREAK
+        CASE 56 g_pending_vehicle_model = GUARDIAN BREAK
+        CASE 57 g_pending_vehicle_model = HYDRA BREAK
+        CASE 58 g_pending_vehicle_model = INSURGENT BREAK
+        CASE 59 g_pending_vehicle_model = INSURGENT2 BREAK
+        CASE 60 g_pending_vehicle_model = KURUMA BREAK
+        CASE 61 g_pending_vehicle_model = KURUMA2 BREAK
+        CASE 62 g_pending_vehicle_model = LECTRO BREAK
+        CASE 63 g_pending_vehicle_model = MULE3 BREAK
+        CASE 64 g_pending_vehicle_model = SAVAGE BREAK
+        CASE 65 g_pending_vehicle_model = SLAMVAN2 BREAK
+        CASE 66 g_pending_vehicle_model = TANKER2 BREAK
+        CASE 67 g_pending_vehicle_model = TECHNICAL BREAK
+        CASE 68 g_pending_vehicle_model = TRASH2 BREAK
+        CASE 69 g_pending_vehicle_model = VALKYRIE BREAK
+        CASE 70 g_pending_vehicle_model = VELUM2 BREAK
+        CASE 71 g_pending_vehicle_model = DINGHY BREAK
+        CASE 72 g_pending_vehicle_model = DINGHY2 BREAK
+        CASE 73 g_pending_vehicle_model = DINGHY3 BREAK
+        CASE 74 g_pending_vehicle_model = JETMAX BREAK
+        CASE 75 g_pending_vehicle_model = MARQUIS BREAK
+        CASE 76 g_pending_vehicle_model = SEASHARK BREAK
+        CASE 77 g_pending_vehicle_model = SEASHARK2 BREAK
+        CASE 78 g_pending_vehicle_model = SEASHARK3 BREAK
+        CASE 79 g_pending_vehicle_model = SPEEDER BREAK
+        CASE 80 g_pending_vehicle_model = SPEEDER2 BREAK
+        CASE 81 g_pending_vehicle_model = SQUALO BREAK
+        CASE 82 g_pending_vehicle_model = SUBMERSIBLE BREAK
+        CASE 83 g_pending_vehicle_model = SUNTRAP BREAK
+        CASE 84 g_pending_vehicle_model = TORO BREAK
+        CASE 85 g_pending_vehicle_model = TORO2 BREAK
+        CASE 86 g_pending_vehicle_model = TROPIC BREAK
+        CASE 87 g_pending_vehicle_model = TUG BREAK
     ENDSWITCH
     IF IS_MODEL_IN_CDIMAGE(g_pending_vehicle_model)
         IF g_spawn_count < 1 g_spawn_count = 1 ENDIF
@@ -1227,17 +1473,17 @@ PROC FINISH_SELECTED_VEHICLE_SPAWN()
     INT column = 0
     INT row = 0
     FLOAT offsetX = 0.0
-    FLOAT offsetY = 8.0
+    FLOAT offsetY = 4.0
     IF g_spawn_alignment = 0
         column = g_spawn_index - ((g_spawn_index / 10) * 10)
         row = g_spawn_index / 10
-        offsetX = (TO_FLOAT(column) - 4.5) * 5.0
-        offsetY = 8.0 + (TO_FLOAT(row) * 7.0)
+        offsetX = (TO_FLOAT(column) - 4.5) * 4.2
+        offsetY = 4.0 + (TO_FLOAT(row) * 5.5)
     ELSE
         column = g_spawn_index - ((g_spawn_index / 5) * 5)
         row = g_spawn_index / 5
-        offsetX = (TO_FLOAT(column) - 2.0) * 7.0
-        offsetY = 8.0 + (TO_FLOAT(row) * 5.0)
+        offsetX = (TO_FLOAT(column) - 2.0) * 5.5
+        offsetY = 4.0 + (TO_FLOAT(row) * 4.2)
     ENDIF
     VECTOR spawnPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER_PED_ID(), <<offsetX, offsetY, 1.0>>)
     FLOAT spawnHeading = g_spawn_heading + (TO_FLOAT(g_spawn_facing) * 90.0)
@@ -1408,39 +1654,7 @@ PROC APPLY_SELECTED()
         CASE 1
             SWITCH g_item
                 CASE 0
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_PISTOL, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_COMBATPISTOL, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_APPISTOL, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_MICROSMG, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_SMG, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_ASSAULTRIFLE, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_CARBINERIFLE, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_ADVANCEDRIFLE, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_MG, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_COMBATMG, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_PUMPSHOTGUN, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_SAWNOFFSHOTGUN, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_ASSAULTSHOTGUN, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_SNIPERRIFLE, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_HEAVYSNIPER, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_GRENADELAUNCHER, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_RPG, 25, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_MINIGUN, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_GRENADE, 25, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_STICKYBOMB, 25, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_MOLOTOV, 25, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_SMOKEGRENADE, 25, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_BZGAS, 25, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_FLARE, 25, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_STUNGUN, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_FIREEXTINGUISHER, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_PETROLCAN, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_KNIFE, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_NIGHTSTICK, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_HAMMER, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_BAT, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_CROWBAR, 9999, TRUE)
-                    GIVE_DELAYED_WEAPON_TO_PED(playerPed, WEAPONTYPE_GOLFCLUB, 9999, TRUE)
+                    GIVE_ALL_MENU_WEAPONS(playerPed)
                 BREAK
                 CASE 1
                     g_infinite_ammo = NOT g_infinite_ammo
@@ -1554,34 +1768,40 @@ PROC APPLY_SELECTED()
                 g_spawner_open = TRUE
                 g_item = g_spawner_item
                 g_scroll = g_spawner_scroll
-            ELIF g_item = 13
+            ELIF g_item = 18
                 g_page_item[3] = g_item
                 g_page_scroll[3] = g_scroll
                 g_lsc_open = TRUE
                 g_lsc_mod_choice = -1
                 g_item = g_lsc_item
                 g_scroll = g_lsc_scroll
-            ELIF g_item = 14
+            ELIF g_item = 1
+                WARP_INTO_LAST_PLAYER_VEHICLE()
+            ELIF g_item = 2
+                g_vehicle_quick_entry_exit = NOT g_vehicle_quick_entry_exit
+            ELIF g_item = 3 AND IS_PED_IN_ANY_VEHICLE(playerPed)
+                APPLY_LSC_MAX_TO_VEHICLE(GET_VEHICLE_PED_IS_IN(playerPed))
+            ELIF g_item = 4
                 g_vehicle_speedometer = NOT g_vehicle_speedometer
-            ELIF g_item = 15
+            ELIF g_item = 5
                 g_vehicle_speed_unit = 1 - g_vehicle_speed_unit
-            ELIF g_item > 0 AND g_item < 13 AND IS_PED_IN_ANY_VEHICLE(playerPed)
+            ELIF g_item > 5 AND g_item < 19 AND IS_PED_IN_ANY_VEHICLE(playerPed)
                 playerVehicle = GET_VEHICLE_PED_IS_IN(playerPed)
                 SWITCH g_item
-                    CASE 1
+                    CASE 6
                         g_vehicle_god = NOT g_vehicle_god
                         SET_ENTITY_INVINCIBLE(playerVehicle, g_vehicle_god)
                     BREAK
-                    CASE 2
+                    CASE 7
                         SET_VEHICLE_FIXED(playerVehicle)
                         SET_VEHICLE_ENGINE_HEALTH(playerVehicle, 1000.0)
                     BREAK
-                    CASE 3
+                    CASE 8
                         g_vehicle_auto_repair = NOT g_vehicle_auto_repair
                     BREAK
-                    CASE 4 SET_VEHICLE_ON_GROUND_PROPERLY(playerVehicle) BREAK
-                    CASE 5 SET_VEHICLE_ENGINE_HEALTH(playerVehicle, -4000.0) BREAK
-                    CASE 6
+                    CASE 9 SET_VEHICLE_ON_GROUND_PROPERLY(playerVehicle) BREAK
+                    CASE 10 SET_VEHICLE_ENGINE_HEALTH(playerVehicle, -4000.0) BREAK
+                    CASE 11
                         g_doors_locked = NOT g_doors_locked
                         IF g_doors_locked
                             SET_VEHICLE_DOORS_LOCKED(playerVehicle, VEHICLELOCK_LOCKED)
@@ -1589,7 +1809,7 @@ PROC APPLY_SELECTED()
                             SET_VEHICLE_DOORS_LOCKED(playerVehicle, VEHICLELOCK_UNLOCKED)
                         ENDIF
                     BREAK
-                    CASE 7
+                    CASE 12
                         g_seatbelt = NOT g_seatbelt
                         IF g_seatbelt
                             SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(playerPed, KNOCKOFFVEHICLE_NEVER)
@@ -1597,11 +1817,11 @@ PROC APPLY_SELECTED()
                             SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(playerPed, KNOCKOFFVEHICLE_DEFAULT)
                         ENDIF
                     BREAK
-                    CASE 8 BREAK
-                    CASE 9 BREAK
-                    CASE 10 g_vehicle_cornering = NOT g_vehicle_cornering BREAK
-                    CASE 11 g_vehicle_bulletproof_tyres = NOT g_vehicle_bulletproof_tyres BREAK
-                    CASE 12
+                    CASE 13 BREAK
+                    CASE 14 BREAK
+                    CASE 15 g_vehicle_cornering = NOT g_vehicle_cornering BREAK
+                    CASE 16 g_vehicle_bulletproof_tyres = NOT g_vehicle_bulletproof_tyres BREAK
+                    CASE 17
                         g_vehicle_turbo = NOT g_vehicle_turbo
                         SET_VEHICLE_MOD_KIT(playerVehicle, 0)
                         TOGGLE_VEHICLE_MOD(playerVehicle, MOD_TOGGLE_TURBO, g_vehicle_turbo)
@@ -1785,21 +2005,24 @@ ENDFUNC
 PROC DRAW_VEHICLE_ROW(INT index, FLOAT y)
     SWITCH index
         CASE 0 DRAW_OPTION(y, "Vehicle Spawner", "OPEN", g_item = index, 2) BREAK
-        CASE 1 IF g_vehicle_god DRAW_OPTION(y, "Vehicle God Mode", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Vehicle God Mode", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 2 DRAW_OPTION(y, "Repair Vehicle", "APPLY", g_item = index, 2) BREAK
-        CASE 3 IF g_vehicle_auto_repair DRAW_OPTION(y, "Auto Repair Vehicle", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Repair Vehicle", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 4 DRAW_OPTION(y, "Flip Vehicle upright", "APPLY", g_item = index, 2) BREAK
-        CASE 5 DRAW_OPTION(y, "Destroy Engine", "APPLY", g_item = index, 2) BREAK
-        CASE 6 IF g_doors_locked DRAW_OPTION(y, "Lock Doors", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Lock Doors", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 7 IF g_seatbelt DRAW_OPTION(y, "Always Seatbelt", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Always Seatbelt", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 8 DRAW_VEHICLE_MULTIPLIER(y, "Acceleration Boost", g_vehicle_acceleration_level, g_item = index) BREAK
-        CASE 9 DRAW_VEHICLE_MULTIPLIER(y, "Top-Speed Boost", g_vehicle_top_speed_level, g_item = index) BREAK
-        CASE 10 IF g_vehicle_cornering DRAW_OPTION(y, "High Cornering Grip", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "High Cornering Grip", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 11 IF g_vehicle_bulletproof_tyres DRAW_OPTION(y, "Bulletproof Tyres", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Bulletproof Tyres", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 12 IF g_vehicle_turbo DRAW_OPTION(y, "Turbo Mod", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Turbo Mod", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 13 DRAW_OPTION(y, "LS Customs", "OPEN", g_item = index, 2) BREAK
-        CASE 14 IF g_vehicle_speedometer DRAW_OPTION(y, "Speedometer", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Speedometer", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 15 IF g_vehicle_speed_unit = 0 DRAW_OPTION(y, "Speed Unit", "< MPH >", g_item = index, 3) ELSE DRAW_OPTION(y, "Speed Unit", "< KMPH >", g_item = index, 3) ENDIF BREAK
+        CASE 1 DRAW_OPTION(y, "Enter Personal Vehicle", "APPLY", g_item = index, 2) BREAK
+        CASE 2 IF g_vehicle_quick_entry_exit DRAW_OPTION(y, "Instant Enter / Exit", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Instant Enter / Exit", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 3 DRAW_OPTION(y, "Max Vehicle Upgrades", "APPLY", g_item = index, 2) BREAK
+        CASE 4 IF g_vehicle_speedometer DRAW_OPTION(y, "Speedometer", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Speedometer", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 5 IF g_vehicle_speed_unit = 0 DRAW_OPTION(y, "Speed Unit", "< MPH >", g_item = index, 3) ELSE DRAW_OPTION(y, "Speed Unit", "< KMPH >", g_item = index, 3) ENDIF BREAK
+        CASE 6 IF g_vehicle_god DRAW_OPTION(y, "Vehicle God Mode", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Vehicle God Mode", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 7 DRAW_OPTION(y, "Repair Vehicle", "APPLY", g_item = index, 2) BREAK
+        CASE 8 IF g_vehicle_auto_repair DRAW_OPTION(y, "Auto Repair Vehicle", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Repair Vehicle", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 9 DRAW_OPTION(y, "Flip Vehicle upright", "APPLY", g_item = index, 2) BREAK
+        CASE 10 DRAW_OPTION(y, "Destroy Engine", "APPLY", g_item = index, 2) BREAK
+        CASE 11 IF g_doors_locked DRAW_OPTION(y, "Lock Doors", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Lock Doors", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 12 IF g_seatbelt DRAW_OPTION(y, "Always Seatbelt", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Always Seatbelt", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 13 DRAW_VEHICLE_MULTIPLIER(y, "Acceleration Boost", g_vehicle_acceleration_level, g_item = index) BREAK
+        CASE 14 DRAW_VEHICLE_MULTIPLIER(y, "Top-Speed Boost", g_vehicle_top_speed_level, g_item = index) BREAK
+        CASE 15 IF g_vehicle_cornering DRAW_OPTION(y, "High Cornering Grip", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "High Cornering Grip", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 16 IF g_vehicle_bulletproof_tyres DRAW_OPTION(y, "Bulletproof Tyres", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Bulletproof Tyres", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 17 IF g_vehicle_turbo DRAW_OPTION(y, "Turbo Mod", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Turbo Mod", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 18 DRAW_OPTION(y, "LS Customs", "OPEN", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -1957,7 +2180,7 @@ PROC DRAW_PAGE()
                 DRAW_LSC_PAGE()
             ELSE
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "VEHICLE SETTINGS")
-            DRAW_SCROLLING_ROWS(16, 1)
+            DRAW_SCROLLING_ROWS(19, 1)
             ENDIF
         BREAK
         CASE 4
@@ -2110,12 +2333,20 @@ SCRIPT
         ENDIF
         g_was_in_vehicle = g_player_in_vehicle
         IF g_player_in_vehicle
-            IF g_vehicle_auto_repair SET_VEHICLE_FIXED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) ENDIF
-            SET_VEHICLE_CHEAT_POWER_INCREASE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), VEHICLE_MULTIPLIER_VALUE(g_vehicle_acceleration_level))
-            IF g_vehicle_top_speed_level > 0
-                SET_VEHICLE_MAX_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), GET_VEHICLE_ESTIMATED_MAX_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) * VEHICLE_MULTIPLIER_VALUE(g_vehicle_top_speed_level))
+            VEHICLE_INDEX currentVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+            IF g_vehicle_auto_repair SET_VEHICLE_FIXED(currentVehicle) ENDIF
+            IF g_vehicle_acceleration_level > 0
+                SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, VEHICLE_MULTIPLIER_VALUE(g_vehicle_acceleration_level))
             ELSE
-                SET_VEHICLE_MAX_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), -1.0)
+                SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, 1.0)
+            ENDIF
+            IF currentVehicle != g_performance_vehicle OR g_applied_top_speed_level != g_vehicle_top_speed_level
+                SET_VEHICLE_MAX_SPEED(currentVehicle, -1.0)
+                IF g_vehicle_top_speed_level > 0
+                    SET_VEHICLE_MAX_SPEED(currentVehicle, GET_VEHICLE_ESTIMATED_MAX_SPEED(currentVehicle) * VEHICLE_MULTIPLIER_VALUE(g_vehicle_top_speed_level))
+                ENDIF
+                g_performance_vehicle = currentVehicle
+                g_applied_top_speed_level = g_vehicle_top_speed_level
             ENDIF
             IF g_vehicle_cornering
                 SET_VEHICLE_FRICTION_OVERRIDE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), 2.0)
@@ -2123,11 +2354,15 @@ SCRIPT
                 SET_VEHICLE_FRICTION_OVERRIDE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), -1.0)
             ENDIF
             IF g_vehicle_bulletproof_tyres
-                SET_VEHICLE_TYRES_CAN_BURST(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), FALSE)
+                SET_VEHICLE_TYRES_CAN_BURST(currentVehicle, FALSE)
             ELSE
-                SET_VEHICLE_TYRES_CAN_BURST(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), TRUE)
+                SET_VEHICLE_TYRES_CAN_BURST(currentVehicle, TRUE)
             ENDIF
+        ELSE
+            g_performance_vehicle = NULL
+            g_applied_top_speed_level = -1
         ENDIF
+        PROCESS_QUICK_VEHICLE_ENTRY_EXIT()
         IF g_seatbelt
             IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
                 SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(PLAYER_PED_ID(), KNOCKOFFVEHICLE_NEVER)
@@ -2140,6 +2375,8 @@ SCRIPT
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_PHONE)
             DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_CELLPHONE_UP)
             MENU_CAPTURE_INPUT()
+            DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_FRONTEND_DOWN, TRUE)
+            DISABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_FRONTEND_DOWN, TRUE)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_JUMP)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_SPECIAL)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_JUMP)
