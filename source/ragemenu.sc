@@ -14,6 +14,8 @@ USING "commands_misc.sch"
 USING "commands_camera.sch"
 USING "commands_streaming.sch"
 USING "commands_task.sch"
+USING "commands_stats.sch"
+USING "stats_enums.sch"
 
 BOOL g_open = FALSE
 BOOL g_home = TRUE
@@ -58,12 +60,11 @@ BOOL g_civilian_reports = TRUE
 BOOL g_night_vision = FALSE
 BOOL g_thermal_vision = FALSE
 BOOL g_motion_blur = FALSE
-BOOL g_cinematic_bars = FALSE
 BOOL g_camera_shake = FALSE
 BOOL g_vehicle_auto_repair = FALSE
 BOOL g_vehicle_turbo = FALSE
-BOOL g_vehicle_acceleration = FALSE
-BOOL g_vehicle_top_speed = FALSE
+INT g_vehicle_acceleration_level = 0
+INT g_vehicle_top_speed_level = 0
 BOOL g_vehicle_cornering = FALSE
 BOOL g_vehicle_bulletproof_tyres = FALSE
 BOOL g_vehicle_speedometer = FALSE
@@ -81,7 +82,7 @@ INT g_vehicle_spawn_choice = 0
 BOOL g_vehicle_spawn_pending = FALSE
 BOOL g_delete_previous_spawned_vehicle = TRUE
 VEHICLE_INDEX g_last_spawned_vehicle
-VEHICLE_INDEX g_spawned_custom_vehicles[150]
+VEHICLE_INDEX g_spawned_custom_vehicles[500]
 INT g_spawned_custom_vehicle_count = 0
 MODEL_NAMES g_pending_vehicle_model = ADDER
 INT g_vehicle_spawn_request_time = 0
@@ -98,7 +99,6 @@ FLOAT g_spawn_heading = 0.0
 BOOL g_keyboard_active = FALSE
 INT g_keyboard_target = 0
 INT g_cash_amount = 0
-INT g_npc_drop_amount = 0
 BOOL g_everyone_ignores = FALSE
 BOOL g_low_population = FALSE
 BOOL g_hud_hidden = FALSE
@@ -207,9 +207,7 @@ PROC DRAW_NUMBER_OPTION(FLOAT y, STRING label, INT value, BOOL selected)
     SET_TEXT_SCALE(0.290, 0.290)
     SET_TEXT_COLOUR(210, 230, 255, 255)
     SET_TEXT_RIGHT_JUSTIFY(TRUE)
-    BEGIN_TEXT_COMMAND_DISPLAY_TEXT("NUMBER")
-        ADD_TEXT_COMPONENT_INTEGER(value)
-    END_TEXT_COMMAND_DISPLAY_TEXT(g_menu_x + 0.098, y - 0.012 + g_menu_y)
+    DISPLAY_TEXT_WITH_NUMBER(g_menu_x + 0.098, y - 0.012 + g_menu_y, "~1~", value)
     SET_TEXT_RIGHT_JUSTIFY(FALSE)
 ENDPROC
 
@@ -221,8 +219,6 @@ PROC DRAW_SPEEDOMETER()
         EXIT
     ENDIF
 
-    // Text-only HUD: this avoids the black background drawn by the prior
-    // DISPLAY_TEXT_WITH_NUMBER helper and stays above the street-name area.
     SET_TEXT_RENDER_ID(1)
     SET_SCRIPT_GFX_DRAW_BEHIND_PAUSEMENU(TRUE)
     SET_SCRIPT_GFX_DRAW_ORDER(GFX_ORDER_BEFORE_HUD_PRIORITY_LOW)
@@ -303,6 +299,11 @@ PROC FINISH_ATTACKER_SPAWN()
     IF DOES_ENTITY_EXIST(attacker)
         GIVE_WEAPON_TO_PED(attacker, g_pending_attacker_weapon, 9999, TRUE, TRUE)
         SET_PED_AS_ENEMY(attacker, TRUE)
+        SET_PED_RELATIONSHIP_GROUP_HASH(attacker, RELGROUPHASH_HATES_PLAYER)
+        SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_PLAYER)
+        SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_PLAYER, RELGROUPHASH_HATES_PLAYER)
+        SET_PED_FLEE_ATTRIBUTES(attacker, FA_NEVER_FLEE, TRUE)
+        SET_PED_COMBAT_ABILITY(attacker, CAL_PROFESSIONAL)
         SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(attacker, TRUE)
         TASK_COMBAT_PED(attacker, PLAYER_PED_ID())
         SET_PED_KEEP_TASK(attacker, TRUE)
@@ -449,15 +450,15 @@ FUNC INT ITEM_COUNT()
         RETURN 10
     ENDIF
     SWITCH g_tab
-        CASE 0 RETURN 12 BREAK
+        CASE 0 RETURN 14 BREAK
         CASE 1 RETURN 6 BREAK
         CASE 2 RETURN 6 BREAK
-        CASE 3 RETURN 15 BREAK
-        CASE 4 RETURN 7 BREAK
-        CASE 5 RETURN 4 BREAK
-        CASE 6 RETURN 6 BREAK
-        CASE 7 RETURN 9 BREAK
-        CASE 8 RETURN 8 BREAK
+        CASE 3 RETURN 16 BREAK
+        CASE 4 RETURN 6 BREAK
+        CASE 5 RETURN 3 BREAK
+        CASE 6 RETURN 15 BREAK
+        CASE 7 RETURN 8 BREAK
+        CASE 8 RETURN 5 BREAK
     ENDSWITCH
     RETURN 1
 ENDFUNC
@@ -524,7 +525,7 @@ PROC DRAW_HOME()
     BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
         ADD_TEXT_COMPONENT_SUBSTRING_KEYBOARD_DISPLAY("MEGATARD")
     END_TEXT_COMMAND_DISPLAY_TEXT(g_menu_x - 0.060, 0.100 + g_menu_y)
-    MENU_TEXT(g_menu_x - 0.060, 0.158, 0.390, titleR, titleG, titleB, "Made by: @Geekmaxxer")
+    MENU_TEXT(g_menu_x - 0.057, 0.158, 0.390, titleR, titleG, titleB, "Made by: @Geekmaxxer")
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "CATEGORIES")
     IF g_scroll = 0
         DRAW_OPTION(0.268, "Player Settings", ">>>", g_item = 0, 2)
@@ -592,18 +593,10 @@ PROC PROCESS_MENU_KEYBOARD()
             IF parsed < 0 parsed = 0 ENDIF
             IF g_keyboard_target = 1
                 IF parsed < 1 parsed = 1 ENDIF
-                IF parsed > 150 parsed = 150 ENDIF
+                IF parsed > 500 parsed = 500 ENDIF
                 g_spawn_count = parsed
             ELIF g_keyboard_target = 2
                 g_cash_amount = parsed
-            ELIF g_keyboard_target = 3
-                g_npc_drop_amount = parsed
-                SET_MONEY_CARRIED_BY_ALL_NEW_PEDS(parsed)
-                IF parsed > 0
-                    SET_AMBIENT_PEDS_DROP_MONEY(TRUE)
-                ELSE
-                    SET_AMBIENT_PEDS_DROP_MONEY(FALSE)
-                ENDIF
             ENDIF
         ENDIF
         g_keyboard_active = FALSE
@@ -691,7 +684,6 @@ PROC MENU_CAPTURE_INPUT()
 
     DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_JUMP, TRUE)
     DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_VEH_SPECIAL, TRUE)
-    DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_VEH_EXIT, TRUE)
     DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_VEH_HANDBRAKE, TRUE)
     DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_VEH_CIN_CAM, TRUE)
     DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_VEH_HEADLIGHT, TRUE)
@@ -777,15 +769,16 @@ ENDPROC
 
 FUNC BOOL IS_SELECTOR_ACTIVE()
     IF g_tab = 3 AND g_spawner_open
-        IF g_item = 0 OR g_item = 1 OR g_item = 3 OR g_item = 4 RETURN TRUE ENDIF
+        IF g_item = 1 OR g_item = 2 OR g_item = 4 OR g_item = 5 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 0
-        IF g_item = 9 OR g_item = 10 RETURN TRUE ENDIF
+        IF g_item = 11 OR g_item = 12 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 4
         IF g_item = 0 OR g_item = 1 RETURN TRUE ENDIF
     ENDIF
-    IF g_tab = 3 AND g_item = 14 AND NOT g_lsc_open RETURN TRUE ENDIF
+    IF g_tab = 3 AND g_item = 15 AND NOT g_lsc_open RETURN TRUE ENDIF
+    IF g_tab = 3 AND NOT g_lsc_open AND (g_item = 7 OR g_item = 8) RETURN TRUE ENDIF
     IF g_tab = 3 AND g_lsc_open
         IF g_item = 1 OR g_item = 3 OR g_item = 4 OR g_item = 8 RETURN TRUE ENDIF
     ENDIF
@@ -797,17 +790,17 @@ ENDFUNC
 
 PROC ADJUST_SELECTOR(INT direction)
     IF g_tab = 3 AND g_spawner_open
-        IF g_item = 0
+        IF g_item = 1
             g_vehicle_spawn_choice = g_vehicle_spawn_choice + direction
             IF g_vehicle_spawn_choice < 0 g_vehicle_spawn_choice = 25 ENDIF
             IF g_vehicle_spawn_choice > 25 g_vehicle_spawn_choice = 0 ENDIF
-        ELIF g_item = 1
+        ELIF g_item = 2
             g_spawn_count = g_spawn_count + direction
-            IF g_spawn_count < 1 g_spawn_count = 150 ENDIF
-            IF g_spawn_count > 150 g_spawn_count = 1 ENDIF
-        ELIF g_item = 3
-            g_spawn_alignment = 1 - g_spawn_alignment
+            IF g_spawn_count < 1 g_spawn_count = 500 ENDIF
+            IF g_spawn_count > 500 g_spawn_count = 1 ENDIF
         ELIF g_item = 4
+            g_spawn_alignment = 1 - g_spawn_alignment
+        ELIF g_item = 5
             g_spawn_facing = g_spawn_facing + direction
             IF g_spawn_facing < 0 g_spawn_facing = 3 ENDIF
             IF g_spawn_facing > 3 g_spawn_facing = 0 ENDIF
@@ -815,12 +808,12 @@ PROC ADJUST_SELECTOR(INT direction)
         EXIT
     ENDIF
     IF g_tab = 0
-        IF g_item = 9
+        IF g_item = 11
             g_attacker_model_choice = g_attacker_model_choice + direction
             IF g_attacker_model_choice < 0 g_attacker_model_choice = 3 ENDIF
             IF g_attacker_model_choice > 3 g_attacker_model_choice = 0 ENDIF
         ENDIF
-        IF g_item = 10
+        IF g_item = 12
             g_attacker_weapon_choice = g_attacker_weapon_choice + direction
             IF g_attacker_weapon_choice < 0 g_attacker_weapon_choice = 3 ENDIF
             IF g_attacker_weapon_choice > 3 g_attacker_weapon_choice = 0 ENDIF
@@ -867,8 +860,20 @@ PROC ADJUST_SELECTOR(INT direction)
         IF g_lsc_wheel_type > 9 g_lsc_wheel_type = 0 ENDIF
         SET_VEHICLE_WHEEL_TYPE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_WHEEL_TYPE, g_lsc_wheel_type))
     ENDIF
-    IF g_tab = 3 AND g_item = 14
+    IF g_tab = 3 AND g_item = 15
         g_vehicle_speed_unit = 1 - g_vehicle_speed_unit
+    ENDIF
+    IF g_tab = 3 AND NOT g_spawner_open AND NOT g_lsc_open
+        IF g_item = 7
+            g_vehicle_acceleration_level = g_vehicle_acceleration_level + direction
+            IF g_vehicle_acceleration_level < 0 g_vehicle_acceleration_level = 9 ENDIF
+            IF g_vehicle_acceleration_level > 9 g_vehicle_acceleration_level = 0 ENDIF
+        ENDIF
+        IF g_item = 8
+            g_vehicle_top_speed_level = g_vehicle_top_speed_level + direction
+            IF g_vehicle_top_speed_level < 0 g_vehicle_top_speed_level = 9 ENDIF
+            IF g_vehicle_top_speed_level > 9 g_vehicle_top_speed_level = 0 ENDIF
+        ENDIF
     ENDIF
     IF g_tab = 8
         IF g_item = 0
@@ -1021,7 +1026,7 @@ PROC START_SELECTED_VEHICLE_SPAWN()
     ENDSWITCH
     IF IS_MODEL_IN_CDIMAGE(g_pending_vehicle_model)
         IF g_spawn_count < 1 g_spawn_count = 1 ENDIF
-        IF g_spawn_count > 150 g_spawn_count = 150 ENDIF
+        IF g_spawn_count > 500 g_spawn_count = 500 ENDIF
         g_spawn_remaining = g_spawn_count
         g_spawn_index = 0
         g_spawn_heading = GET_ENTITY_HEADING(PLAYER_PED_ID())
@@ -1032,6 +1037,13 @@ PROC START_SELECTED_VEHICLE_SPAWN()
         g_vehicle_spawn_pending = TRUE
         g_vehicle_spawn_request_time = GET_GAME_TIMER()
     ENDIF
+ENDPROC
+
+PROC START_ONE_SELECTED_VEHICLE_SPAWN()
+    INT savedSpawnCount = g_spawn_count
+    g_spawn_count = 1
+    START_SELECTED_VEHICLE_SPAWN()
+    g_spawn_count = savedSpawnCount
 ENDPROC
 
 PROC FINISH_SELECTED_VEHICLE_SPAWN()
@@ -1059,7 +1071,7 @@ PROC FINISH_SELECTED_VEHICLE_SPAWN()
         IF g_spawn_maxed
             APPLY_LSC_MAX_TO_VEHICLE(spawnedVehicle)
         ENDIF
-        IF g_spawned_custom_vehicle_count < 150
+        IF g_spawned_custom_vehicle_count < 500
             g_spawned_custom_vehicles[g_spawned_custom_vehicle_count] = spawnedVehicle
             g_spawned_custom_vehicle_count = g_spawned_custom_vehicle_count + 1
         ENDIF
@@ -1176,18 +1188,34 @@ PROC APPLY_SELECTED()
                 BREAK
                 CASE 7
                     g_drunk = NOT g_drunk
-                    SET_PED_IS_DRUNK(playerPed, g_drunk)
+                    IF g_drunk
+                        SET_PED_IS_DRUNK(playerPed, TRUE)
+                        REQUEST_ANIM_SET("move_m@drunk@verydrunk")
+                        SHAKE_GAMEPLAY_CAM("DRUNK_SHAKE", 0.30)
+                    ELSE
+                        SET_PED_IS_DRUNK(playerPed, FALSE)
+                        RESET_PED_MOVEMENT_CLIPSET(playerPed)
+                        STOP_GAMEPLAY_CAM_SHAKING(TRUE)
+                    ENDIF
                 BREAK
                 CASE 8
                     g_explosive_melee = NOT g_explosive_melee
                 BREAK
-                CASE 9
+                CASE 9 OPEN_MENU_KEYBOARD(2) BREAK
+                CASE 10
+                    SWITCH GET_ENTITY_MODEL(playerPed)
+                        CASE PLAYER_ZERO STAT_SET_INT(SP0_TOTAL_CASH, g_cash_amount) BREAK
+                        CASE PLAYER_ONE STAT_SET_INT(SP1_TOTAL_CASH, g_cash_amount) BREAK
+                        CASE PLAYER_TWO STAT_SET_INT(SP2_TOTAL_CASH, g_cash_amount) BREAK
+                    ENDSWITCH
+                BREAK
+                CASE 11
                     g_attacker_model_choice = g_attacker_model_choice
                 BREAK
-                CASE 10
+                CASE 12
                     g_attacker_weapon_choice = g_attacker_weapon_choice
                 BREAK
-                CASE 11 START_ATTACKER_SPAWN() BREAK
+                CASE 13 START_ATTACKER_SPAWN() BREAK
             ENDSWITCH
         BREAK
         CASE 1
@@ -1280,11 +1308,12 @@ PROC APPLY_SELECTED()
         CASE 3
             IF g_spawner_open
                 SWITCH g_item
-                    CASE 1 OPEN_MENU_KEYBOARD(1) BREAK
-                    CASE 2 g_spawn_maxed = NOT g_spawn_maxed BREAK
-                    CASE 5 g_delete_previous_spawned_vehicle = NOT g_delete_previous_spawned_vehicle BREAK
-                    CASE 6 DELETE_ALL_CUSTOM_CARS() BREAK
-                    CASE 7 START_SELECTED_VEHICLE_SPAWN() BREAK
+                    CASE 0 START_SELECTED_VEHICLE_SPAWN() BREAK
+                    CASE 1 START_ONE_SELECTED_VEHICLE_SPAWN() BREAK
+                    CASE 2 OPEN_MENU_KEYBOARD(1) BREAK
+                    CASE 3 g_spawn_maxed = NOT g_spawn_maxed BREAK
+                    CASE 6 g_delete_previous_spawned_vehicle = NOT g_delete_previous_spawned_vehicle BREAK
+                    CASE 7 DELETE_ALL_CUSTOM_CARS() BREAK
                 ENDSWITCH
             ELIF g_lsc_open
                 IF IS_PED_IN_ANY_VEHICLE(playerPed)
@@ -1345,11 +1374,11 @@ PROC APPLY_SELECTED()
                 g_lsc_mod_choice = -1
                 g_item = g_lsc_item
                 g_scroll = g_lsc_scroll
-            ELIF g_item = 13
-                g_vehicle_speedometer = NOT g_vehicle_speedometer
             ELIF g_item = 14
+                g_vehicle_speedometer = NOT g_vehicle_speedometer
+            ELIF g_item = 15
                 g_vehicle_speed_unit = 1 - g_vehicle_speed_unit
-            ELIF g_item > 0 AND g_item < 12 AND IS_PED_IN_ANY_VEHICLE(playerPed)
+            ELIF g_item > 0 AND g_item < 13 AND IS_PED_IN_ANY_VEHICLE(playerPed)
                 playerVehicle = GET_VEHICLE_PED_IS_IN(playerPed)
                 SWITCH g_item
                     CASE 1
@@ -1360,9 +1389,12 @@ PROC APPLY_SELECTED()
                         SET_VEHICLE_FIXED(playerVehicle)
                         SET_VEHICLE_ENGINE_HEALTH(playerVehicle, 1000.0)
                     BREAK
-                    CASE 3 SET_VEHICLE_ON_GROUND_PROPERLY(playerVehicle) BREAK
-                    CASE 4 SET_VEHICLE_ENGINE_HEALTH(playerVehicle, -4000.0) BREAK
-                    CASE 5
+                    CASE 3
+                        g_vehicle_auto_repair = NOT g_vehicle_auto_repair
+                    BREAK
+                    CASE 4 SET_VEHICLE_ON_GROUND_PROPERLY(playerVehicle) BREAK
+                    CASE 5 SET_VEHICLE_ENGINE_HEALTH(playerVehicle, -4000.0) BREAK
+                    CASE 6
                         g_doors_locked = NOT g_doors_locked
                         IF g_doors_locked
                             SET_VEHICLE_DOORS_LOCKED(playerVehicle, VEHICLELOCK_LOCKED)
@@ -1370,7 +1402,7 @@ PROC APPLY_SELECTED()
                             SET_VEHICLE_DOORS_LOCKED(playerVehicle, VEHICLELOCK_UNLOCKED)
                         ENDIF
                     BREAK
-                    CASE 6
+                    CASE 7
                         g_seatbelt = NOT g_seatbelt
                         IF g_seatbelt
                             SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(playerPed, KNOCKOFFVEHICLE_NEVER)
@@ -1378,11 +1410,11 @@ PROC APPLY_SELECTED()
                             SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(playerPed, KNOCKOFFVEHICLE_DEFAULT)
                         ENDIF
                     BREAK
-                    CASE 7 g_vehicle_acceleration = NOT g_vehicle_acceleration BREAK
-                    CASE 8 g_vehicle_top_speed = NOT g_vehicle_top_speed BREAK
-                    CASE 9 g_vehicle_cornering = NOT g_vehicle_cornering BREAK
-                    CASE 10 g_vehicle_bulletproof_tyres = NOT g_vehicle_bulletproof_tyres BREAK
-                    CASE 11
+                    CASE 8 BREAK
+                    CASE 9 BREAK
+                    CASE 10 g_vehicle_cornering = NOT g_vehicle_cornering BREAK
+                    CASE 11 g_vehicle_bulletproof_tyres = NOT g_vehicle_bulletproof_tyres BREAK
+                    CASE 12
                         g_vehicle_turbo = NOT g_vehicle_turbo
                         SET_VEHICLE_MOD_KIT(playerVehicle, 0)
                         TOGGLE_VEHICLE_MOD(playerVehicle, MOD_TOGGLE_TURBO, g_vehicle_turbo)
@@ -1411,10 +1443,6 @@ PROC APPLY_SELECTED()
                     ENDIF
                 BREAK
                 CASE 5
-                    g_cinematic_bars = NOT g_cinematic_bars
-                    SET_CINEMATIC_MODE_ACTIVE(g_cinematic_bars)
-                BREAK
-                CASE 6
                     g_camera_shake = NOT g_camera_shake
                     IF g_camera_shake
                         SHAKE_GAMEPLAY_CAM("DRUNK_SHAKE", 0.5)
@@ -1438,9 +1466,6 @@ PROC APPLY_SELECTED()
                 BREAK
                 CASE 1 SET_RADIO_RETUNE_DOWN() BREAK
                 CASE 2 SET_RADIO_RETUNE_UP() BREAK
-                CASE 3
-                    DISABLE_PORTABLE_RADIO()
-                BREAK
             ENDSWITCH
         BREAK
         CASE 6
@@ -1451,6 +1476,15 @@ PROC APPLY_SELECTED()
                 CASE 3 TELEPORT_PLAYER_WITH_VEHICLE(<<711.7, 1198.8, 348.5>>) BREAK
                 CASE 4 TELEPORT_PLAYER_WITH_VEHICLE(<<-2047.4, 3132.1, 32.8>>) BREAK
                 CASE 5 TELEPORT_PLAYER_WITH_VEHICLE(<<102.9, -1939.7, 20.8>>) BREAK
+                CASE 6 TELEPORT_PLAYER_WITH_VEHICLE(<<-14.4, -1438.0, 31.1>>) BREAK
+                CASE 7 TELEPORT_PLAYER_WITH_VEHICLE(<<-852.4, 160.0, 65.6>>) BREAK
+                CASE 8 TELEPORT_PLAYER_WITH_VEHICLE(<<1975.5, 3819.6, 33.4>>) BREAK
+                CASE 9 TELEPORT_PLAYER_WITH_VEHICLE(<<1274.8, -1710.0, 54.8>>) BREAK
+                CASE 10 TELEPORT_PLAYER_WITH_VEHICLE(<<-47.1, -1112.3, 26.4>>) BREAK
+                CASE 11 TELEPORT_PLAYER_WITH_VEHICLE(<<-449.7, -340.7, 34.5>>) BREAK
+                CASE 12 TELEPORT_PLAYER_WITH_VEHICLE(<<425.1, -979.5, 30.7>>) BREAK
+                CASE 13 TELEPORT_PLAYER_WITH_VEHICLE(<<-662.1, -948.5, 21.5>>) BREAK
+                CASE 14 TELEPORT_PLAYER_WITH_VEHICLE(<<-365.4, -131.4, 37.9>>) BREAK
             ENDSWITCH
         BREAK
         CASE 7
@@ -1478,15 +1512,11 @@ PROC APPLY_SELECTED()
                 CASE 5 g_first_person = NOT g_first_person BREAK
                 CASE 6 CLEAR_AREA_OF_VEHICLES(GET_ENTITY_COORDS(playerPed), 50.0) BREAK
                 CASE 7 CLEAR_AREA_OF_PEDS(GET_ENTITY_COORDS(playerPed), 50.0) BREAK
-                CASE 8 g_vehicle_auto_repair = NOT g_vehicle_auto_repair BREAK
             ENDSWITCH
         BREAK
         CASE 8
             SWITCH g_item
                 CASE 2 g_respawn_at_death = NOT g_respawn_at_death BREAK
-                CASE 5 OPEN_MENU_KEYBOARD(2) BREAK
-                CASE 6 OPEN_MENU_KEYBOARD(3) BREAK
-                CASE 7 SET_PED_MONEY(playerPed, g_cash_amount) BREAK
             ENDSWITCH
         BREAK
     ENDSWITCH
@@ -1507,47 +1537,87 @@ PROC DRAW_PLAYER_ROW(INT index, FLOAT y)
         CASE 6 IF g_super_jump DRAW_OPTION(y, "Super Jump", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Super Jump", "OFF", g_item = index, 0) ENDIF BREAK
         CASE 7 IF g_drunk DRAW_OPTION(y, "Drunk Mode", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Drunk Mode", "OFF", g_item = index, 0) ENDIF BREAK
         CASE 8 IF g_explosive_melee DRAW_OPTION(y, "Explosive Melee", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Explosive Melee", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 9 DRAW_ATTACKER_MODEL(y, g_item = index) BREAK
-        CASE 10 DRAW_ATTACKER_WEAPON(y, g_item = index) BREAK
-        CASE 11 DRAW_OPTION(y, "Send Attacker", "APPLY", g_item = index, 2) BREAK
+        CASE 9 DRAW_NUMBER_OPTION(y, "Cash Balance", g_cash_amount, g_item = index) BREAK
+        CASE 10 DRAW_OPTION(y, "Apply Cash Balance", "APPLY", g_item = index, 2) BREAK
+        CASE 11 DRAW_ATTACKER_MODEL(y, g_item = index) BREAK
+        CASE 12 DRAW_ATTACKER_WEAPON(y, g_item = index) BREAK
+        CASE 13 DRAW_OPTION(y, "Send Attacker", "APPLY", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
+
+PROC DRAW_VEHICLE_MULTIPLIER(FLOAT y, STRING label, INT level, BOOL selected)
+    IF level = 0
+        DRAW_OPTION(y, label, "< OFF >", selected, 0)
+    ELIF level = 1
+        DRAW_OPTION(y, label, "< 1.25x >", selected, 3)
+    ELIF level = 2
+        DRAW_OPTION(y, label, "< 1.5x >", selected, 3)
+    ELIF level = 3
+        DRAW_OPTION(y, label, "< 2x >", selected, 3)
+    ELIF level = 4
+        DRAW_OPTION(y, label, "< 2.5x >", selected, 3)
+    ELIF level = 5
+        DRAW_OPTION(y, label, "< 3x >", selected, 3)
+    ELIF level = 6
+        DRAW_OPTION(y, label, "< 4x >", selected, 3)
+    ELIF level = 7
+        DRAW_OPTION(y, label, "< 5x >", selected, 3)
+    ELIF level = 8
+        DRAW_OPTION(y, label, "< 10x >", selected, 3)
+    ELSE
+        DRAW_OPTION(y, label, "< 20x >", selected, 3)
+    ENDIF
+ENDPROC
+
+FUNC FLOAT VEHICLE_MULTIPLIER_VALUE(INT level)
+    IF level = 1 RETURN 1.25 ENDIF
+    IF level = 2 RETURN 1.5 ENDIF
+    IF level = 3 RETURN 2.0 ENDIF
+    IF level = 4 RETURN 2.5 ENDIF
+    IF level = 5 RETURN 3.0 ENDIF
+    IF level = 6 RETURN 4.0 ENDIF
+    IF level = 7 RETURN 5.0 ENDIF
+    IF level = 8 RETURN 10.0 ENDIF
+    IF level = 9 RETURN 20.0 ENDIF
+    RETURN 0.0
+ENDFUNC
 
 PROC DRAW_VEHICLE_ROW(INT index, FLOAT y)
     SWITCH index
         CASE 0 DRAW_OPTION(y, "Vehicle Spawner", "OPEN", g_item = index, 2) BREAK
         CASE 1 IF g_vehicle_god DRAW_OPTION(y, "Vehicle God Mode", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Vehicle God Mode", "OFF", g_item = index, 0) ENDIF BREAK
         CASE 2 DRAW_OPTION(y, "Repair Vehicle", "APPLY", g_item = index, 2) BREAK
-        CASE 3 DRAW_OPTION(y, "Flip Vehicle upright", "APPLY", g_item = index, 2) BREAK
-        CASE 4 DRAW_OPTION(y, "Destroy Engine", "APPLY", g_item = index, 2) BREAK
-        CASE 5 IF g_doors_locked DRAW_OPTION(y, "Lock Doors", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Lock Doors", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 6 IF g_seatbelt DRAW_OPTION(y, "Always Seatbelt", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Always Seatbelt", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 7 IF g_vehicle_acceleration DRAW_OPTION(y, "Acceleration Boost", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Acceleration Boost", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 8 IF g_vehicle_top_speed DRAW_OPTION(y, "Top-Speed Boost", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Top-Speed Boost", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 9 IF g_vehicle_cornering DRAW_OPTION(y, "High Cornering Grip", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "High Cornering Grip", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 10 IF g_vehicle_bulletproof_tyres DRAW_OPTION(y, "Bulletproof Tyres", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Bulletproof Tyres", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 11 IF g_vehicle_turbo DRAW_OPTION(y, "Turbo Mod", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Turbo Mod", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 12 DRAW_OPTION(y, "LS Customs", "OPEN", g_item = index, 2) BREAK
-        CASE 13 IF g_vehicle_speedometer DRAW_OPTION(y, "Speedometer", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Speedometer", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 14 IF g_vehicle_speed_unit = 0 DRAW_OPTION(y, "Speed Unit", "< MPH >", g_item = index, 3) ELSE DRAW_OPTION(y, "Speed Unit", "< KMPH >", g_item = index, 3) ENDIF BREAK
+        CASE 3 IF g_vehicle_auto_repair DRAW_OPTION(y, "Auto Repair Vehicle", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Repair Vehicle", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 4 DRAW_OPTION(y, "Flip Vehicle upright", "APPLY", g_item = index, 2) BREAK
+        CASE 5 DRAW_OPTION(y, "Destroy Engine", "APPLY", g_item = index, 2) BREAK
+        CASE 6 IF g_doors_locked DRAW_OPTION(y, "Lock Doors", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Lock Doors", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 7 IF g_seatbelt DRAW_OPTION(y, "Always Seatbelt", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Always Seatbelt", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 8 DRAW_VEHICLE_MULTIPLIER(y, "Acceleration Boost", g_vehicle_acceleration_level, g_item = index) BREAK
+        CASE 9 DRAW_VEHICLE_MULTIPLIER(y, "Top-Speed Boost", g_vehicle_top_speed_level, g_item = index) BREAK
+        CASE 10 IF g_vehicle_cornering DRAW_OPTION(y, "High Cornering Grip", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "High Cornering Grip", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 11 IF g_vehicle_bulletproof_tyres DRAW_OPTION(y, "Bulletproof Tyres", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Bulletproof Tyres", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 12 IF g_vehicle_turbo DRAW_OPTION(y, "Turbo Mod", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Turbo Mod", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 13 DRAW_OPTION(y, "LS Customs", "OPEN", g_item = index, 2) BREAK
+        CASE 14 IF g_vehicle_speedometer DRAW_OPTION(y, "Speedometer", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Speedometer", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 15 IF g_vehicle_speed_unit = 0 DRAW_OPTION(y, "Speed Unit", "< MPH >", g_item = index, 3) ELSE DRAW_OPTION(y, "Speed Unit", "< KMPH >", g_item = index, 3) ENDIF BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_SPAWNER_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 DRAW_VEHICLE_SPAWN_SELECTOR(y, g_item = index) BREAK
-        CASE 1 DRAW_NUMBER_OPTION(y, "Spawn Count", g_spawn_count, g_item = index) BREAK
-        CASE 2 IF g_spawn_maxed DRAW_OPTION(y, "Max Available Upgrades", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Max Available Upgrades", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 3 IF g_spawn_alignment = 0 DRAW_OPTION(y, "Alignment", "< Door to Door >", g_item = index, 3) ELSE DRAW_OPTION(y, "Alignment", "< Bumper to Bumper >", g_item = index, 3) ENDIF BREAK
-        CASE 4
+        CASE 0 DRAW_OPTION(y, "Spawn Selected Vehicle(s)", "APPLY", g_item = index, 2) BREAK
+        CASE 1 DRAW_VEHICLE_SPAWN_SELECTOR(y, g_item = index) BREAK
+        CASE 2 DRAW_NUMBER_OPTION(y, "Spawn Count", g_spawn_count, g_item = index) BREAK
+        CASE 3 IF g_spawn_maxed DRAW_OPTION(y, "Max Available Upgrades", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Max Available Upgrades", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 4 IF g_spawn_alignment = 0 DRAW_OPTION(y, "Alignment", "< Door to Door >", g_item = index, 3) ELSE DRAW_OPTION(y, "Alignment", "< Bumper to Bumper >", g_item = index, 3) ENDIF BREAK
+        CASE 5
             IF g_spawn_facing = 0 DRAW_OPTION(y, "Facing", "< Forward >", g_item = index, 3)
             ELIF g_spawn_facing = 1 DRAW_OPTION(y, "Facing", "< Right >", g_item = index, 3)
             ELIF g_spawn_facing = 2 DRAW_OPTION(y, "Facing", "< Backward >", g_item = index, 3)
             ELSE DRAW_OPTION(y, "Facing", "< Left >", g_item = index, 3) ENDIF
         BREAK
-        CASE 5 IF g_delete_previous_spawned_vehicle DRAW_OPTION(y, "Auto Delete Previous Car", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Delete Previous Car", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 6 DRAW_OPTION(y, "Delete All Custom Cars", "APPLY", g_item = index, 2) BREAK
-        CASE 7 DRAW_OPTION(y, "Spawn Selected Vehicle(s)", "APPLY", g_item = index, 2) BREAK
+        CASE 6 IF g_delete_previous_spawned_vehicle DRAW_OPTION(y, "Auto Delete Previous Car", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Delete Previous Car", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 7 DRAW_OPTION(y, "Delete All Custom Cars", "APPLY", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -1572,7 +1642,26 @@ PROC DRAW_MISC_ROW(INT index, FLOAT y)
         CASE 5 IF g_first_person DRAW_OPTION(y, "Force First Person", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Force First Person", "OFF", g_item = index, 0) ENDIF BREAK
         CASE 6 DRAW_OPTION(y, "Clear Nearby Vehicles", "APPLY", g_item = index, 2) BREAK
         CASE 7 DRAW_OPTION(y, "Clear Nearby Peds", "APPLY", g_item = index, 2) BREAK
-        CASE 8 IF g_vehicle_auto_repair DRAW_OPTION(y, "Auto Repair Vehicle", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Repair Vehicle", "OFF", g_item = index, 0) ENDIF BREAK
+    ENDSWITCH
+ENDPROC
+
+PROC DRAW_TELEPORT_ROW(INT index, FLOAT y)
+    SWITCH index
+        CASE 0 DRAW_OPTION(y, "Mount Chiliad", ">", g_item = index, 3) BREAK
+        CASE 1 DRAW_OPTION(y, "Maze Bank Tower", ">", g_item = index, 3) BREAK
+        CASE 2 DRAW_OPTION(y, "Los Santos Airport", ">", g_item = index, 3) BREAK
+        CASE 3 DRAW_OPTION(y, "Vinewood Sign", ">", g_item = index, 3) BREAK
+        CASE 4 DRAW_OPTION(y, "Fort Zancudo", ">", g_item = index, 3) BREAK
+        CASE 5 DRAW_OPTION(y, "Grove Street", ">", g_item = index, 3) BREAK
+        CASE 6 DRAW_OPTION(y, "Franklin's House", ">", g_item = index, 3) BREAK
+        CASE 7 DRAW_OPTION(y, "Michael's House", ">", g_item = index, 3) BREAK
+        CASE 8 DRAW_OPTION(y, "Trevor's Trailer", ">", g_item = index, 3) BREAK
+        CASE 9 DRAW_OPTION(y, "Lester's Warehouse", ">", g_item = index, 3) BREAK
+        CASE 10 DRAW_OPTION(y, "Simeon's Dealership", ">", g_item = index, 3) BREAK
+        CASE 11 DRAW_OPTION(y, "Hospital", ">", g_item = index, 3) BREAK
+        CASE 12 DRAW_OPTION(y, "Police Station", ">", g_item = index, 3) BREAK
+        CASE 13 DRAW_OPTION(y, "Ammu-Nation", ">", g_item = index, 3) BREAK
+        CASE 14 DRAW_OPTION(y, "Los Santos Customs", ">", g_item = index, 3) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -1599,6 +1688,7 @@ PROC DRAW_SCROLLING_ROWS(INT total, INT rowType)
         IF rowType = 0 DRAW_PLAYER_ROW(index, y) ENDIF
         IF rowType = 1 DRAW_VEHICLE_ROW(index, y) ENDIF
         IF rowType = 2 DRAW_MISC_ROW(index, y) ENDIF
+        IF rowType = 3 DRAW_TELEPORT_ROW(index, y) ENDIF
         index = index + 1
         row = row + 1
     ENDWHILE
@@ -1623,11 +1713,11 @@ PROC DRAW_PAGE()
     BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
         ADD_TEXT_COMPONENT_SUBSTRING_KEYBOARD_DISPLAY("MEGATARD")
     END_TEXT_COMMAND_DISPLAY_TEXT(g_menu_x - 0.060, 0.100 + g_menu_y)
-    MENU_TEXT(g_menu_x - 0.060, 0.158, 0.390, titleR, titleG, titleB, "Made by: @Geekmaxxer")
+    MENU_TEXT(g_menu_x - 0.057, 0.158, 0.390, titleR, titleG, titleB, "Made by: @Geekmaxxer")
     SWITCH g_tab
         CASE 0
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "PLAYER SETTINGS")
-            DRAW_SCROLLING_ROWS(12, 0)
+            DRAW_SCROLLING_ROWS(14, 0)
         BREAK
         CASE 1
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "WEAPON SETTINGS")
@@ -1654,7 +1744,7 @@ PROC DRAW_PAGE()
                 DRAW_LSC_PAGE()
             ELSE
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "VEHICLE SETTINGS")
-            DRAW_SCROLLING_ROWS(15, 1)
+            DRAW_SCROLLING_ROWS(16, 1)
             ENDIF
         BREAK
         CASE 4
@@ -1664,24 +1754,17 @@ PROC DRAW_PAGE()
             IF g_night_vision DRAW_OPTION(0.344, "Night Vision", "ON", g_item = 2, 1) ELSE DRAW_OPTION(0.344, "Night Vision", "OFF", g_item = 2, 0) ENDIF
             IF g_thermal_vision DRAW_OPTION(0.382, "Thermal Vision", "ON", g_item = 3, 1) ELSE DRAW_OPTION(0.382, "Thermal Vision", "OFF", g_item = 3, 0) ENDIF
             IF g_motion_blur DRAW_OPTION(0.420, "Motion Blur", "ON", g_item = 4, 1) ELSE DRAW_OPTION(0.420, "Motion Blur", "OFF", g_item = 4, 0) ENDIF
-            IF g_cinematic_bars DRAW_OPTION(0.458, "Cinematic Bars", "ON", g_item = 5, 1) ELSE DRAW_OPTION(0.458, "Cinematic Bars", "OFF", g_item = 5, 0) ENDIF
-            IF g_camera_shake DRAW_OPTION(0.496, "Camera Shake", "ON", g_item = 6, 1) ELSE DRAW_OPTION(0.496, "Camera Shake", "OFF", g_item = 6, 0) ENDIF
+            IF g_camera_shake DRAW_OPTION(0.458, "Camera Shake", "ON", g_item = 5, 1) ELSE DRAW_OPTION(0.458, "Camera Shake", "OFF", g_item = 5, 0) ENDIF
         BREAK
         CASE 5
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "PORTABLE RADIO")
             IF g_mobile_radio DRAW_OPTION(0.268, "Portable Radio", "ON", g_item = 0, 1) ELSE DRAW_OPTION(0.268, "Portable Radio", "OFF", g_item = 0, 0) ENDIF
             DRAW_OPTION(0.306, "Previous Station", "APPLY", g_item = 1, 2)
             DRAW_OPTION(0.344, "Next Station", "APPLY", g_item = 2, 2)
-            DRAW_OPTION(0.382, "Radio Off", "APPLY", g_item = 3, 2)
         BREAK
         CASE 6
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "TELEPORT LOCATIONS")
-            DRAW_OPTION(0.268, "Mount Chiliad", ">", g_item = 0, 3)
-            DRAW_OPTION(0.306, "Maze Bank Tower", ">", g_item = 1, 3)
-            DRAW_OPTION(0.344, "Los Santos Airport", ">", g_item = 2, 3)
-            DRAW_OPTION(0.382, "Vinewood Sign", ">", g_item = 3, 3)
-            DRAW_OPTION(0.420, "Fort Zancudo", ">", g_item = 4, 3)
-            DRAW_OPTION(0.458, "Grove Street", ">", g_item = 5, 3)
+            DRAW_SCROLLING_ROWS(15, 3)
         BREAK
         CASE 7
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "MISC AND NPC")
@@ -1694,9 +1777,6 @@ PROC DRAW_PAGE()
             IF g_respawn_at_death DRAW_OPTION(0.344, "Enable Custom Respawn", "ON", g_item = 2, 1) ELSE DRAW_OPTION(0.344, "Enable Custom Respawn", "OFF", g_item = 2, 0) ENDIF
             DRAW_MENU_X_SELECTOR(0.382, g_item = 3)
             DRAW_MENU_Y_SELECTOR(0.420, g_item = 4)
-            DRAW_NUMBER_OPTION(0.458, "Cash Balance", g_cash_amount, g_item = 5)
-            DRAW_NUMBER_OPTION(0.496, "NPC Cash Drop", g_npc_drop_amount, g_item = 6)
-            DRAW_OPTION(0.534, "Apply Cash Balance", "APPLY", g_item = 7, 2)
         BREAK
     ENDSWITCH
     DRAW_SCROLLBAR()
@@ -1720,6 +1800,9 @@ SCRIPT
         IF g_fast_run SET_RUN_SPRINT_MULTIPLIER_FOR_PLAYER(PLAYER_ID(), 1.49) ELSE SET_RUN_SPRINT_MULTIPLIER_FOR_PLAYER(PLAYER_ID(), 1.0) ENDIF
         IF g_fast_swim SET_SWIM_MULTIPLIER_FOR_PLAYER(PLAYER_ID(), 1.49) ELSE SET_SWIM_MULTIPLIER_FOR_PLAYER(PLAYER_ID(), 1.0) ENDIF
         IF g_super_jump SET_SUPER_JUMP_THIS_FRAME(PLAYER_ID()) ENDIF
+        IF g_drunk AND HAS_ANIM_SET_LOADED("move_m@drunk@verydrunk")
+            SET_PED_MOVEMENT_CLIPSET(PLAYER_PED_ID(), "move_m@drunk@verydrunk", 0.25)
+        ENDIF
         IF g_explosive_ammo SET_EXPLOSIVE_AMMO_THIS_FRAME(PLAYER_ID()) ENDIF
         IF g_fire_ammo SET_FIRE_AMMO_THIS_FRAME(PLAYER_ID()) ENDIF
         IF g_explosive_melee SET_EXPLOSIVE_MELEE_THIS_FRAME(PLAYER_ID()) ENDIF
@@ -1793,11 +1876,9 @@ SCRIPT
         g_was_in_vehicle = g_player_in_vehicle
         IF g_player_in_vehicle
             IF g_vehicle_auto_repair SET_VEHICLE_FIXED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) ENDIF
-            IF g_vehicle_acceleration
-                SET_VEHICLE_CHEAT_POWER_INCREASE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), 2.5)
-            ENDIF
-            IF g_vehicle_top_speed
-                SET_VEHICLE_MAX_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), 150.0)
+            SET_VEHICLE_CHEAT_POWER_INCREASE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), VEHICLE_MULTIPLIER_VALUE(g_vehicle_acceleration_level))
+            IF g_vehicle_top_speed_level > 0
+                SET_VEHICLE_MAX_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), GET_VEHICLE_ESTIMATED_MAX_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) * VEHICLE_MULTIPLIER_VALUE(g_vehicle_top_speed_level))
             ELSE
                 SET_VEHICLE_MAX_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), -1.0)
             ENDIF
@@ -1823,8 +1904,6 @@ SCRIPT
             ENDIF
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_PHONE)
             DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_CELLPHONE_UP)
-            DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_SELECT_WEAPON)
-            DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_CHARACTER_WHEEL)
             MENU_CAPTURE_INPUT()
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_JUMP)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_SPECIAL)
@@ -1833,7 +1912,6 @@ SCRIPT
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_HEADLIGHT)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_PUSHBIKE_PEDAL)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_FLY_THROTTLE_UP)
-            DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_EXIT)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_HANDBRAKE)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_CIN_CAM)
             PROCESS_MENU_DIRECTION_INPUT()
