@@ -41,12 +41,15 @@ BOOL g_infinite_ammo = FALSE
 BOOL g_explosive_ammo = FALSE
 BOOL g_fire_ammo = FALSE
 BOOL g_explosive_melee = FALSE
+BOOL g_infinite_parachute = FALSE
 INT g_attacker_model_choice = 0
 INT g_attacker_weapon_choice = 0
 BOOL g_attacker_spawn_pending = FALSE
 MODEL_NAMES g_pending_attacker_model = PLAYER_ZERO
 WEAPON_TYPE g_pending_attacker_weapon = WEAPONTYPE_PISTOL
 INT g_attacker_request_time = 0
+PED_INDEX g_menu_attackers[32]
+INT g_menu_attacker_count = 0
 BOOL g_never_wanted = FALSE
 BOOL g_ignore_police = FALSE
 BOOL g_vehicle_god = FALSE
@@ -79,6 +82,7 @@ BOOL g_lsc_turbo = FALSE
 BOOL g_lsc_xenon = FALSE
 BOOL g_lsc_neon = FALSE
 INT g_vehicle_spawn_choice = 0
+INT g_vehicle_spawn_category = 0
 BOOL g_vehicle_spawn_pending = FALSE
 BOOL g_delete_previous_spawned_vehicle = TRUE
 VEHICLE_INDEX g_last_spawned_vehicle
@@ -93,6 +97,12 @@ INT g_spawn_count = 1
 BOOL g_spawn_maxed = FALSE
 INT g_spawn_alignment = 0
 INT g_spawn_facing = 0
+BOOL g_auto_waypoint = FALSE
+BOOL g_auto_waypoint_seen = FALSE
+VECTOR g_last_auto_waypoint = <<0.0, 0.0, 0.0>>
+BOOL g_outfit_open = FALSE
+INT g_outfit_item = 0
+INT g_outfit_scroll = 0
 INT g_spawn_remaining = 0
 INT g_spawn_index = 0
 FLOAT g_spawn_heading = 0.0
@@ -307,9 +317,136 @@ PROC FINISH_ATTACKER_SPAWN()
         SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(attacker, TRUE)
         TASK_COMBAT_PED(attacker, PLAYER_PED_ID())
         SET_PED_KEEP_TASK(attacker, TRUE)
+        IF g_menu_attacker_count < 32
+            g_menu_attackers[g_menu_attacker_count] = attacker
+            g_menu_attacker_count = g_menu_attacker_count + 1
+        ENDIF
     ENDIF
     SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_attacker_model)
     g_attacker_spawn_pending = FALSE
+ENDPROC
+
+PROC CLEAR_MENU_ATTACKERS()
+    INT index = 0
+    REPEAT g_menu_attacker_count index
+        IF DOES_ENTITY_EXIST(g_menu_attackers[index])
+            SET_ENTITY_AS_MISSION_ENTITY(g_menu_attackers[index], TRUE, TRUE)
+            DELETE_PED(g_menu_attackers[index])
+        ENDIF
+    ENDREPEAT
+    g_menu_attacker_count = 0
+ENDPROC
+
+PROC TELEPORT_PLAYER_WITH_VEHICLE(VECTOR destination)
+    PED_INDEX playerPed = PLAYER_PED_ID()
+    IF IS_PED_IN_ANY_VEHICLE(playerPed)
+        SET_ENTITY_COORDS(GET_VEHICLE_PED_IS_IN(playerPed), destination)
+    ELSE
+        SET_ENTITY_COORDS(playerPed, destination)
+    ENDIF
+ENDPROC
+
+PROC TELEPORT_TO_BLIP_TYPE(BLIP_SPRITE sprite)
+    BLIP_INDEX blip = GET_FIRST_BLIP_INFO_ID(sprite)
+    IF blip != NULL
+        IF IS_BLIP_ON_MINIMAP(blip)
+            VECTOR destination = GET_BLIP_COORDS(blip)
+            TELEPORT_PLAYER_WITH_VEHICLE(destination)
+        ENDIF
+    ENDIF
+ENDPROC
+
+PROC TELEPORT_TO_WAYPOINT()
+    IF IS_WAYPOINT_ACTIVE()
+        TELEPORT_TO_BLIP_TYPE(GET_WAYPOINT_BLIP_ENUM_ID())
+    ENDIF
+ENDPROC
+
+PROC TELEPORT_TO_OBJECTIVE()
+    TELEPORT_TO_BLIP_TYPE(RADAR_TRACE_OBJECTIVE)
+ENDPROC
+
+PROC ADJUST_OUTFIT_SLOT(INT direction)
+    PED_INDEX playerPed = PLAYER_PED_ID()
+    INT current = 0
+    INT count = 0
+    INT next = 0
+    INT texture = 0
+    IF g_outfit_item < NUM_PED_COMPONENTS
+        PED_COMPONENT component = INT_TO_ENUM(PED_COMPONENT, g_outfit_item)
+        current = GET_PED_DRAWABLE_VARIATION(playerPed, component)
+        count = GET_NUMBER_OF_PED_DRAWABLE_VARIATIONS(playerPed, component)
+        IF count <= 0 EXIT ENDIF
+        next = current + direction
+        IF next < 0 next = count - 1 ENDIF
+        IF next >= count next = 0 ENDIF
+        texture = GET_PED_TEXTURE_VARIATION(playerPed, component)
+        IF texture >= GET_NUMBER_OF_PED_TEXTURE_VARIATIONS(playerPed, component, next) texture = 0 ENDIF
+        SET_PED_COMPONENT_VARIATION(playerPed, component, next, texture)
+    ELSE
+        PED_PROP_POSITION prop = INT_TO_ENUM(PED_PROP_POSITION, g_outfit_item - NUM_PED_COMPONENTS)
+        current = GET_PED_PROP_INDEX(playerPed, prop)
+        count = GET_NUMBER_OF_PED_PROP_DRAWABLE_VARIATIONS(playerPed, prop)
+        IF count <= 0 EXIT ENDIF
+        next = current + direction
+        IF next < -1 next = count - 1 ENDIF
+        IF next >= count next = -1 ENDIF
+        IF next = -1
+            CLEAR_PED_PROP(playerPed, prop)
+        ELSE
+            texture = GET_NUMBER_OF_PED_PROP_TEXTURE_VARIATIONS(playerPed, prop, next)
+            SET_PED_PROP_INDEX(playerPed, prop, next, 0)
+        ENDIF
+    ENDIF
+ENDPROC
+
+PROC DRAW_OUTFIT_ROW(INT index, FLOAT y)
+    PED_INDEX playerPed = PLAYER_PED_ID()
+    INT current = 0
+    STRING label = "Outfit item"
+    IF index = 0 label = "Head" ENDIF
+    IF index = 1 label = "Beard / Mask" ENDIF
+    IF index = 2 label = "Hair" ENDIF
+    IF index = 3 label = "Torso" ENDIF
+    IF index = 4 label = "Legs / Pants" ENDIF
+    IF index = 5 label = "Hands / Gloves" ENDIF
+    IF index = 6 label = "Shoes" ENDIF
+    IF index = 7 label = "Teeth" ENDIF
+    IF index = 8 label = "Undershirt" ENDIF
+    IF index = 9 label = "Body Armour" ENDIF
+    IF index = 10 label = "Decal" ENDIF
+    IF index = 11 label = "Jacket / Top" ENDIF
+    IF index = 12 label = "Hat" ENDIF
+    IF index = 13 label = "Glasses" ENDIF
+    IF index = 14 label = "Ears" ENDIF
+    IF index = 15 label = "Prop 3" ENDIF
+    IF index = 16 label = "Prop 4" ENDIF
+    IF index = 17 label = "Prop 5" ENDIF
+    IF index = 18 label = "Watch" ENDIF
+    IF index = 19 label = "Bracelet" ENDIF
+    IF index = 20 label = "Prop 8" ENDIF
+    IF index < NUM_PED_COMPONENTS
+        current = GET_PED_DRAWABLE_VARIATION(playerPed, INT_TO_ENUM(PED_COMPONENT, index))
+        DRAW_NUMBER_OPTION(y, label, current, g_item = index)
+    ELSE
+        current = GET_PED_PROP_INDEX(playerPed, INT_TO_ENUM(PED_PROP_POSITION, index - NUM_PED_COMPONENTS))
+        IF current < 0
+            DRAW_OPTION(y, label, "< None >", g_item = index, 3)
+        ELSE
+            DRAW_NUMBER_OPTION(y, label, current, g_item = index)
+        ENDIF
+    ENDIF
+ENDPROC
+
+PROC DRAW_OUTFIT_PAGE()
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "OUTFIT CUSTOMIZATION")
+    INT index = g_outfit_scroll
+    INT row = 0
+    WHILE row < 8 AND index < 21
+        DRAW_OUTFIT_ROW(index, 0.268 + (TO_FLOAT(row) * ROW_H))
+        index = index + 1
+        row = row + 1
+    ENDWHILE
 ENDPROC
 
 FUNC INT LSC_SLOT()
@@ -444,19 +581,20 @@ PROC DRAW_LSC_PAGE()
 ENDPROC
 
 FUNC INT ITEM_COUNT()
-    IF g_tab = 3 AND g_spawner_open RETURN 8 ENDIF
+    IF g_tab = 0 AND g_outfit_open RETURN 21 ENDIF
+    IF g_tab = 3 AND g_spawner_open RETURN 9 ENDIF
     IF g_tab = 3 AND g_lsc_open
         IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
         RETURN 10
     ENDIF
     SWITCH g_tab
-        CASE 0 RETURN 14 BREAK
+        CASE 0 RETURN 16 BREAK
         CASE 1 RETURN 6 BREAK
         CASE 2 RETURN 6 BREAK
         CASE 3 RETURN 16 BREAK
         CASE 4 RETURN 6 BREAK
         CASE 5 RETURN 3 BREAK
-        CASE 6 RETURN 15 BREAK
+        CASE 6 RETURN 23 BREAK
         CASE 7 RETURN 8 BREAK
         CASE 8 RETURN 5 BREAK
     ENDSWITCH
@@ -767,9 +905,26 @@ PROC APPLY_ACCENT_CHOICE()
     ENDSWITCH
 ENDPROC
 
+PROC ADJUST_VEHICLE_SPAWN_CHOICE(INT direction)
+    INT first = 0
+    INT last = 17
+    IF g_vehicle_spawn_category = 1
+        first = 18
+        last = 22
+    ENDIF
+    IF g_vehicle_spawn_category = 2
+        first = 23
+        last = 25
+    ENDIF
+    g_vehicle_spawn_choice = g_vehicle_spawn_choice + direction
+    IF g_vehicle_spawn_choice < first g_vehicle_spawn_choice = last ENDIF
+    IF g_vehicle_spawn_choice > last g_vehicle_spawn_choice = first ENDIF
+ENDPROC
+
 FUNC BOOL IS_SELECTOR_ACTIVE()
+    IF g_tab = 0 AND g_outfit_open RETURN TRUE ENDIF
     IF g_tab = 3 AND g_spawner_open
-        IF g_item = 1 OR g_item = 2 OR g_item = 4 OR g_item = 5 RETURN TRUE ENDIF
+        IF g_item = 1 OR g_item = 2 OR g_item = 3 OR g_item = 5 OR g_item = 6 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 0
         IF g_item = 11 OR g_item = 12 RETURN TRUE ENDIF
@@ -778,7 +933,7 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
         IF g_item = 0 OR g_item = 1 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 3 AND g_item = 15 AND NOT g_lsc_open RETURN TRUE ENDIF
-    IF g_tab = 3 AND NOT g_lsc_open AND (g_item = 7 OR g_item = 8) RETURN TRUE ENDIF
+    IF g_tab = 3 AND NOT g_lsc_open AND (g_item = 8 OR g_item = 9) RETURN TRUE ENDIF
     IF g_tab = 3 AND g_lsc_open
         IF g_item = 1 OR g_item = 3 OR g_item = 4 OR g_item = 8 RETURN TRUE ENDIF
     ENDIF
@@ -789,18 +944,27 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
 ENDFUNC
 
 PROC ADJUST_SELECTOR(INT direction)
+    IF g_tab = 0 AND g_outfit_open
+        ADJUST_OUTFIT_SLOT(direction)
+        EXIT
+    ENDIF
     IF g_tab = 3 AND g_spawner_open
         IF g_item = 1
-            g_vehicle_spawn_choice = g_vehicle_spawn_choice + direction
-            IF g_vehicle_spawn_choice < 0 g_vehicle_spawn_choice = 25 ENDIF
-            IF g_vehicle_spawn_choice > 25 g_vehicle_spawn_choice = 0 ENDIF
+            g_vehicle_spawn_category = g_vehicle_spawn_category + direction
+            IF g_vehicle_spawn_category < 0 g_vehicle_spawn_category = 2 ENDIF
+            IF g_vehicle_spawn_category > 2 g_vehicle_spawn_category = 0 ENDIF
+            IF g_vehicle_spawn_category = 0 g_vehicle_spawn_choice = 0 ENDIF
+            IF g_vehicle_spawn_category = 1 g_vehicle_spawn_choice = 18 ENDIF
+            IF g_vehicle_spawn_category = 2 g_vehicle_spawn_choice = 23 ENDIF
         ELIF g_item = 2
+            ADJUST_VEHICLE_SPAWN_CHOICE(direction)
+        ELIF g_item = 3
             g_spawn_count = g_spawn_count + direction
             IF g_spawn_count < 1 g_spawn_count = 500 ENDIF
             IF g_spawn_count > 500 g_spawn_count = 1 ENDIF
-        ELIF g_item = 4
-            g_spawn_alignment = 1 - g_spawn_alignment
         ELIF g_item = 5
+            g_spawn_alignment = 1 - g_spawn_alignment
+        ELIF g_item = 6
             g_spawn_facing = g_spawn_facing + direction
             IF g_spawn_facing < 0 g_spawn_facing = 3 ENDIF
             IF g_spawn_facing > 3 g_spawn_facing = 0 ENDIF
@@ -831,11 +995,6 @@ PROC ADJUST_SELECTOR(INT direction)
             IF g_weather_choice > 5 g_weather_choice = 0 ENDIF
         ENDIF
     ENDIF
-    IF g_tab = 3 AND g_item = 0
-        g_vehicle_spawn_choice = g_vehicle_spawn_choice + direction
-        IF g_vehicle_spawn_choice < 0 g_vehicle_spawn_choice = 25 ENDIF
-        IF g_vehicle_spawn_choice > 25 g_vehicle_spawn_choice = 0 ENDIF
-    ENDIF
     IF g_tab = 3 AND g_lsc_open AND g_item = 1
         g_lsc_slot_choice = g_lsc_slot_choice + direction
         IF g_lsc_slot_choice < 0 g_lsc_slot_choice = 25 ENDIF
@@ -864,12 +1023,12 @@ PROC ADJUST_SELECTOR(INT direction)
         g_vehicle_speed_unit = 1 - g_vehicle_speed_unit
     ENDIF
     IF g_tab = 3 AND NOT g_spawner_open AND NOT g_lsc_open
-        IF g_item = 7
+        IF g_item = 8
             g_vehicle_acceleration_level = g_vehicle_acceleration_level + direction
             IF g_vehicle_acceleration_level < 0 g_vehicle_acceleration_level = 9 ENDIF
             IF g_vehicle_acceleration_level > 9 g_vehicle_acceleration_level = 0 ENDIF
         ENDIF
-        IF g_item = 8
+        IF g_item = 9
             g_vehicle_top_speed_level = g_vehicle_top_speed_level + direction
             IF g_vehicle_top_speed_level < 0 g_vehicle_top_speed_level = 9 ENDIF
             IF g_vehicle_top_speed_level > 9 g_vehicle_top_speed_level = 0 ENDIF
@@ -884,8 +1043,8 @@ PROC ADJUST_SELECTOR(INT direction)
         ENDIF
         IF g_item = 1
             g_respawn_location_choice = g_respawn_location_choice + direction
-            IF g_respawn_location_choice < 0 g_respawn_location_choice = 11 ENDIF
-            IF g_respawn_location_choice > 11 g_respawn_location_choice = 0 ENDIF
+            IF g_respawn_location_choice < 0 g_respawn_location_choice = 22 ENDIF
+            IF g_respawn_location_choice > 22 g_respawn_location_choice = 0 ENDIF
         ENDIF
         IF g_item = 3
             g_menu_x = g_menu_x + (TO_FLOAT(direction) * 0.005)
@@ -961,7 +1120,24 @@ PROC DRAW_RESPAWN_SELECTOR(FLOAT y, BOOL selected)
         CASE 9 DRAW_OPTION(y, "Respawn location:", "< LS Airport >", selected, 3) BREAK
         CASE 10 DRAW_OPTION(y, "Respawn location:", "< Maze Bank Tower >", selected, 3) BREAK
         CASE 11 DRAW_OPTION(y, "Respawn location:", "< Grove Street >", selected, 3) BREAK
+        CASE 12 DRAW_OPTION(y, "Respawn location:", "< North Yankton >", selected, 3) BREAK
+        CASE 13 DRAW_OPTION(y, "Respawn location:", "< Cayo Perico >", selected, 3) BREAK
+        CASE 14 DRAW_OPTION(y, "Respawn location:", "< Fort Zancudo >", selected, 3) BREAK
+        CASE 15 DRAW_OPTION(y, "Respawn location:", "< Vinewood Sign >", selected, 3) BREAK
+        CASE 16 DRAW_OPTION(y, "Respawn location:", "< Mount Chiliad >", selected, 3) BREAK
+        CASE 17 DRAW_OPTION(y, "Respawn location:", "< Sandy Shores Airfield >", selected, 3) BREAK
+        CASE 18 DRAW_OPTION(y, "Respawn location:", "< IAA Building >", selected, 3) BREAK
+        CASE 19 DRAW_OPTION(y, "Respawn location:", "< Mount Gordo >", selected, 3) BREAK
+        CASE 20 DRAW_OPTION(y, "Respawn location:", "< Del Perro Pier >", selected, 3) BREAK
+        CASE 21 DRAW_OPTION(y, "Respawn location:", "< Paleto Bay >", selected, 3) BREAK
+        CASE 22 DRAW_OPTION(y, "Respawn location:", "< Humane Labs >", selected, 3) BREAK
     ENDSWITCH
+ENDPROC
+
+PROC DRAW_VEHICLE_CATEGORY_SELECTOR(FLOAT y, BOOL selected)
+    IF g_vehicle_spawn_category = 0 DRAW_OPTION(y, "Vehicle Type:", "< Cars >", selected, 3) ENDIF
+    IF g_vehicle_spawn_category = 1 DRAW_OPTION(y, "Vehicle Type:", "< Bikes >", selected, 3) ENDIF
+    IF g_vehicle_spawn_category = 2 DRAW_OPTION(y, "Vehicle Type:", "< Aircraft >", selected, 3) ENDIF
 ENDPROC
 
 PROC DRAW_VEHICLE_SPAWN_SELECTOR(FLOAT y, BOOL selected)
@@ -1099,16 +1275,18 @@ PROC MOVE_PLAYER_TO_RESPAWN_LOCATION()
         CASE 9 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<-1034.6, -2733.6, 20.2>>) BREAK
         CASE 10 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<-75.0, -818.9, 326.2>>) BREAK
         CASE 11 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<102.9, -1939.7, 20.8>>) BREAK
+        CASE 12 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<5311.0, -5206.0, 83.0>>) BREAK
+        CASE 13 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<3619.0, -583.0, 74.0>>) BREAK
+        CASE 14 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<-2047.4, 3132.1, 32.8>>) BREAK
+        CASE 15 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<711.7, 1198.8, 348.5>>) BREAK
+        CASE 16 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<501.7, 5604.4, 797.9>>) BREAK
+        CASE 17 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<1692.0, 3291.0, 41.0>>) BREAK
+        CASE 18 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<-438.0, 1076.0, 327.0>>) BREAK
+        CASE 19 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<-1170.0, 4927.0, 224.0>>) BREAK
+        CASE 20 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<-1604.5, -1072.5, 13.0>>) BREAK
+        CASE 21 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<-112.3, 6463.2, 31.0>>) BREAK
+        CASE 22 SET_ENTITY_COORDS(PLAYER_PED_ID(), <<3615.2, 3740.6, 28.7>>) BREAK
     ENDSWITCH
-ENDPROC
-
-PROC TELEPORT_PLAYER_WITH_VEHICLE(VECTOR destination)
-    PED_INDEX playerPed = PLAYER_PED_ID()
-    IF IS_PED_IN_ANY_VEHICLE(playerPed)
-        SET_ENTITY_COORDS(GET_VEHICLE_PED_IS_IN(playerPed), destination)
-    ELSE
-        SET_ENTITY_COORDS(playerPed, destination)
-    ENDIF
 ENDPROC
 
 PROC MOVE_MENU_CURSOR(INT direction)
@@ -1158,6 +1336,7 @@ ENDPROC
 PROC APPLY_SELECTED()
     PED_INDEX playerPed = PLAYER_PED_ID()
     VEHICLE_INDEX playerVehicle
+    IF g_outfit_open EXIT ENDIF
     SWITCH g_tab
         CASE 0
             SWITCH g_item
@@ -1216,6 +1395,14 @@ PROC APPLY_SELECTED()
                     g_attacker_weapon_choice = g_attacker_weapon_choice
                 BREAK
                 CASE 13 START_ATTACKER_SPAWN() BREAK
+                CASE 14 g_infinite_parachute = NOT g_infinite_parachute BREAK
+                CASE 15
+                    g_page_item[0] = g_item
+                    g_page_scroll[0] = g_scroll
+                    g_outfit_open = TRUE
+                    g_item = g_outfit_item
+                    g_scroll = g_outfit_scroll
+                BREAK
             ENDSWITCH
         BREAK
         CASE 1
@@ -1309,11 +1496,11 @@ PROC APPLY_SELECTED()
             IF g_spawner_open
                 SWITCH g_item
                     CASE 0 START_SELECTED_VEHICLE_SPAWN() BREAK
-                    CASE 1 START_ONE_SELECTED_VEHICLE_SPAWN() BREAK
-                    CASE 2 OPEN_MENU_KEYBOARD(1) BREAK
-                    CASE 3 g_spawn_maxed = NOT g_spawn_maxed BREAK
-                    CASE 6 g_delete_previous_spawned_vehicle = NOT g_delete_previous_spawned_vehicle BREAK
-                    CASE 7 DELETE_ALL_CUSTOM_CARS() BREAK
+                    CASE 2 START_ONE_SELECTED_VEHICLE_SPAWN() BREAK
+                    CASE 3 OPEN_MENU_KEYBOARD(1) BREAK
+                    CASE 4 g_spawn_maxed = NOT g_spawn_maxed BREAK
+                    CASE 7 g_delete_previous_spawned_vehicle = NOT g_delete_previous_spawned_vehicle BREAK
+                    CASE 8 DELETE_ALL_CUSTOM_CARS() BREAK
                 ENDSWITCH
             ELIF g_lsc_open
                 IF IS_PED_IN_ANY_VEHICLE(playerPed)
@@ -1367,7 +1554,7 @@ PROC APPLY_SELECTED()
                 g_spawner_open = TRUE
                 g_item = g_spawner_item
                 g_scroll = g_spawner_scroll
-            ELIF g_item = 12
+            ELIF g_item = 13
                 g_page_item[3] = g_item
                 g_page_scroll[3] = g_scroll
                 g_lsc_open = TRUE
@@ -1470,21 +1657,29 @@ PROC APPLY_SELECTED()
         BREAK
         CASE 6
             SWITCH g_item
-                CASE 0 TELEPORT_PLAYER_WITH_VEHICLE(<<501.7, 5604.4, 797.9>>) BREAK
-                CASE 1 TELEPORT_PLAYER_WITH_VEHICLE(<<-75.0, -818.9, 326.2>>) BREAK
-                CASE 2 TELEPORT_PLAYER_WITH_VEHICLE(<<-1034.6, -2733.6, 20.2>>) BREAK
-                CASE 3 TELEPORT_PLAYER_WITH_VEHICLE(<<711.7, 1198.8, 348.5>>) BREAK
-                CASE 4 TELEPORT_PLAYER_WITH_VEHICLE(<<-2047.4, 3132.1, 32.8>>) BREAK
-                CASE 5 TELEPORT_PLAYER_WITH_VEHICLE(<<102.9, -1939.7, 20.8>>) BREAK
-                CASE 6 TELEPORT_PLAYER_WITH_VEHICLE(<<-14.4, -1438.0, 31.1>>) BREAK
-                CASE 7 TELEPORT_PLAYER_WITH_VEHICLE(<<-852.4, 160.0, 65.6>>) BREAK
-                CASE 8 TELEPORT_PLAYER_WITH_VEHICLE(<<1975.5, 3819.6, 33.4>>) BREAK
-                CASE 9 TELEPORT_PLAYER_WITH_VEHICLE(<<1274.8, -1710.0, 54.8>>) BREAK
-                CASE 10 TELEPORT_PLAYER_WITH_VEHICLE(<<-47.1, -1112.3, 26.4>>) BREAK
-                CASE 11 TELEPORT_PLAYER_WITH_VEHICLE(<<-449.7, -340.7, 34.5>>) BREAK
-                CASE 12 TELEPORT_PLAYER_WITH_VEHICLE(<<425.1, -979.5, 30.7>>) BREAK
-                CASE 13 TELEPORT_PLAYER_WITH_VEHICLE(<<-662.1, -948.5, 21.5>>) BREAK
-                CASE 14 TELEPORT_PLAYER_WITH_VEHICLE(<<-365.4, -131.4, 37.9>>) BREAK
+                CASE 0 TELEPORT_TO_WAYPOINT() BREAK
+                CASE 1 TELEPORT_TO_OBJECTIVE() BREAK
+                CASE 2 g_auto_waypoint = NOT g_auto_waypoint BREAK
+                CASE 3 TELEPORT_PLAYER_WITH_VEHICLE(<<501.7, 5604.4, 797.9>>) BREAK
+                CASE 4 TELEPORT_PLAYER_WITH_VEHICLE(<<-75.0, -818.9, 326.2>>) BREAK
+                CASE 5 TELEPORT_PLAYER_WITH_VEHICLE(<<-1034.6, -2733.6, 20.2>>) BREAK
+                CASE 6 TELEPORT_PLAYER_WITH_VEHICLE(<<711.7, 1198.8, 348.5>>) BREAK
+                CASE 7 TELEPORT_PLAYER_WITH_VEHICLE(<<-2047.4, 3132.1, 32.8>>) BREAK
+                CASE 8 TELEPORT_PLAYER_WITH_VEHICLE(<<102.9, -1939.7, 20.8>>) BREAK
+                CASE 9 TELEPORT_PLAYER_WITH_VEHICLE(<<-14.4, -1438.0, 31.1>>) BREAK
+                CASE 10 TELEPORT_PLAYER_WITH_VEHICLE(<<-852.4, 160.0, 65.6>>) BREAK
+                CASE 11 TELEPORT_PLAYER_WITH_VEHICLE(<<1975.5, 3819.6, 33.4>>) BREAK
+                CASE 12 TELEPORT_PLAYER_WITH_VEHICLE(<<1274.8, -1710.0, 54.8>>) BREAK
+                CASE 13 TELEPORT_PLAYER_WITH_VEHICLE(<<-47.1, -1112.3, 26.4>>) BREAK
+                CASE 14 TELEPORT_PLAYER_WITH_VEHICLE(<<-449.7, -340.7, 34.5>>) BREAK
+                CASE 15 TELEPORT_PLAYER_WITH_VEHICLE(<<425.1, -979.5, 30.7>>) BREAK
+                CASE 16 TELEPORT_PLAYER_WITH_VEHICLE(<<-662.1, -948.5, 21.5>>) BREAK
+                CASE 17 TELEPORT_PLAYER_WITH_VEHICLE(<<-365.4, -131.4, 37.9>>) BREAK
+                CASE 18 TELEPORT_PLAYER_WITH_VEHICLE(<<5311.0, -5206.0, 83.0>>) BREAK
+                CASE 19 TELEPORT_PLAYER_WITH_VEHICLE(<<3619.0, -583.0, 74.0>>) BREAK
+                CASE 20 TELEPORT_PLAYER_WITH_VEHICLE(<<1692.0, 3291.0, 41.0>>) BREAK
+                CASE 21 TELEPORT_PLAYER_WITH_VEHICLE(<<-438.0, 1076.0, 327.0>>) BREAK
+                CASE 22 TELEPORT_PLAYER_WITH_VEHICLE(<<-1170.0, 4927.0, 224.0>>) BREAK
             ENDSWITCH
         BREAK
         CASE 7
@@ -1511,7 +1706,10 @@ PROC APPLY_SELECTED()
                 CASE 4 g_radar_hidden = NOT g_radar_hidden BREAK
                 CASE 5 g_first_person = NOT g_first_person BREAK
                 CASE 6 CLEAR_AREA_OF_VEHICLES(GET_ENTITY_COORDS(playerPed), 50.0) BREAK
-                CASE 7 CLEAR_AREA_OF_PEDS(GET_ENTITY_COORDS(playerPed), 50.0) BREAK
+                CASE 7
+                    CLEAR_AREA_OF_PEDS(GET_ENTITY_COORDS(playerPed), 50.0)
+                    CLEAR_MENU_ATTACKERS()
+                BREAK
             ENDSWITCH
         BREAK
         CASE 8
@@ -1542,6 +1740,8 @@ PROC DRAW_PLAYER_ROW(INT index, FLOAT y)
         CASE 11 DRAW_ATTACKER_MODEL(y, g_item = index) BREAK
         CASE 12 DRAW_ATTACKER_WEAPON(y, g_item = index) BREAK
         CASE 13 DRAW_OPTION(y, "Send Attacker", "APPLY", g_item = index, 2) BREAK
+        CASE 14 IF g_infinite_parachute DRAW_OPTION(y, "Infinite Parachute", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Infinite Parachute", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 15 DRAW_OPTION(y, "Outfit Customization", "OPEN", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -1606,18 +1806,19 @@ ENDPROC
 PROC DRAW_SPAWNER_ROW(INT index, FLOAT y)
     SWITCH index
         CASE 0 DRAW_OPTION(y, "Spawn Selected Vehicle(s)", "APPLY", g_item = index, 2) BREAK
-        CASE 1 DRAW_VEHICLE_SPAWN_SELECTOR(y, g_item = index) BREAK
-        CASE 2 DRAW_NUMBER_OPTION(y, "Spawn Count", g_spawn_count, g_item = index) BREAK
-        CASE 3 IF g_spawn_maxed DRAW_OPTION(y, "Max Available Upgrades", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Max Available Upgrades", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 4 IF g_spawn_alignment = 0 DRAW_OPTION(y, "Alignment", "< Door to Door >", g_item = index, 3) ELSE DRAW_OPTION(y, "Alignment", "< Bumper to Bumper >", g_item = index, 3) ENDIF BREAK
-        CASE 5
+        CASE 1 DRAW_VEHICLE_CATEGORY_SELECTOR(y, g_item = index) BREAK
+        CASE 2 DRAW_VEHICLE_SPAWN_SELECTOR(y, g_item = index) BREAK
+        CASE 3 DRAW_NUMBER_OPTION(y, "Spawn Count", g_spawn_count, g_item = index) BREAK
+        CASE 4 IF g_spawn_maxed DRAW_OPTION(y, "Max Available Upgrades", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Max Available Upgrades", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 5 IF g_spawn_alignment = 0 DRAW_OPTION(y, "Alignment", "< Door to Door >", g_item = index, 3) ELSE DRAW_OPTION(y, "Alignment", "< Bumper to Bumper >", g_item = index, 3) ENDIF BREAK
+        CASE 6
             IF g_spawn_facing = 0 DRAW_OPTION(y, "Facing", "< Forward >", g_item = index, 3)
             ELIF g_spawn_facing = 1 DRAW_OPTION(y, "Facing", "< Right >", g_item = index, 3)
             ELIF g_spawn_facing = 2 DRAW_OPTION(y, "Facing", "< Backward >", g_item = index, 3)
             ELSE DRAW_OPTION(y, "Facing", "< Left >", g_item = index, 3) ENDIF
         BREAK
-        CASE 6 IF g_delete_previous_spawned_vehicle DRAW_OPTION(y, "Auto Delete Previous Car", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Delete Previous Car", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 7 DRAW_OPTION(y, "Delete All Custom Cars", "APPLY", g_item = index, 2) BREAK
+        CASE 7 IF g_delete_previous_spawned_vehicle DRAW_OPTION(y, "Auto Delete Previous Car", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Delete Previous Car", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 8 DRAW_OPTION(y, "Delete All Custom Cars", "APPLY", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -1625,7 +1826,7 @@ PROC DRAW_SPAWNER_PAGE()
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "VEHICLE SPAWNER")
     INT index = g_spawner_scroll
     INT row = 0
-    WHILE row < 8 AND index < 8
+    WHILE row < 8 AND index < 9
         DRAW_SPAWNER_ROW(index, 0.268 + (TO_FLOAT(row) * ROW_H))
         index = index + 1
         row = row + 1
@@ -1647,21 +1848,29 @@ ENDPROC
 
 PROC DRAW_TELEPORT_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 DRAW_OPTION(y, "Mount Chiliad", ">", g_item = index, 3) BREAK
-        CASE 1 DRAW_OPTION(y, "Maze Bank Tower", ">", g_item = index, 3) BREAK
-        CASE 2 DRAW_OPTION(y, "Los Santos Airport", ">", g_item = index, 3) BREAK
-        CASE 3 DRAW_OPTION(y, "Vinewood Sign", ">", g_item = index, 3) BREAK
-        CASE 4 DRAW_OPTION(y, "Fort Zancudo", ">", g_item = index, 3) BREAK
-        CASE 5 DRAW_OPTION(y, "Grove Street", ">", g_item = index, 3) BREAK
-        CASE 6 DRAW_OPTION(y, "Franklin's House", ">", g_item = index, 3) BREAK
-        CASE 7 DRAW_OPTION(y, "Michael's House", ">", g_item = index, 3) BREAK
-        CASE 8 DRAW_OPTION(y, "Trevor's Trailer", ">", g_item = index, 3) BREAK
-        CASE 9 DRAW_OPTION(y, "Lester's Warehouse", ">", g_item = index, 3) BREAK
-        CASE 10 DRAW_OPTION(y, "Simeon's Dealership", ">", g_item = index, 3) BREAK
-        CASE 11 DRAW_OPTION(y, "Hospital", ">", g_item = index, 3) BREAK
-        CASE 12 DRAW_OPTION(y, "Police Station", ">", g_item = index, 3) BREAK
-        CASE 13 DRAW_OPTION(y, "Ammu-Nation", ">", g_item = index, 3) BREAK
-        CASE 14 DRAW_OPTION(y, "Los Santos Customs", ">", g_item = index, 3) BREAK
+        CASE 0 DRAW_OPTION(y, "Teleport to Waypoint", "APPLY", g_item = index, 2) BREAK
+        CASE 1 DRAW_OPTION(y, "Teleport to Objective", "APPLY", g_item = index, 2) BREAK
+        CASE 2 IF g_auto_waypoint DRAW_OPTION(y, "Auto Teleport Waypoint", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Teleport Waypoint", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 3 DRAW_OPTION(y, "Mount Chiliad", ">", g_item = index, 3) BREAK
+        CASE 4 DRAW_OPTION(y, "Maze Bank Tower", ">", g_item = index, 3) BREAK
+        CASE 5 DRAW_OPTION(y, "Los Santos Airport", ">", g_item = index, 3) BREAK
+        CASE 6 DRAW_OPTION(y, "Vinewood Sign", ">", g_item = index, 3) BREAK
+        CASE 7 DRAW_OPTION(y, "Fort Zancudo", ">", g_item = index, 3) BREAK
+        CASE 8 DRAW_OPTION(y, "Grove Street", ">", g_item = index, 3) BREAK
+        CASE 9 DRAW_OPTION(y, "Franklin's House", ">", g_item = index, 3) BREAK
+        CASE 10 DRAW_OPTION(y, "Michael's House", ">", g_item = index, 3) BREAK
+        CASE 11 DRAW_OPTION(y, "Trevor's Trailer", ">", g_item = index, 3) BREAK
+        CASE 12 DRAW_OPTION(y, "Lester's Warehouse", ">", g_item = index, 3) BREAK
+        CASE 13 DRAW_OPTION(y, "Simeon's Dealership", ">", g_item = index, 3) BREAK
+        CASE 14 DRAW_OPTION(y, "Hospital", ">", g_item = index, 3) BREAK
+        CASE 15 DRAW_OPTION(y, "Police Station", ">", g_item = index, 3) BREAK
+        CASE 16 DRAW_OPTION(y, "Ammu-Nation", ">", g_item = index, 3) BREAK
+        CASE 17 DRAW_OPTION(y, "Los Santos Customs", ">", g_item = index, 3) BREAK
+        CASE 18 DRAW_OPTION(y, "North Yankton", ">", g_item = index, 3) BREAK
+        CASE 19 DRAW_OPTION(y, "Cayo Perico", ">", g_item = index, 3) BREAK
+        CASE 20 DRAW_OPTION(y, "Sandy Shores Airfield", ">", g_item = index, 3) BREAK
+        CASE 21 DRAW_OPTION(y, "IAA Building", ">", g_item = index, 3) BREAK
+        CASE 22 DRAW_OPTION(y, "Mount Gordo", ">", g_item = index, 3) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -1717,7 +1926,11 @@ PROC DRAW_PAGE()
     SWITCH g_tab
         CASE 0
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "PLAYER SETTINGS")
-            DRAW_SCROLLING_ROWS(14, 0)
+            IF g_outfit_open
+                DRAW_OUTFIT_PAGE()
+            ELSE
+                DRAW_SCROLLING_ROWS(16, 0)
+            ENDIF
         BREAK
         CASE 1
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "WEAPON SETTINGS")
@@ -1753,7 +1966,7 @@ PROC DRAW_PAGE()
             DRAW_WEATHER_SELECTOR(0.306, g_item = 1)
             IF g_night_vision DRAW_OPTION(0.344, "Night Vision", "ON", g_item = 2, 1) ELSE DRAW_OPTION(0.344, "Night Vision", "OFF", g_item = 2, 0) ENDIF
             IF g_thermal_vision DRAW_OPTION(0.382, "Thermal Vision", "ON", g_item = 3, 1) ELSE DRAW_OPTION(0.382, "Thermal Vision", "OFF", g_item = 3, 0) ENDIF
-            IF g_motion_blur DRAW_OPTION(0.420, "Motion Blur", "ON", g_item = 4, 1) ELSE DRAW_OPTION(0.420, "Motion Blur", "OFF", g_item = 4, 0) ENDIF
+            IF g_motion_blur DRAW_OPTION(0.420, "CCTV Filter", "ON", g_item = 4, 1) ELSE DRAW_OPTION(0.420, "CCTV Filter", "OFF", g_item = 4, 0) ENDIF
             IF g_camera_shake DRAW_OPTION(0.458, "Camera Shake", "ON", g_item = 5, 1) ELSE DRAW_OPTION(0.458, "Camera Shake", "OFF", g_item = 5, 0) ENDIF
         BREAK
         CASE 5
@@ -1764,7 +1977,7 @@ PROC DRAW_PAGE()
         BREAK
         CASE 6
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "TELEPORT LOCATIONS")
-            DRAW_SCROLLING_ROWS(15, 3)
+            DRAW_SCROLLING_ROWS(23, 3)
         BREAK
         CASE 7
             MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "MISC AND NPC")
@@ -1866,6 +2079,28 @@ SCRIPT
             ENDIF
         ENDIF
         g_player_in_vehicle = IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
+        IF g_infinite_parachute
+            IF NOT HAS_PED_GOT_WEAPON(PLAYER_PED_ID(), GADGETTYPE_PARACHUTE)
+                GIVE_WEAPON_TO_PED(PLAYER_PED_ID(), GADGETTYPE_PARACHUTE, 1)
+            ENDIF
+        ENDIF
+        IF g_auto_waypoint
+            IF IS_WAYPOINT_ACTIVE()
+                BLIP_INDEX waypointBlip = GET_FIRST_BLIP_INFO_ID(GET_WAYPOINT_BLIP_ENUM_ID())
+                IF waypointBlip != NULL
+                    VECTOR waypointPosition = GET_BLIP_COORDS(waypointBlip)
+                    IF NOT g_auto_waypoint_seen OR VDIST(g_last_auto_waypoint, waypointPosition) > 5.0
+                        g_last_auto_waypoint = waypointPosition
+                        g_auto_waypoint_seen = TRUE
+                        TELEPORT_PLAYER_WITH_VEHICLE(waypointPosition)
+                    ENDIF
+                ENDIF
+            ELSE
+                g_auto_waypoint_seen = FALSE
+            ENDIF
+        ELSE
+            g_auto_waypoint_seen = FALSE
+        ENDIF
         IF g_lsc_open AND NOT g_player_in_vehicle
             g_item = 0
             g_scroll = 0
@@ -1936,6 +2171,12 @@ SCRIPT
                     g_spawner_open = FALSE
                     g_item = g_page_item[3]
                     g_scroll = g_page_scroll[3]
+                ELIF g_outfit_open
+                    g_outfit_item = g_item
+                    g_outfit_scroll = g_scroll
+                    g_outfit_open = FALSE
+                    g_item = g_page_item[0]
+                    g_scroll = g_page_scroll[0]
                 ELIF g_lsc_open
                     g_lsc_item = g_item
                     g_lsc_scroll = g_scroll
