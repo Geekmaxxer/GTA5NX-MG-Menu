@@ -32,13 +32,19 @@ $release = $projectXml.ProjectEditorSettingsVer3_0.CompilingSettingsList.Compili
     Where-Object { $_.ConfigurationName -eq 'Release' } |
     Select-Object -First 1
 if ($null -eq $release) { throw "Could not find Release include paths in $project" }
-$includePath = (($release.IncludePaths.string |
-    ForEach-Object { $_.Replace('$(script)', $DevNgRoot) }) -join ';')
+$includePath = ((($release.IncludePaths.string |
+    ForEach-Object { $_.Replace('$(script)', $DevNgRoot) }) + (Join-Path $PSScriptRoot '..\source')) -join ';')
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 # Keep an exact source snapshot beside every build so a later failed test can
 # always be reproduced or reverted without searching through the workspace.
 Copy-Item -LiteralPath $Source -Destination (Join-Path $OutputDirectory 'ragemenu.sc') -Force
+Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..\source') -Recurse -Filter '*.sch' | ForEach-Object {
+    $relative = $_.FullName.Substring(((Join-Path $PSScriptRoot '..\source') | Resolve-Path).Path.Length + 1)
+    $destination = Join-Path $OutputDirectory $relative
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+    Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
+}
 $controllerSnapshot = Join-Path $PSScriptRoot '..\source\achievement_controller.sc'
 if (Test-Path -LiteralPath $controllerSnapshot) {
     Copy-Item -LiteralPath $controllerSnapshot -Destination (Join-Path $OutputDirectory 'achievement_controller.sc') -Force
