@@ -2,11 +2,11 @@ using System.IO.Compression;
 
 if (args.Length != 4 || !string.Equals(args[0], "--adapt-header", StringComparison.OrdinalIgnoreCase))
 {
-    Console.Error.WriteLine("Usage: NscAdapter --adapt-header <switch-reference.nsc> <candidate.nsc> <output.nsc>");
+    Console.Error.WriteLine("Usage: NscAdapter --adapt-header <switch-reference.nsc|folder> <candidate.nsc> <output.nsc>");
     Environment.Exit(2);
 }
 
-var reference = ReadPayloadFromPath(args[1]);
+var reference = ReadPayloadFromPath(ResolveReferencePath(args[1]));
 var candidateContainer = File.ReadAllBytes(args[2]);
 var candidate = ReadPayloadFromBytes(candidateContainer);
 
@@ -19,13 +19,31 @@ Buffer.BlockCopy(reference, 0, candidate, 0, 8);
 Buffer.BlockCopy(reference, 0x18, candidate, 0x18, 4);
 
 Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(args[3]))!);
-// script_rel.rpf stores ragemenu.nsc as an ordinary compressed file entry.
-// Its working payload starts at the script header, not at the optional RSC7
-// envelope emitted by scriptrc.  The RPF editor performs archive compression.
 File.WriteAllBytes(args[3], candidate);
 Console.WriteLine($"WROTE_ADAPTED_HEADER {Path.GetFullPath(args[3])}");
 
 static byte[] ReadPayloadFromPath(string path) => ReadPayloadFromBytes(File.ReadAllBytes(path));
+
+static string ResolveReferencePath(string input)
+{
+    if (Directory.Exists(input))
+    {
+        string preferred = Path.Combine(input, "achievement_controller.nsc");
+        if (File.Exists(preferred))
+        {
+            Console.WriteLine($"HEADER_REFERENCE_FOLDER fallback: {Path.GetFullPath(preferred)}");
+            return preferred;
+        }
+        string first = Directory.EnumerateFiles(input, "*.nsc", SearchOption.TopDirectoryOnly).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).FirstOrDefault() ?? string.Empty;
+        if (!string.IsNullOrEmpty(first))
+        {
+            Console.WriteLine($"HEADER_REFERENCE_FOLDER fallback: {Path.GetFullPath(first)}");
+            return first;
+        }
+        throw new InvalidDataException($"No .nsc reference found in folder {input}");
+    }
+    return input;
+}
 
 static byte[] ReadPayloadFromBytes(byte[] data)
 {
