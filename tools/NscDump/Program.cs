@@ -28,12 +28,13 @@ namespace Decompiler
 
         public static int Main(string[] args)
         {
-            if (args.Length == 2 && string.Equals(args[0], "--scan-dir", StringComparison.OrdinalIgnoreCase) && Directory.Exists(args[1]))
+            if (args.Length == 2 && string.Equals(args[0], "--scan-dir", StringComparison.OrdinalIgnoreCase) && (Directory.Exists(args[1]) || File.Exists(args[1])))
             {
                 string baseDir = AppContext.BaseDirectory;
                 string nativePath = Path.GetFullPath(Path.Combine(baseDir, "..", "..", "..", "..", "third_party", "GTA-V-Script-Decompiler", "GTA V Script Decompiler", "Resources", "x64natives.dat"));
                 x64nativefile = new x64NativeFile(File.OpenRead(nativePath));
-                ScanDirectory(args[1]);
+                if (Directory.Exists(args[1])) ScanDirectory(args[1]);
+                else ScanSingleFile(args[1]);
                 return 0;
             }
             if (args.Length == 3 && string.Equals(args[0], "--native-db", StringComparison.OrdinalIgnoreCase) && Directory.Exists(args[1]))
@@ -54,9 +55,10 @@ namespace Decompiler
                 ValidateScriptNames(args[1]);
                 return 0;
             }
-            if (args.Length == 3 && string.Equals(args[0], "--compare-native-tables", StringComparison.OrdinalIgnoreCase) && File.Exists(args[1]) && File.Exists(args[2]))
+            if (args.Length == 3 && string.Equals(args[0], "--compare-native-tables", StringComparison.OrdinalIgnoreCase) && File.Exists(args[1]) && (File.Exists(args[2]) || Directory.Exists(args[2])))
             {
-                CompareNativeTables(args[1], args[2]);
+                if (Directory.Exists(args[2])) CompareAgainstFolder(args[1], args[2]);
+                else CompareNativeTables(args[1], args[2]);
                 return 0;
             }
             if (args.Length == 3 && string.Equals(args[0], "--compare-native-url", StringComparison.OrdinalIgnoreCase) && File.Exists(args[1]))
@@ -78,7 +80,7 @@ namespace Decompiler
             }
             if (args.Length != 1 || !File.Exists(args[0]))
             {
-                Console.Error.WriteLine("Usage: NscDump <script.nsc> | --scan-dir <directory> | --native-db <directory> <output.json> | --find-script <directory> <name> | --validate-names <directory> | --compare-native-tables <switch.nsc> <pc.ysc> | --compare-native-url <switch.nsc> <url> | --write-crossmap <switch.nsc> <pc.ysc> <output.json> | --adapt-header <switch.nsc> <candidate.ysc> <output.nsc>");
+                Console.Error.WriteLine("Usage: NscDump <script.nsc> | --scan-dir <directory|file> | --native-db <directory> <output.json> | --find-script <directory> <name> | --validate-names <directory> | --compare-native-tables <switch.nsc> <pc.ysc|folder> | --compare-native-url <switch.nsc> <url> | --write-crossmap <switch.nsc> <pc.ysc> <output.json> | --adapt-header <switch.nsc|folder> <candidate.ysc> <output.nsc>");
                 return 2;
             }
             string singleBaseDir = AppContext.BaseDirectory;
@@ -102,6 +104,20 @@ namespace Decompiler
                 {
                     Console.WriteLine($"{Path.GetRelativePath(directory, path)}\tERROR\t{ex.Message}");
                 }
+            }
+        }
+
+        private static void ScanSingleFile(string path)
+        {
+            Console.WriteLine("SCRIPT\tCODE_LENGTH\tNATIVES\tCALL_CANDIDATES\tOUT_OF_RANGE_CANDIDATES");
+            try
+            {
+                ScanSummary(path, out uint codeLength, out uint nativeCount, out int calls, out int invalidCalls);
+                Console.WriteLine($"{Path.GetFileName(path)}\t{codeLength}\t{nativeCount}\t{calls}\t{invalidCalls}");
+            }
+            catch (Exception ex) when (ex is InvalidDataException || ex is IOException)
+            {
+                Console.WriteLine($"{Path.GetFileName(path)}\tERROR\t{ex.Message}");
             }
         }
 
@@ -321,6 +337,53 @@ namespace Decompiler
             Console.WriteLine($"DIRECT_STORED_MATCHES {directMatches}/{pcCount}");
         }
 
+        // Folder form: check every decoded native in the candidate against the
+        // union of decoded natives across a stock folder (e.g. script_rel.rpf).
+        // A zero unmatched count means every compiled native exists somewhere in
+        // stock; per-script index coverage still needs a single-file compare.
+        private static void CompareAgainstFolder(string candidatePath, string folder)
+        {
+            byte[] candidate = ReadNscPayload(candidatePath);
+            uint candidateCodeLength = U32(candidate, 0x1c);
+            uint candidateCount = U32(candidate, 0x2c);
+            int candidateOffset = ResourceOffset(U64(candidate, 0x40));
+            var stock = new HashSet<ulong>();
+            int scripts = 0;
+            foreach (string path in Directory.EnumerateFiles(folder, "*.nsc", SearchOption.AllDirectories))
+            {
+                byte[] data;
+                try { data = ReadNscPayload(path); }
+                catch (InvalidDataException) { continue; }
+                if (data.Length < 0x78) continue;
+                uint codeLength = U32(data, 0x1c);
+                uint nativeCount = U32(data, 0x2c);
+                int nativeOffset;
+                try { nativeOffset = ResourceOffset(U64(data, 0x40)); }
+                catch (InvalidDataException) { continue; }
+                if (nativeOffset < 0 || nativeOffset + (long)nativeCount * 8 > data.Length) continue;
+                scripts++;
+                for (uint i = 0; i < nativeCount; i++)
+                {
+                    ulong stored = U64(data, checked(nativeOffset + (int)i * 8));
+                    stock.Add(RotateLeft(stored, unchecked((int)(codeLength + i))));
+                }
+            }
+            int matched = 0;
+            var missing = new List<string>();
+            for (uint i = 0; i < candidateCount; i++)
+            {
+                ulong stored = U64(candidate, checked(candidateOffset + (int)i * 8));
+                ulong decoded = RotateLeft(stored, unchecked((int)(candidateCodeLength + i)));
+                if (stock.Contains(decoded)) matched++;
+                else missing.Add($"{i}:0x{decoded:X16}");
+            }
+            Console.WriteLine($"STOCK_SCRIPTS {scripts}");
+            Console.WriteLine($"CANDIDATE_NATIVES {candidateCount}");
+            Console.WriteLine($"FOLDER_MATCHES {matched}/{candidateCount}");
+            Console.WriteLine($"FOLDER_UNMATCHED {candidateCount - matched}/{candidateCount}");
+            foreach (string m in missing) Console.WriteLine($"MISSING\t{m}");
+        }
+
         private static void WriteCrossmap(string switchPath, string pcPath, string outputPath)
         {
             byte[] switchData = ReadNscPayload(switchPath);
@@ -379,7 +442,7 @@ namespace Decompiler
 
         private static void AdaptHeader(string switchPath, string candidatePath, string outputPath)
         {
-            byte[] switchData = ReadNscPayload(switchPath);
+            byte[] switchData = ReadNscPayload(ResolveReferenceArg(switchPath));
             byte[] candidateContainer = File.ReadAllBytes(candidatePath);
             bool candidateHasRscHeader = candidateContainer.Length >= 16 && U32(candidateContainer, 0) == 0x37435352;
             byte[] candidate = ReadNscPayload(candidateContainer, candidatePath);
@@ -402,6 +465,19 @@ namespace Decompiler
             Console.WriteLine($"PAGE_BASE 0x{switchPageBase:X16}");
             Console.WriteLine($"UNKNOWN2 0x{switchUnknown2:X8}");
             Console.WriteLine("NOTE native tables and code were preserved; inspect and compare before packaging");
+        }
+
+        private static string ResolveReferenceArg(string input)
+        {
+            if (Directory.Exists(input))
+            {
+                string preferred = Path.Combine(input, "achievement_controller.nsc");
+                if (File.Exists(preferred)) return preferred;
+                string first = Directory.EnumerateFiles(input, "*.nsc", SearchOption.TopDirectoryOnly).OrderBy(p => p, StringComparer.OrdinalIgnoreCase).FirstOrDefault() ?? string.Empty;
+                if (!string.IsNullOrEmpty(first)) return first;
+                throw new InvalidDataException($"No .nsc reference found in folder {input}");
+            }
+            return input;
         }
 
         private static string FindDirectSwitchIndices(byte[] data, int offset, uint count, ulong value)
