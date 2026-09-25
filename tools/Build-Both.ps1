@@ -2,8 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$DevNgRoot,
 
-    [Parameter(Mandatory = $true)]
     [string]$SwitchHeaderReference,
+
+    [string]$SwitchHeaderReferenceFolder,
 
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
@@ -14,12 +15,36 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$buildStart = Get-Date
 
 $DevNgRoot = [IO.Path]::GetFullPath($DevNgRoot)
-$SwitchHeaderReference = [IO.Path]::GetFullPath($SwitchHeaderReference)
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $RagemenuSource = [IO.Path]::GetFullPath($RagemenuSource)
 $ControllerSource = [IO.Path]::GetFullPath($ControllerSource)
+
+if ([string]::IsNullOrWhiteSpace($SwitchHeaderReference) -and [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    throw 'Specify either -SwitchHeaderReference or -SwitchHeaderReferenceFolder.'
+}
+if (-not [string]::IsNullOrWhiteSpace($SwitchHeaderReference) -and -not [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    throw 'Specify only one of -SwitchHeaderReference / -SwitchHeaderReferenceFolder.'
+}
+if (-not [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    $SwitchHeaderReferenceFolder = [IO.Path]::GetFullPath($SwitchHeaderReferenceFolder)
+    if (-not (Test-Path -LiteralPath $SwitchHeaderReferenceFolder -PathType Container)) { throw "Header reference folder is missing: $SwitchHeaderReferenceFolder" }
+    # achievement_controller.nsc exists in every stock extraction and shares the
+    # verified page-base / unk18 profile, so prefer it as the stable adapter ref.
+    $preferred = Join-Path $SwitchHeaderReferenceFolder 'achievement_controller.nsc'
+    if (Test-Path -LiteralPath $preferred) {
+        $SwitchHeaderReference = $preferred
+        Write-Output "HEADER_REFERENCE_FOLDER match: $preferred"
+    } else {
+        $fallback = Get-ChildItem -LiteralPath $SwitchHeaderReferenceFolder -Filter '*.nsc' -File | Select-Object -First 1 -ExpandProperty FullName
+        if ([string]::IsNullOrWhiteSpace($fallback) -or -not (Test-Path -LiteralPath $fallback)) { throw "No .nsc reference found in folder $SwitchHeaderReferenceFolder" }
+        $SwitchHeaderReference = $fallback
+        Write-Output "HEADER_REFERENCE_FOLDER fallback: $fallback"
+    }
+}
+$SwitchHeaderReference = [IO.Path]::GetFullPath($SwitchHeaderReference)
 
 $sc = Join-Path $DevNgRoot 'sc.exe'
 $scriptrc = Join-Path $DevNgRoot 'scriptrc_x64.exe'
@@ -35,13 +60,18 @@ $release = $projectXml.ProjectEditorSettingsVer3_0.CompilingSettingsList.Compili
     Where-Object { $_.ConfigurationName -eq 'Release' } |
     Select-Object -First 1
 if ($null -eq $release) { throw "Could not find Release include paths in $project" }
-$includePath = (($release.IncludePaths.string |
-    ForEach-Object { $_.Replace('$(script)', $DevNgRoot) }) -join ';')
+$includePath = ((($release.IncludePaths.string |
+    ForEach-Object { $_.Replace('$(script)', $DevNgRoot) }) + (Join-Path $PSScriptRoot '..\source')) -join ';')
 
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
-# Preserve the exact source inputs used for this build.
 Copy-Item -LiteralPath $RagemenuSource -Destination (Join-Path $OutputDirectory 'ragemenu.sc') -Force
 Copy-Item -LiteralPath $ControllerSource -Destination (Join-Path $OutputDirectory 'achievement_controller.sc') -Force
+Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..\source') -Recurse -Filter '*.sch' | ForEach-Object {
+    $relative = $_.FullName.Substring(((Join-Path $PSScriptRoot '..\source') | Resolve-Path).Path.Length + 1)
+    $destination = Join-Path $OutputDirectory $relative
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+    Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
+}
 
 function Build-NscScript {
     param(
@@ -71,4 +101,6 @@ function Build-NscScript {
 Build-NscScript -Name 'ragemenu' -Source $RagemenuSource
 Build-NscScript -Name 'achievement_controller' -Source $ControllerSource
 
+$elapsed = (Get-Date) - $buildStart
+Write-Output "BUILD_SECONDS $([math]::Round($elapsed.TotalSeconds, 1))"
 Write-Output 'These are raw Switch script payloads. Insert them into script_rel.rpf as normal compressed file entries, not as RPF resource entries.'

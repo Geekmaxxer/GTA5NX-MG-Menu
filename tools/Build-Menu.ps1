@@ -2,8 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$DevNgRoot,
 
-    [Parameter(Mandatory = $true)]
     [string]$SwitchHeaderReference,
+
+    [string]$SwitchHeaderReferenceFolder,
 
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
@@ -12,11 +13,36 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$buildStart = Get-Date
 
 $DevNgRoot = [IO.Path]::GetFullPath($DevNgRoot)
-$SwitchHeaderReference = [IO.Path]::GetFullPath($SwitchHeaderReference)
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $Source = [IO.Path]::GetFullPath($Source)
+
+if ([string]::IsNullOrWhiteSpace($SwitchHeaderReference) -and [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    throw 'Specify either -SwitchHeaderReference or -SwitchHeaderReferenceFolder.'
+}
+if (-not [string]::IsNullOrWhiteSpace($SwitchHeaderReference) -and -not [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    throw 'Specify only one of -SwitchHeaderReference / -SwitchHeaderReferenceFolder.'
+}
+if (-not [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    $SwitchHeaderReferenceFolder = [IO.Path]::GetFullPath($SwitchHeaderReferenceFolder)
+    if (-not (Test-Path -LiteralPath $SwitchHeaderReferenceFolder -PathType Container)) { throw "Header reference folder is missing: $SwitchHeaderReferenceFolder" }
+    $exact = Join-Path $SwitchHeaderReferenceFolder 'ragemenu.nsc'
+    if (Test-Path -LiteralPath $exact) {
+        $SwitchHeaderReference = $exact
+        Write-Output "HEADER_REFERENCE_FOLDER match: $exact"
+    } else {
+        $fallback = Join-Path $SwitchHeaderReferenceFolder 'achievement_controller.nsc'
+        if (-not (Test-Path -LiteralPath $fallback)) {
+            $fallback = Get-ChildItem -LiteralPath $SwitchHeaderReferenceFolder -Filter '*.nsc' -File | Select-Object -First 1 -ExpandProperty FullName
+        }
+        if ([string]::IsNullOrWhiteSpace($fallback) -or -not (Test-Path -LiteralPath $fallback)) { throw "No .nsc reference found in folder $SwitchHeaderReferenceFolder" }
+        $SwitchHeaderReference = $fallback
+        Write-Output "HEADER_REFERENCE_FOLDER fallback (no ragemenu.nsc in folder): $fallback"
+    }
+}
+$SwitchHeaderReference = [IO.Path]::GetFullPath($SwitchHeaderReference)
 
 $sc = Join-Path $DevNgRoot 'sc.exe'
 $scriptrc = Join-Path $DevNgRoot 'scriptrc_x64.exe'
@@ -51,8 +77,6 @@ if (Test-Path -LiteralPath $controllerSnapshot) {
 }
 $sco = Join-Path $OutputDirectory 'ragemenu.sco'
 $pcNsc = Join-Path $OutputDirectory 'ragemenu.pc.nsc'
-# The archive entry must be named ragemenu.nsc.  Keep the Win64 compiler
-# intermediate separate so it cannot be installed by mistake.
 $switchNsc = Join-Path $OutputDirectory 'ragemenu.nsc'
 
 & $sc $Source '-output' $sco '-ipath' $includePath '-PlatformName=Win64' '-final' '-forcename' '-nodeHeapSize=536870912'
@@ -64,6 +88,8 @@ if ($LASTEXITCODE -ne 0) { throw "scriptrc conversion failed with exit code $LAS
 & 'dotnet' run --project $adapterProject -c Release --no-restore -- --adapt-header $SwitchHeaderReference $pcNsc $switchNsc
 if ($LASTEXITCODE -ne 0) { throw "Switch header adaptation failed with exit code $LASTEXITCODE" }
 
+$elapsed = (Get-Date) - $buildStart
 Write-Output "BUILT $switchNsc"
 Write-Output "INTERMEDIATE (do not install): $pcNsc"
+Write-Output "BUILD_SECONDS $([math]::Round($elapsed.TotalSeconds, 1))"
 Write-Output 'This is a raw Switch script payload. Insert it into script_rel.rpf as a normal compressed file entry, not as an RPF resource entry.'

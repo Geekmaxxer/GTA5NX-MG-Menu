@@ -2,8 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$DevNgRoot,
 
-    [Parameter(Mandatory = $true)]
     [string]$SwitchHeaderReference,
+
+    [string]$SwitchHeaderReferenceFolder,
 
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
@@ -13,14 +14,45 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$buildStart = Get-Date
 
 $DevNgRoot = [IO.Path]::GetFullPath($DevNgRoot)
-$SwitchHeaderReference = [IO.Path]::GetFullPath($SwitchHeaderReference)
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $Source = [IO.Path]::GetFullPath($Source)
 # The build's name (and therefore the .sco/.nsc filenames) comes from the
 # source .sc file itself, so this script isn't tied to any one script.
 $Name = [IO.Path]::GetFileNameWithoutExtension($Source)
+
+# Either a single-file reference or a folder of stock Switch .nsc files.
+# Folder mode resolves "<folder>\<Name>.nsc" first (e.g. achievement_controller.nsc
+# when building achievement_controller.sc). Stock extractions have no ragemenu.nsc,
+# so a missing exact-name match falls back to achievement_controller.nsc (or the
+# first .nsc found); this is safe because every verified stock script_rel.rpf
+# script shares the same page-base / unk18 header profile.
+if ([string]::IsNullOrWhiteSpace($SwitchHeaderReference) -and [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    throw 'Specify either -SwitchHeaderReference or -SwitchHeaderReferenceFolder.'
+}
+if (-not [string]::IsNullOrWhiteSpace($SwitchHeaderReference) -and -not [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    throw 'Specify only one of -SwitchHeaderReference / -SwitchHeaderReferenceFolder.'
+}
+if (-not [string]::IsNullOrWhiteSpace($SwitchHeaderReferenceFolder)) {
+    $SwitchHeaderReferenceFolder = [IO.Path]::GetFullPath($SwitchHeaderReferenceFolder)
+    if (-not (Test-Path -LiteralPath $SwitchHeaderReferenceFolder -PathType Container)) { throw "Header reference folder is missing: $SwitchHeaderReferenceFolder" }
+    $exact = Join-Path $SwitchHeaderReferenceFolder "$Name.nsc"
+    if (Test-Path -LiteralPath $exact) {
+        $SwitchHeaderReference = $exact
+        Write-Output "HEADER_REFERENCE_FOLDER match: $exact"
+    } else {
+        $fallback = Join-Path $SwitchHeaderReferenceFolder 'achievement_controller.nsc'
+        if (-not (Test-Path -LiteralPath $fallback)) {
+            $fallback = Get-ChildItem -LiteralPath $SwitchHeaderReferenceFolder -Filter '*.nsc' -File | Select-Object -First 1 -ExpandProperty FullName
+        }
+        if ([string]::IsNullOrWhiteSpace($fallback) -or -not (Test-Path -LiteralPath $fallback)) { throw "No .nsc reference found in folder $SwitchHeaderReferenceFolder for script $Name" }
+        $SwitchHeaderReference = $fallback
+        Write-Output "HEADER_REFERENCE_FOLDER fallback (no $Name.nsc in folder): $fallback"
+    }
+}
+$SwitchHeaderReference = [IO.Path]::GetFullPath($SwitchHeaderReference)
 
 $sc = Join-Path $DevNgRoot 'sc.exe'
 $scriptrc = Join-Path $DevNgRoot 'scriptrc_x64.exe'
@@ -65,6 +97,8 @@ if ($LASTEXITCODE -ne 0) { throw "scriptrc conversion failed with exit code $LAS
 & 'dotnet' run --project $adapterProject -c Release --no-restore -- --adapt-header $SwitchHeaderReference $pcNsc $switchNsc
 if ($LASTEXITCODE -ne 0) { throw "Switch header adaptation failed with exit code $LASTEXITCODE" }
 
+$elapsed = (Get-Date) - $buildStart
 Write-Output "BUILT $switchNsc"
 Write-Output "INTERMEDIATE (do not install): $pcNsc"
+Write-Output "BUILD_SECONDS $([math]::Round($elapsed.TotalSeconds, 1))"
 Write-Output "This is a raw Switch script payload. Insert it into script_rel.rpf as a normal compressed file entry named $Name.nsc, not as an RPF resource entry."
