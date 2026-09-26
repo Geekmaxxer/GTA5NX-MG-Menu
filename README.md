@@ -103,7 +103,7 @@ Do not use a reference script from a different version or port.
 
 ## Editing the menu
 
-Modify [source/ragemenu.sc](source/ragemenu.sc). It is SanScript/C-like source
+Modify [source/ragemenu.sc](source/ragemenu.sc) and it's source folders containing schematic (`.sch`) files. It is SanScript/C-like source
 that uses Rockstar native declarations from the `dev_ng` include path. Keep
 changes small and test each one.
 
