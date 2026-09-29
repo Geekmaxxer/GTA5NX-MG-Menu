@@ -5,6 +5,8 @@ owned game dumps and offline single-player research. This repository contains
 no Rockstar game files, no `update2.rpf`, no stock `.nsc` files, no compiler
 binaries, no keys, and no prebuilt menu archive.
 
+**This source is not updated as frequently as the actual download**
+
 ## What you need
 
 - A version 2699 build of the patched GTA5 Switch port files with Rockstar's internal script build tools already
