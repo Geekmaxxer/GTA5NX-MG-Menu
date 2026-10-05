@@ -1,10 +1,5 @@
 PROC DRAW_ATTACKER_MODEL(FLOAT y, BOOL selected)
-    SWITCH g_attacker_model_choice
-        CASE 0 DRAW_OPTION(y, "Attacker Model:", "< Michael >", selected, 3) BREAK
-        CASE 1 DRAW_OPTION(y, "Attacker Model:", "< Franklin >", selected, 3) BREAK
-        CASE 2 DRAW_OPTION(y, "Attacker Model:", "< Trevor >", selected, 3) BREAK
-        CASE 3 DRAW_OPTION(y, "Attacker Model:", "< Random >", selected, 3) BREAK
-    ENDSWITCH
+    DRAW_OPTION(y, "Attacker PED:", g_attacker_ped_name, selected, 2)
 ENDPROC
 
 PROC DRAW_ATTACKER_WEAPON(FLOAT y, BOOL selected)
@@ -18,18 +13,12 @@ ENDPROC
 
 PROC START_ATTACKER_SPAWN()
     IF g_attacker_spawn_pending OR g_menu_attacker_count >= COUNT_OF(g_menu_attackers) EXIT ENDIF
-    SWITCH g_attacker_model_choice
-        CASE 0 g_pending_attacker_model = PLAYER_ZERO BREAK
-        CASE 1 g_pending_attacker_model = PLAYER_ONE BREAK
-        CASE 2 g_pending_attacker_model = PLAYER_TWO BREAK
-        CASE 3
-            SWITCH GET_RANDOM_INT_IN_RANGE(0, 3)
-                CASE 0 g_pending_attacker_model = PLAYER_ZERO BREAK
-                CASE 1 g_pending_attacker_model = PLAYER_ONE BREAK
-                CASE 2 g_pending_attacker_model = PLAYER_TWO BREAK
-            ENDSWITCH
-        BREAK
-    ENDSWITCH
+    IF g_attacker_ped_search_is_custom
+        g_pending_attacker_model = g_attacker_ped_model
+    ELSE
+        g_pending_attacker_model = PED_MODEL_FOR_CHOICE(g_attacker_ped_choice)
+    ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_attacker_model) OR NOT IS_MODEL_VALID(g_pending_attacker_model) EXIT ENDIF
     SWITCH g_attacker_weapon_choice
         CASE 0 g_pending_attacker_weapon = WEAPONTYPE_PISTOL BREAK
         CASE 1 g_pending_attacker_weapon = WEAPONTYPE_SMG BREAK
@@ -44,8 +33,9 @@ ENDPROC
 PROC FINISH_ATTACKER_SPAWN()
     PED_INDEX attacker
     VECTOR spawnPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER_PED_ID(), <<0.0, 8.0, 0.0>>)
-    attacker = CREATE_PED(PEDTYPE_CIVMALE, g_pending_attacker_model, spawnPosition, GET_ENTITY_HEADING(PLAYER_PED_ID()), TRUE, FALSE)
+    attacker = CREATE_PED(PEDTYPE_CIVMALE, g_pending_attacker_model, spawnPosition, GET_ENTITY_HEADING(PLAYER_PED_ID()), FALSE, TRUE)
     IF DOES_ENTITY_EXIST(attacker)
+        SET_ENTITY_AS_MISSION_ENTITY(attacker, TRUE, TRUE)
         GIVE_WEAPON_TO_PED(attacker, g_pending_attacker_weapon, 9999, TRUE, TRUE)
         SET_PED_AS_ENEMY(attacker, TRUE)
         SET_PED_RELATIONSHIP_GROUP_HASH(attacker, RELGROUPHASH_HATES_PLAYER)
@@ -76,6 +66,15 @@ PROC FINISH_ATTACKER_SPAWN()
     g_attacker_spawn_pending = FALSE
 ENDPROC
 
+PROC RESTORE_ATTACKER_RELATIONSHIP_GROUPS()
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVMALE)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_CIVMALE, RELGROUPHASH_HATES_PLAYER)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVFEMALE)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_HATES_PLAYER)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_COP)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_COP, RELGROUPHASH_HATES_PLAYER)
+ENDPROC
+
 PROC CLEAR_MENU_ATTACKERS()
     INT index = 0
     REPEAT g_menu_attacker_count index
@@ -85,10 +84,14 @@ PROC CLEAR_MENU_ATTACKERS()
         ENDIF
     ENDREPEAT
     g_menu_attacker_count = 0
+    RESTORE_ATTACKER_RELATIONSHIP_GROUPS()
 ENDPROC
 
 PROC APPLY_ATTACKER_RAGE_STATE()
     INT index = 0
+    IF NOT g_attacker_rage
+        RESTORE_ATTACKER_RELATIONSHIP_GROUPS()
+    ENDIF
     REPEAT g_menu_attacker_count index
         IF DOES_ENTITY_EXIST(g_menu_attackers[index]) AND NOT IS_PED_INJURED(g_menu_attackers[index])
             IF g_attacker_rage
@@ -174,18 +177,12 @@ ENDFUNC
 
 PROC START_BODYGUARD_SPAWN()
     IF g_bodyguard_spawn_pending OR g_bodyguard_count >= COUNT_OF(g_bodyguards) EXIT ENDIF
-    SWITCH g_bodyguard_model_choice
-        CASE 0 g_pending_bodyguard_model = PLAYER_ZERO BREAK
-        CASE 1 g_pending_bodyguard_model = PLAYER_ONE BREAK
-        CASE 2 g_pending_bodyguard_model = PLAYER_TWO BREAK
-        CASE 3
-            SWITCH GET_RANDOM_INT_IN_RANGE(0, 3)
-                CASE 0 g_pending_bodyguard_model = PLAYER_ZERO BREAK
-                CASE 1 g_pending_bodyguard_model = PLAYER_ONE BREAK
-                CASE 2 g_pending_bodyguard_model = PLAYER_TWO BREAK
-            ENDSWITCH
-        BREAK
-    ENDSWITCH
+    IF g_guard_ped_search_is_custom
+        g_pending_bodyguard_model = g_guard_ped_model
+    ELSE
+        g_pending_bodyguard_model = PED_MODEL_FOR_CHOICE(g_guard_ped_choice)
+    ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_bodyguard_model) OR NOT IS_MODEL_VALID(g_pending_bodyguard_model) EXIT ENDIF
     REQUEST_MODEL(g_pending_bodyguard_model)
     g_bodyguard_spawn_pending = TRUE
     g_bodyguard_request_time = GET_GAME_TIMER()
@@ -200,7 +197,6 @@ PROC BODYGUARD_FOLLOW_OFFSET(INT slot, VECTOR &offset)
     IF slot = 5 offset = <<5.0, 0.0, 0.0>> ENDIF
     IF slot = 6 offset = <<0.0, 5.0, 0.0>> ENDIF
     IF slot = 7 offset = <<0.0, -5.0, 0.0>> ENDIF
-
     IF slot >= 8
         INT ringSlot = slot - 8
         INT ring = 0
@@ -214,40 +210,8 @@ PROC BODYGUARD_FOLLOW_OFFSET(INT slot, VECTOR &offset)
         INT positionInRing = ringSlot - ringStart
         INT angleStep = (positionInRing * 137) % 360
         FLOAT radius = 8.0 + (TO_FLOAT(ring) * 3.0)
-        FLOAT angleDeg = TO_FLOAT(angleStep)
-        FLOAT angleRad = angleDeg * 0.0174533
-        FLOAT cosValue = 1.0
-        FLOAT sinValue = angleRad
-        INT series = 2
-        WHILE series <= 8
-            FLOAT term = 1.0
-            INT factor = 2
-            WHILE factor <= series
-                term = term / TO_FLOAT(factor)
-                factor = factor + 1
-            ENDWHILE
-            INT power = 1
-            FLOAT powerValue = 1.0
-            WHILE power <= series
-                powerValue = powerValue * angleRad
-                power = power + 1
-            ENDWHILE
-            IF series = 2 OR series = 4 OR series = 6 OR series = 8
-                IF series = 2 OR series = 6
-                    cosValue = cosValue - (powerValue * term)
-                ELSE
-                    cosValue = cosValue + (powerValue * term)
-                ENDIF
-            ELSE
-                IF series = 3 OR series = 7
-                    sinValue = sinValue - (powerValue * term)
-                ELSE
-                    sinValue = sinValue + (powerValue * term)
-                ENDIF
-            ENDIF
-            series = series + 1
-        ENDWHILE
-        offset = <<radius * cosValue, radius * sinValue, 0.0>>
+        FLOAT angleRad = TO_FLOAT(angleStep) * 0.0174533
+        offset = <<radius * COS(angleRad), radius * SIN(angleRad), 0.0>>
     ENDIF
     IF g_bodyguard_formation_choice = 1
         IF slot = 0 offset = <<-3.0, 2.0, 0.0>> ENDIF
@@ -285,21 +249,14 @@ PROC BODYGUARD_FOLLOW_OFFSET(INT slot, VECTOR &offset)
     ENDIF
 ENDPROC
 
-FUNC INT BODYGUARD_SLOT_FOR_PED(PED_INDEX guard)
-    INT index = 0
-    REPEAT g_bodyguard_count index
-        IF g_bodyguards[index] = guard RETURN index ENDIF
-    ENDREPEAT
-    RETURN 0
-ENDFUNC
-
-PROC ISSUE_BODYGUARD_FOLLOW_TASK(PED_INDEX guard)
-    INT slot = BODYGUARD_SLOT_FOR_PED(guard)
+PROC ISSUE_BODYGUARD_FOLLOW_TASK_AT(INT slot)
     VECTOR offset = <<-2.5, 2.5, 0.0>>
     IF NOT g_bodyguard_follow EXIT ENDIF
-    IF IS_PED_INJURED(guard) EXIT ENDIF
+    IF slot < 0 OR slot >= g_bodyguard_count EXIT ENDIF
+    IF NOT DOES_ENTITY_EXIST(g_bodyguards[slot]) EXIT ENDIF
+    IF IS_PED_INJURED(g_bodyguards[slot]) EXIT ENDIF
     BODYGUARD_FOLLOW_OFFSET(slot, offset)
-    TASK_FOLLOW_TO_OFFSET_OF_ENTITY(guard, PLAYER_PED_ID(), offset, 1.0, -1, 2.0, TRUE)
+    TASK_FOLLOW_TO_OFFSET_OF_ENTITY(g_bodyguards[slot], PLAYER_PED_ID(), offset, 1.0, -1, 2.0, TRUE)
 ENDPROC
 
 PROC FINISH_BODYGUARD_SPAWN()
@@ -307,8 +264,9 @@ PROC FINISH_BODYGUARD_SPAWN()
     WEAPON_TYPE guardWeapon = WEAPONTYPE_ASSAULTRIFLE
     VECTOR spawnPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER_PED_ID(), <<0.0, 4.0, 0.0>>)
     BLIP_INDEX guardBlip
-    guard = CREATE_PED(PEDTYPE_CIVMALE, g_pending_bodyguard_model, spawnPosition, GET_ENTITY_HEADING(PLAYER_PED_ID()), TRUE, FALSE)
+    guard = CREATE_PED(PEDTYPE_CIVMALE, g_pending_bodyguard_model, spawnPosition, GET_ENTITY_HEADING(PLAYER_PED_ID()), FALSE, TRUE)
     IF DOES_ENTITY_EXIST(guard)
+        SET_ENTITY_AS_MISSION_ENTITY(guard, TRUE, TRUE)
         SWITCH g_bodyguard_weapon_choice
             CASE 0 guardWeapon = WEAPONTYPE_PISTOL BREAK
             CASE 1 guardWeapon = WEAPONTYPE_SMG BREAK
@@ -337,7 +295,7 @@ PROC FINISH_BODYGUARD_SPAWN()
         IF g_bodyguard_count < COUNT_OF(g_bodyguards)
             g_bodyguards[g_bodyguard_count] = guard
             g_bodyguard_count = g_bodyguard_count + 1
-            ISSUE_BODYGUARD_FOLLOW_TASK(guard)
+            ISSUE_BODYGUARD_FOLLOW_TASK_AT(g_bodyguard_count - 1)
         ENDIF
     ENDIF
     SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_bodyguard_model)
@@ -355,7 +313,7 @@ PROC APPLY_BODYGUARD_FOLLOW_STATE()
             IF g_bodyguard_follow
                 SET_PED_AS_GROUP_MEMBER(g_bodyguards[index], g_bodyguard_group)
                 SET_PED_CAN_TELEPORT_TO_GROUP_LEADER(g_bodyguards[index], g_bodyguard_group, TRUE)
-                ISSUE_BODYGUARD_FOLLOW_TASK(g_bodyguards[index])
+                ISSUE_BODYGUARD_FOLLOW_TASK_AT(index)
             ELSE
                 TASK_GUARD_CURRENT_POSITION(g_bodyguards[index], 5.0, 10.0, TRUE)
             ENDIF
@@ -365,6 +323,7 @@ ENDPROC
 
 PROC PROCESS_BODYGUARD_FOLLOW()
     INT index = 0
+    INT scanned = 0
     VECTOR guardPosition = <<0.0, 0.0, 0.0>>
     VECTOR leaderPosition = <<0.0, 0.0, 0.0>>
     VECTOR delta = <<0.0, 0.0, 0.0>>
@@ -377,16 +336,20 @@ PROC PROCESS_BODYGUARD_FOLLOW()
         ENSURE_BODYGUARD_GROUP()
     ENDIF
     leaderPosition = GET_ENTITY_COORDS(PLAYER_PED_ID())
-    REPEAT g_bodyguard_count index
+    WHILE scanned < BODYGUARD_FOLLOW_SCAN_PER_TICK AND scanned < g_bodyguard_count
+        IF g_bodyguard_scan_index >= g_bodyguard_count g_bodyguard_scan_index = 0 ENDIF
+        index = g_bodyguard_scan_index
+        g_bodyguard_scan_index = g_bodyguard_scan_index + 1
+        scanned = scanned + 1
         IF DOES_ENTITY_EXIST(g_bodyguards[index]) AND NOT IS_PED_INJURED(g_bodyguards[index]) AND NOT IS_PED_IN_COMBAT(g_bodyguards[index])
             guardPosition = GET_ENTITY_COORDS(g_bodyguards[index])
             delta = guardPosition - leaderPosition
             distance = SQRT((delta.x * delta.x) + (delta.y * delta.y) + (delta.z * delta.z))
             IF distance > 7.0
-                ISSUE_BODYGUARD_FOLLOW_TASK(g_bodyguards[index])
+                ISSUE_BODYGUARD_FOLLOW_TASK_AT(index)
             ENDIF
         ENDIF
-    ENDREPEAT
+    ENDWHILE
 ENDPROC
 
 PROC APPLY_BODYGUARD_FORMATION()
@@ -420,10 +383,49 @@ PROC CLEAR_BODYGUARDS()
         ENDIF
     ENDREPEAT
     g_bodyguard_count = 0
+    g_bodyguard_scan_index = 0
     IF DOES_GROUP_EXIST(g_bodyguard_group)
         REMOVE_GROUP(g_bodyguard_group)
         g_bodyguard_group = NULL
     ENDIF
+ENDPROC
+
+PROC PRUNE_MENU_PED_TRACKING()
+    INT readIndex = 0
+    INT writeIndex = 0
+    REPEAT g_bodyguard_count readIndex
+        IF DOES_ENTITY_EXIST(g_bodyguards[readIndex])
+            g_bodyguards[writeIndex] = g_bodyguards[readIndex]
+            writeIndex = writeIndex + 1
+        ENDIF
+    ENDREPEAT
+    g_bodyguard_count = writeIndex
+    g_bodyguard_scan_index = 0
+    IF g_bodyguard_count <= 0 AND DOES_GROUP_EXIST(g_bodyguard_group)
+        REMOVE_GROUP(g_bodyguard_group)
+        g_bodyguard_group = NULL
+    ENDIF
+    readIndex = 0
+    writeIndex = 0
+    REPEAT g_brawl_ped_count readIndex
+        IF DOES_ENTITY_EXIST(g_brawl_peds[readIndex])
+            g_brawl_peds[writeIndex] = g_brawl_peds[readIndex]
+            writeIndex = writeIndex + 1
+        ENDIF
+    ENDREPEAT
+    g_brawl_ped_count = writeIndex
+    readIndex = 0
+    writeIndex = 0
+    REPEAT g_stripper_count readIndex
+        IF DOES_ENTITY_EXIST(g_stripper_peds[readIndex])
+            g_stripper_peds[writeIndex] = g_stripper_peds[readIndex]
+            writeIndex = writeIndex + 1
+        ENDIF
+    ENDREPEAT
+    g_stripper_count = writeIndex
+    g_stripper_write_index = 0
+    IF g_stripper_count < STRIPPER_TRACK_MAX g_stripper_write_index = g_stripper_count ENDIF
+    IF g_stripper_write_index >= STRIPPER_TRACK_MAX g_stripper_write_index = 0 ENDIF
 ENDPROC
 
 PROC PROCESS_BODYGUARD_SPAWN()
@@ -436,6 +438,75 @@ PROC PROCESS_BODYGUARD_SPAWN()
     ENDIF
 ENDPROC
 
+PROC START_STRIPPER_SPAWN()
+    IF g_stripper_spawn_pending EXIT ENDIF
+    MODEL_NAMES model = STRIPPER_MODEL_FOR_CHOICE(g_stripper_choice)
+    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) EXIT ENDIF
+    g_pending_stripper_model = model
+    REQUEST_MODEL(g_pending_stripper_model)
+    g_stripper_spawn_pending = TRUE
+    g_stripper_request_time = GET_GAME_TIMER()
+ENDPROC
+
+PROC TRACK_STRIPPER_PED(PED_INDEX ped)
+    IF g_stripper_count < STRIPPER_TRACK_MAX
+        g_stripper_peds[g_stripper_count] = ped
+        g_stripper_count = g_stripper_count + 1
+        g_stripper_write_index = g_stripper_write_index + 1
+        IF g_stripper_write_index >= STRIPPER_TRACK_MAX g_stripper_write_index = 0 ENDIF
+        EXIT
+    ENDIF
+    IF DOES_ENTITY_EXIST(g_stripper_peds[g_stripper_write_index])
+        SET_ENTITY_AS_MISSION_ENTITY(g_stripper_peds[g_stripper_write_index], TRUE, TRUE)
+        DELETE_PED(g_stripper_peds[g_stripper_write_index])
+    ENDIF
+    g_stripper_peds[g_stripper_write_index] = ped
+    g_stripper_write_index = g_stripper_write_index + 1
+    IF g_stripper_write_index >= STRIPPER_TRACK_MAX g_stripper_write_index = 0 ENDIF
+ENDPROC
+
+PROC FINISH_STRIPPER_SPAWN()
+    VECTOR spawnPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER_PED_ID(), <<0.0, 3.0, 0.0>>)
+    PED_INDEX ped = CREATE_PED(PEDTYPE_CIVFEMALE, g_pending_stripper_model, spawnPosition, GET_ENTITY_HEADING(PLAYER_PED_ID()) + 180.0, FALSE, TRUE)
+    SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_stripper_model)
+    g_stripper_spawn_pending = FALSE
+    IF NOT DOES_ENTITY_EXIST(ped) EXIT ENDIF
+    SET_ENTITY_AS_MISSION_ENTITY(ped, TRUE, TRUE)
+    SET_PED_FLEE_ATTRIBUTES(ped, FA_NEVER_FLEE, TRUE)
+    SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(ped, TRUE)
+    SET_PED_CAN_RAGDOLL_FROM_PLAYER_IMPACT(ped, TRUE)
+    TRACK_STRIPPER_PED(ped)
+ENDPROC
+
+PROC PROCESS_STRIPPER_SPAWN()
+    IF NOT g_stripper_spawn_pending EXIT ENDIF
+    IF HAS_MODEL_LOADED(g_pending_stripper_model)
+        FINISH_STRIPPER_SPAWN()
+    ELIF GET_GAME_TIMER() > g_stripper_request_time + 8000
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_stripper_model)
+        g_stripper_spawn_pending = FALSE
+    ENDIF
+ENDPROC
+
+PROC CLEAR_STRIPPER_PEDS()
+    INT index = 0
+    REPEAT g_stripper_count index
+        IF DOES_ENTITY_EXIST(g_stripper_peds[index])
+            SET_ENTITY_AS_MISSION_ENTITY(g_stripper_peds[index], TRUE, TRUE)
+            DELETE_PED(g_stripper_peds[index])
+        ENDIF
+    ENDREPEAT
+    g_stripper_count = 0
+    g_stripper_write_index = 0
+ENDPROC
+
+PROC DRAW_STRIPPER_SELECTOR(FLOAT y, BOOL selected)
+    IF g_stripper_spawn_pending
+        DRAW_OPTION(y, "Spawn Stripper", "< Loading >", selected, 2)
+        EXIT
+    ENDIF
+    DRAW_OPTION(y, "Spawn Stripper", STRIPPER_NAME_FOR_CHOICE(g_stripper_choice), selected, 3)
+ENDPROC
 
 FUNC FLOAT NEON_ANIM_SPEED_VALUE()
     IF g_neon_speed_index <= 0 RETURN 0.0 ENDIF
@@ -637,39 +708,6 @@ PROC APPLY_UNLIMITED_ABILITY()
     ENDIF
 ENDPROC
 
-PROC APPLY_NPC_VEHICLE_SPEED()
-    VECTOR center = <<0.0, 0.0, 0.0>>
-    VEHICLE_INDEX candidate = NULL
-    VEHICLE_INDEX occupied = NULL
-    INT guard = 0
-    FLOAT boost = 0.0
-    IF g_npc_vehicle_speed_level <= 0 EXIT ENDIF
-    IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        occupied = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
-    ENDIF
-    center = GET_ENTITY_COORDS(PLAYER_PED_ID())
-    IF g_npc_vehicle_speed_level = 1 boost = 1.25 ENDIF
-    IF g_npc_vehicle_speed_level = 2 boost = 1.5 ENDIF
-    IF g_npc_vehicle_speed_level = 3 boost = 2.0 ENDIF
-    IF g_npc_vehicle_speed_level = 4 boost = 2.5 ENDIF
-    IF g_npc_vehicle_speed_level = 5 boost = 3.0 ENDIF
-    IF g_npc_vehicle_speed_level = 6 boost = 4.0 ENDIF
-    IF g_npc_vehicle_speed_level = 7 boost = 5.0 ENDIF
-    IF g_npc_vehicle_speed_level = 8 boost = 10.0 ENDIF
-    IF g_npc_vehicle_speed_level = 9 boost = 20.0 ENDIF
-    IF g_npc_vehicle_speed_level = 10 boost = 50.0 ENDIF
-    IF g_npc_vehicle_speed_level = 11 boost = 100.0 ENDIF
-    IF g_npc_vehicle_speed_level = 12 boost = 200.0 ENDIF
-    guard = 0
-    WHILE guard < 24
-        candidate = GET_RANDOM_VEHICLE_IN_SPHERE(center, 400.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
-        guard = guard + 1
-        IF DOES_ENTITY_EXIST(candidate) AND candidate != occupied
-            SET_VEHICLE_CHEAT_POWER_INCREASE(candidate, boost)
-        ENDIF
-    ENDWHILE
-ENDPROC
-
 PROC PROCESS_GODMODE_TOW_HOOK()
     PED_INDEX playerPed = PLAYER_PED_ID()
     VEHICLE_INDEX truck = NULL
@@ -678,8 +716,12 @@ PROC PROCESS_GODMODE_TOW_HOOK()
     IF NOT IS_PED_IN_ANY_VEHICLE(playerPed) EXIT ENDIF
     truck = GET_VEHICLE_PED_IS_IN(playerPed)
     IF NOT DOES_ENTITY_EXIST(truck) EXIT ENDIF
-    IF DOES_ENTITY_EXIST(g_tow_hook_towed)
-        towed = g_tow_hook_towed
+    IF DOES_ENTITY_EXIST(g_tow_hook_towed) AND IS_ENTITY_A_VEHICLE(g_tow_hook_towed)
+        IF VDIST(GET_ENTITY_COORDS(truck), GET_ENTITY_COORDS(g_tow_hook_towed)) < 25.0
+            towed = g_tow_hook_towed
+        ELSE
+            g_tow_hook_towed = NULL
+        ENDIF
     ELSE
         IF IS_ENTITY_ATTACHED(truck)
             IF IS_ENTITY_A_VEHICLE(GET_ENTITY_ATTACHED_TO(truck))
@@ -696,6 +738,14 @@ PROC PROCESS_GODMODE_TOW_HOOK()
     ENDIF
     g_tow_hook_vehicle = truck
     g_tow_hook_towed = towed
+ENDPROC
+
+PROC APPLY_DISPATCH_SERVICES_STATE()
+    ENABLE_DISPATCH_SERVICE(DT_POLICE_AUTOMOBILE, g_dispatch)
+    ENABLE_DISPATCH_SERVICE(DT_POLICE_HELICOPTER, g_dispatch)
+    ENABLE_DISPATCH_SERVICE(DT_SWAT_AUTOMOBILE, g_dispatch)
+    ENABLE_DISPATCH_SERVICE(DT_POLICE_ROAD_BLOCK, g_dispatch)
+    ENABLE_DISPATCH_SERVICE(DT_ARMY_VEHICLE, g_dispatch)
 ENDPROC
 
 PROC APPLY_NPC_DENSITY()
@@ -719,6 +769,7 @@ PROC PROCESS_SUPER_PUNCH()
     VECTOR fwd = <<0.0, 1.0, 0.0>>
     VECTOR targetPosition = <<0.0, 0.0, 0.0>>
     VECTOR launch = <<0.0, 0.0, 0.0>>
+    VECTOR vehicleLaunch = <<0.0, 0.0, 0.0>>
     VECTOR delta = <<0.0, 0.0, 0.0>>
     PED_INDEX closestPed = NULL
     VEHICLE_INDEX closestVehicle = NULL
@@ -731,6 +782,7 @@ PROC PROCESS_SUPER_PUNCH()
     playerPosition = GET_ENTITY_COORDS(playerPed)
     fwd = GET_ENTITY_FORWARD_VECTOR(playerPed)
     launch = <<fwd.x * 60.0, fwd.y * 60.0, 18.0>>
+    vehicleLaunch = <<fwd.x * 30.0, fwd.y * 30.0, 10.0>>
     IF GET_CLOSEST_PED(playerPosition, 3.5, TRUE, TRUE, closestPed)
         IF DOES_ENTITY_EXIST(closestPed) AND closestPed != playerPed
             IF NOT IS_ENTITY_DEAD(closestPed)
@@ -748,13 +800,12 @@ PROC PROCESS_SUPER_PUNCH()
         targetPosition = GET_ENTITY_COORDS(closestVehicle)
         delta = targetPosition - playerPosition
         IF delta.x * fwd.x + delta.y * fwd.y > 0.0
-            SET_ENTITY_VELOCITY(closestVehicle, launch)
+            SET_ENTITY_VELOCITY(closestVehicle, vehicleLaunch)
         ENDIF
     ENDIF
 ENDPROC
 
 PROC EXPLODE_ALL_NEARBY_VEHICLES()
-
     VECTOR center = GET_ENTITY_COORDS(PLAYER_PED_ID())
     VEHICLE_INDEX found[64]
     INT foundCount = 0
@@ -791,12 +842,259 @@ PROC EXPLODE_ALL_NEARBY_VEHICLES()
             ENDIF
         ENDIF
     ENDWHILE
+    g_explode_queue_count = 0
+    g_explode_queue_index = 0
     WHILE index < foundCount
         IF DOES_ENTITY_EXIST(found[index]) AND found[index] != occupied
-            EXPLODE_VEHICLE(found[index], TRUE, FALSE)
+            IF g_explode_queue_count < COUNT_OF(g_explode_queue)
+                g_explode_queue[g_explode_queue_count] = found[index]
+                g_explode_queue_count = g_explode_queue_count + 1
+            ENDIF
         ENDIF
         index = index + 1
     ENDWHILE
+ENDPROC
+
+PROC PROCESS_EXPLODE_QUEUE()
+    INT burst = 0
+    IF g_explode_queue_index >= g_explode_queue_count
+        g_explode_queue_count = 0
+        g_explode_queue_index = 0
+        EXIT
+    ENDIF
+    WHILE burst < EXPLODE_BURST_PER_FRAME AND g_explode_queue_index < g_explode_queue_count
+        IF DOES_ENTITY_EXIST(g_explode_queue[g_explode_queue_index])
+            EXPLODE_VEHICLE(g_explode_queue[g_explode_queue_index], TRUE, FALSE)
+        ENDIF
+        g_explode_queue_index = g_explode_queue_index + 1
+        burst = burst + 1
+    ENDWHILE
+ENDPROC
+
+FUNC FLOAT DIRT_LEVEL_VALUE(INT level)
+    RETURN TO_FLOAT(level) * 0.5
+ENDFUNC
+
+FUNC STRING DIRT_LEVEL_VALUE_LABEL(INT level)
+    IF level = 0 RETURN "< 0.0 >" ENDIF
+    IF level = 1 RETURN "< 0.5 >" ENDIF
+    IF level = 2 RETURN "< 1.0 >" ENDIF
+    IF level = 3 RETURN "< 1.5 >" ENDIF
+    IF level = 4 RETURN "< 2.0 >" ENDIF
+    IF level = 5 RETURN "< 2.5 >" ENDIF
+    IF level = 6 RETURN "< 3.0 >" ENDIF
+    IF level = 7 RETURN "< 3.5 >" ENDIF
+    IF level = 8 RETURN "< 4.0 >" ENDIF
+    IF level = 9 RETURN "< 4.5 >" ENDIF
+    IF level = 10 RETURN "< 5.0 >" ENDIF
+    IF level = 11 RETURN "< 5.5 >" ENDIF
+    IF level = 12 RETURN "< 6.0 >" ENDIF
+    IF level = 13 RETURN "< 6.5 >" ENDIF
+    IF level = 14 RETURN "< 7.0 >" ENDIF
+    IF level = 15 RETURN "< 7.5 >" ENDIF
+    IF level = 16 RETURN "< 8.0 >" ENDIF
+    IF level = 17 RETURN "< 8.5 >" ENDIF
+    IF level = 18 RETURN "< 9.0 >" ENDIF
+    IF level = 19 RETURN "< 9.5 >" ENDIF
+    IF level = 20 RETURN "< 10.0 >" ENDIF
+    IF level = 21 RETURN "< 10.5 >" ENDIF
+    IF level = 22 RETURN "< 11.0 >" ENDIF
+    IF level = 23 RETURN "< 11.5 >" ENDIF
+    IF level = 24 RETURN "< 12.0 >" ENDIF
+    IF level = 25 RETURN "< 12.5 >" ENDIF
+    IF level = 26 RETURN "< 13.0 >" ENDIF
+    IF level = 27 RETURN "< 13.5 >" ENDIF
+    IF level = 28 RETURN "< 14.0 >" ENDIF
+    IF level = 29 RETURN "< 14.5 >" ENDIF
+    IF level = 30 RETURN "< 15.0 >" ENDIF
+    RETURN "< 15.0 >"
+ENDFUNC
+
+PROC SYNC_VEHICLE_DIRT_SLIDER()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    FLOAT currentDirt = GET_VEHICLE_DIRT_LEVEL(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
+    g_vehicle_dirt_level = ROUND(currentDirt * 2.0)
+    IF g_vehicle_dirt_level < 0 g_vehicle_dirt_level = 0 ENDIF
+    IF g_vehicle_dirt_level > 30 g_vehicle_dirt_level = 30 ENDIF
+ENDPROC
+
+PROC APPLY_VEHICLE_DIRT_LEVEL()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    SET_VEHICLE_DIRT_LEVEL(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), DIRT_LEVEL_VALUE(g_vehicle_dirt_level))
+ENDPROC
+
+PROC APPLY_VEHICLE_WINDOW_ACTION()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX windowVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF g_vehicle_window_action = 0
+        ROLL_DOWN_WINDOWS(windowVehicle)
+    ELSE
+        ROLL_UP_WINDOW(windowVehicle, SC_WINDOW_FRONT_LEFT)
+        ROLL_UP_WINDOW(windowVehicle, SC_WINDOW_FRONT_RIGHT)
+        ROLL_UP_WINDOW(windowVehicle, SC_WINDOW_REAR_LEFT)
+        ROLL_UP_WINDOW(windowVehicle, SC_WINDOW_REAR_RIGHT)
+        ROLL_UP_WINDOW(windowVehicle, SC_WINDOW_MIDDLE_LEFT)
+        ROLL_UP_WINDOW(windowVehicle, SC_WINDOW_MIDDLE_RIGHT)
+    ENDIF
+ENDPROC
+
+PROC APPLY_VEHICLE_SELECTED_WINDOW(BOOL rollDown)
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX selectedWindowVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF rollDown
+        IF g_vehicle_window_choice = 0 ROLL_DOWN_WINDOW(selectedWindowVehicle, SC_WINDOW_FRONT_LEFT) ENDIF
+        IF g_vehicle_window_choice = 1 ROLL_DOWN_WINDOW(selectedWindowVehicle, SC_WINDOW_FRONT_RIGHT) ENDIF
+        IF g_vehicle_window_choice = 2 ROLL_DOWN_WINDOW(selectedWindowVehicle, SC_WINDOW_REAR_LEFT) ENDIF
+        IF g_vehicle_window_choice = 3 ROLL_DOWN_WINDOW(selectedWindowVehicle, SC_WINDOW_REAR_RIGHT) ENDIF
+        IF g_vehicle_window_choice = 4 ROLL_DOWN_WINDOW(selectedWindowVehicle, SC_WINDOW_MIDDLE_LEFT) ENDIF
+        IF g_vehicle_window_choice = 5 ROLL_DOWN_WINDOW(selectedWindowVehicle, SC_WINDOW_MIDDLE_RIGHT) ENDIF
+    ELSE
+        IF g_vehicle_window_choice = 0 ROLL_UP_WINDOW(selectedWindowVehicle, SC_WINDOW_FRONT_LEFT) ENDIF
+        IF g_vehicle_window_choice = 1 ROLL_UP_WINDOW(selectedWindowVehicle, SC_WINDOW_FRONT_RIGHT) ENDIF
+        IF g_vehicle_window_choice = 2 ROLL_UP_WINDOW(selectedWindowVehicle, SC_WINDOW_REAR_LEFT) ENDIF
+        IF g_vehicle_window_choice = 3 ROLL_UP_WINDOW(selectedWindowVehicle, SC_WINDOW_REAR_RIGHT) ENDIF
+        IF g_vehicle_window_choice = 4 ROLL_UP_WINDOW(selectedWindowVehicle, SC_WINDOW_MIDDLE_LEFT) ENDIF
+        IF g_vehicle_window_choice = 5 ROLL_UP_WINDOW(selectedWindowVehicle, SC_WINDOW_MIDDLE_RIGHT) ENDIF
+    ENDIF
+ENDPROC
+
+PROC APPLY_VEHICLE_ENGINE_TOGGLE()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX engineVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF GET_IS_VEHICLE_ENGINE_RUNNING(engineVehicle)
+        SET_VEHICLE_ENGINE_ON(engineVehicle, FALSE, TRUE, TRUE)
+    ELSE
+        SET_VEHICLE_ENGINE_ON(engineVehicle, TRUE, TRUE, FALSE)
+    ENDIF
+ENDPROC
+
+PROC APPLY_VEHICLE_HAZARDS_STATE()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX hazardVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    SET_VEHICLE_INDICATOR_LIGHTS(hazardVehicle, TRUE, g_vehicle_hazards)
+    SET_VEHICLE_INDICATOR_LIGHTS(hazardVehicle, FALSE, g_vehicle_hazards)
+ENDPROC
+
+PROC PROCESS_VEHICLE_HAZARDS()
+    IF NOT g_vehicle_hazards EXIT ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    IF GET_GAME_TIMER() < g_vehicle_hazards_tick EXIT ENDIF
+    APPLY_VEHICLE_HAZARDS_STATE()
+    g_vehicle_hazards_tick = GET_GAME_TIMER() + 500
+ENDPROC
+
+PROC APPLY_EMERGENCY_SIREN_MUTE_STATE(VEHICLE_INDEX sirenVehicle, BOOL muteSirens)
+    IF NOT DOES_ENTITY_EXIST(sirenVehicle) EXIT ENDIF
+    IF IS_ENTITY_DEAD(sirenVehicle) EXIT ENDIF
+    IF muteSirens
+        IF SIREN_MUTE_FORCE_SIREN = 1
+            SET_VEHICLE_SIREN(sirenVehicle, TRUE)
+        ENDIF
+        SET_VEHICLE_HAS_MUTED_SIRENS(sirenVehicle, TRUE)
+        IF SIREN_MUTE_TRAFFIC_YIELD = 1
+            SET_VEHICLE_ACT_AS_IF_HAS_SIREN_ON(sirenVehicle, TRUE)
+        ENDIF
+    ELSE
+        SET_VEHICLE_HAS_MUTED_SIRENS(sirenVehicle, FALSE)
+        SET_VEHICLE_ACT_AS_IF_HAS_SIREN_ON(sirenVehicle, FALSE)
+    ENDIF
+ENDPROC
+
+PROC ANNOUNCE_SIREN_MUTE(BOOL muteSirens)
+    IF muteSirens
+        BEGIN_TEXT_COMMAND_THEFEED_POST("STRING")
+            ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("Sirens Muted")
+        END_TEXT_COMMAND_THEFEED_POST_TICKER(TRUE, FALSE)
+    ELSE
+        BEGIN_TEXT_COMMAND_THEFEED_POST("STRING")
+            ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("Sirens Unmuted")
+        END_TEXT_COMMAND_THEFEED_POST_TICKER(TRUE, FALSE)
+    ENDIF
+ENDPROC
+
+PROC PROCESS_EMERGENCY_SIREN_MUTE()
+    VEHICLE_INDEX sirenVehicle = NULL
+    BOOL eligible = FALSE
+    IF g_open EXIT ENDIF
+    IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
+        sirenVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+        IF DOES_ENTITY_EXIST(sirenVehicle)
+            IF NOT IS_ENTITY_DEAD(sirenVehicle)
+                IF GET_VEHICLE_CLASS(sirenVehicle) = VC_EMERGENCY
+                    IF GET_PED_IN_VEHICLE_SEAT(sirenVehicle, VS_DRIVER, FALSE) = PLAYER_PED_ID()
+                        eligible = TRUE
+                    ENDIF
+                ENDIF
+            ENDIF
+        ENDIF
+    ENDIF
+    IF NOT eligible
+        IF g_siren_mute_armed
+            APPLY_EMERGENCY_SIREN_MUTE_STATE(g_siren_muted_veh, FALSE)
+            ANNOUNCE_SIREN_MUTE(FALSE)
+        ENDIF
+        g_siren_mute_armed = FALSE
+        g_siren_muted_veh = NULL
+        g_siren_hold_start = 0
+        g_siren_hold_latched = FALSE
+        g_siren_mute_tick = 0
+        EXIT
+    ENDIF
+    IF g_siren_mute_armed AND g_siren_muted_veh != sirenVehicle
+        APPLY_EMERGENCY_SIREN_MUTE_STATE(g_siren_muted_veh, FALSE)
+        g_siren_muted_veh = sirenVehicle
+        APPLY_EMERGENCY_SIREN_MUTE_STATE(sirenVehicle, TRUE)
+    ENDIF
+    IF IS_CONTROL_PRESSED(PLAYER_CONTROL, INPUT_VEH_HORN)
+        IF g_siren_hold_start = 0
+            g_siren_hold_start = GET_GAME_TIMER()
+        ENDIF
+        IF NOT g_siren_hold_latched
+            IF GET_GAME_TIMER() - g_siren_hold_start >= SIREN_MUTE_HOLD_MS
+                g_siren_hold_latched = TRUE
+                g_siren_mute_armed = NOT g_siren_mute_armed
+                IF g_siren_mute_armed
+                    g_siren_muted_veh = sirenVehicle
+                    APPLY_EMERGENCY_SIREN_MUTE_STATE(sirenVehicle, TRUE)
+                    g_siren_mute_tick = GET_GAME_TIMER() + SIREN_MUTE_TICK_MS
+                ELSE
+                    APPLY_EMERGENCY_SIREN_MUTE_STATE(g_siren_muted_veh, FALSE)
+                    g_siren_muted_veh = NULL
+                ENDIF
+                ANNOUNCE_SIREN_MUTE(g_siren_mute_armed)
+            ENDIF
+        ENDIF
+    ELSE
+        g_siren_hold_start = 0
+        g_siren_hold_latched = FALSE
+    ENDIF
+    IF g_siren_mute_armed
+        IF DOES_ENTITY_EXIST(g_siren_muted_veh)
+            IF GET_GAME_TIMER() >= g_siren_mute_tick
+                IF IS_VEHICLE_SIREN_AUDIO_ON(g_siren_muted_veh)
+                    SET_VEHICLE_HAS_MUTED_SIRENS(g_siren_muted_veh, TRUE)
+                ENDIF
+                SET_VEHICLE_ACT_AS_IF_HAS_SIREN_ON(g_siren_muted_veh, TRUE)
+                g_siren_mute_tick = GET_GAME_TIMER() + SIREN_MUTE_TICK_MS
+            ENDIF
+        ENDIF
+    ENDIF
+ENDPROC
+
+PROC APPLY_VEHICLE_SEAT_SWITCH()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX seatVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    SWITCH g_vehicle_seat_choice
+        CASE 0 SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), seatVehicle, VS_DRIVER) BREAK
+        CASE 1 SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), seatVehicle, VS_FRONT_RIGHT) BREAK
+        CASE 2 SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), seatVehicle, VS_BACK_LEFT) BREAK
+        CASE 3 SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), seatVehicle, VS_BACK_RIGHT) BREAK
+    ENDSWITCH
+ENDPROC
+
+PROC APPLY_VEHICLE_WASH()
+    g_vehicle_dirt_level = 0
+    APPLY_VEHICLE_DIRT_LEVEL()
 ENDPROC
 
 FUNC BOOL MENU_COMBO_OPEN_PRESSED()
@@ -811,33 +1109,56 @@ FUNC BOOL MENU_COMBO_OPEN_PRESSED()
 ENDFUNC
 
 FUNC INT ITEM_COUNT()
-    IF g_tab = 0 AND g_bodyguard_open RETURN 8 ENDIF
-    IF g_tab = 0 AND g_attacker_open RETURN 6 ENDIF
+    IF g_tab = 0 AND g_bodyguard_open
+        IF g_guard_ped_open RETURN PED_CHOICE_COUNT() + 2 ENDIF
+        RETURN 8
+    ENDIF
+    IF g_tab = 0 AND g_attacker_open
+        IF g_attacker_ped_open RETURN PED_CHOICE_COUNT() + 2 ENDIF
+        RETURN 6
+    ENDIF
     IF g_tab = 0 AND g_outfit_open RETURN 21 ENDIF
     IF g_tab = 0 AND g_radio_open RETURN 3 ENDIF
     IF g_tab = 0 AND g_ped_open RETURN PED_CHOICE_COUNT() + 3 ENDIF
-    IF g_tab = 0 AND g_statman_open RETURN 9 ENDIF
+    IF g_tab = 3 AND g_chauffeur_open
+        IF g_chauffeur_armed_open RETURN MENU_WEAPON_COUNT() + 1 ENDIF
+        IF g_chauffeur_vehicle_open RETURN CHAUFFEUR_VEHICLE_COUNT ENDIF
+        IF g_chauffeur_ped_open RETURN PED_CHOICE_COUNT() + 2 ENDIF
+        RETURN CHAUFFEUR_MENU_ROWS
+    ENDIF
     IF g_tab = 3 AND g_neon_anim_open RETURN 3 ENDIF
     IF g_tab = 3 AND g_spawner_open RETURN 11 ENDIF
+    IF g_tab = 3 AND g_vehicle_control_open RETURN 9 ENDIF
+    IF g_tab = 3 AND g_hydro_open RETURN HYDRO_MENU_ROWS ENDIF
+    IF g_tab = 3 AND g_interior_open RETURN INTERIOR_MENU_ROWS ENDIF
+    IF g_tab = 3 AND g_wheeltyre_open RETURN WHEELTYRE_MENU_ROWS ENDIF
+    IF g_tab = 3 AND g_lsc_extras_open RETURN LSC_EXTRAS_MENU_ROWS ENDIF
+    IF g_tab = 3 AND g_bennys_open RETURN BENNYS_MENU_ROWS ENDIF
+    IF g_tab = 3 AND g_support_open RETURN SUPPORTCHECK_MENU_ROWS ENDIF
     IF g_tab = 3 AND g_lsc_open
         IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
-        RETURN 19
+        RETURN LSC_MENU_ROWS
     ENDIF
     IF g_tab = 1 AND g_weapon_upgrades_open RETURN 7 ENDIF
     IF g_tab = 5 AND g_tp_stores_open RETURN 19 ENDIF
     IF g_tab = 5 AND g_tp_locs_open RETURN 35 ENDIF
     IF g_tab = 4 AND g_timeweather_open RETURN 6 ENDIF
+    IF g_tab = 7 AND g_spooner_open RETURN SPOONER_MENU_ROWS ENDIF
+    IF g_tab = 7 AND g_nsc_loader_open RETURN NSC_LOADER_TOTAL_ROWS() ENDIF
+    IF g_tab = 7 AND g_persist_open RETURN PERSIST_MENU_ROWS ENDIF
     SWITCH g_tab
-        CASE 0 RETURN 25 BREAK
+        CASE 0
+            IF g_auto_save RETURN 26 ENDIF
+            RETURN 25 BREAK
         CASE 1 RETURN 9 BREAK
         CASE 2 RETURN 6 BREAK
-        CASE 3 RETURN 24 BREAK
-        CASE 4 RETURN 11 BREAK
+        CASE 3 RETURN 26 BREAK
+        CASE 4 RETURN 14 BREAK
         CASE 5 RETURN 14 BREAK
-        CASE 6 RETURN 13 BREAK
+        CASE 6 RETURN MISC_MENU_ROWS BREAK
         CASE 7
-            IF g_accent_choice = 14 RETURN 7 ENDIF
-            RETURN 6 BREAK
+            IF g_accent_choice = 14 RETURN 10 ENDIF
+            RETURN 9 BREAK
     ENDSWITCH
     RETURN 1
 ENDFUNC
@@ -846,6 +1167,28 @@ FUNC INT ACTIVE_ITEM_COUNT()
     IF g_home RETURN 8 ENDIF
     RETURN ITEM_COUNT()
 ENDFUNC
+
+PROC DRAW_PAGE_COUNTER()
+    INT total = ACTIVE_ITEM_COUNT()
+    INT current = g_item + 1
+    IF total < 1 total = 1 ENDIF
+    IF current < 1 current = 1 ENDIF
+    IF current > total current = total ENDIF
+    TEXT_LABEL_63 tlCounter = ""
+    tlCounter += current
+    tlCounter += " / "
+    tlCounter += total
+    SET_TEXT_FONT(FONT_STANDARD)
+    SET_TEXT_SCALE(0.270, 0.270)
+    SET_TEXT_COLOUR(g_accent_r, g_accent_g, g_accent_b, 255)
+    SET_TEXT_WRAP(0.0, g_menu_x + 0.105)
+    SET_TEXT_RIGHT_JUSTIFY(TRUE)
+    SET_TEXT_DROPSHADOW(1, 0, 0, 0, 190)
+    BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(tlCounter)
+    END_TEXT_COMMAND_DISPLAY_TEXT(g_menu_x + 0.105, 0.556 + g_menu_y)
+    SET_TEXT_RIGHT_JUSTIFY(FALSE)
+ENDPROC
 
 PROC UPDATE_SCROLL()
     INT activeCount = ACTIVE_ITEM_COUNT()
@@ -871,6 +1214,9 @@ PROC SAVE_NAVIGATION_STATE()
     ELIF g_spawner_open
         g_spawner_item = g_item
         g_spawner_scroll = g_scroll
+    ELIF g_vehicle_control_open
+        g_vehicle_control_item = g_item
+        g_vehicle_control_scroll = g_scroll
     ELIF g_outfit_open
         g_outfit_item = g_item
         g_outfit_scroll = g_scroll
@@ -878,14 +1224,42 @@ PROC SAVE_NAVIGATION_STATE()
         g_radio_item = g_item
         g_radio_scroll = g_scroll
     ELIF g_bodyguard_open
-        g_bodyguard_item = g_item
-        g_bodyguard_scroll = g_scroll
+        IF g_guard_ped_open
+            g_guard_ped_item = g_item
+            g_guard_ped_scroll = g_scroll
+        ELSE
+            g_bodyguard_item = g_item
+            g_bodyguard_scroll = g_scroll
+        ENDIF
     ELIF g_attacker_open
-        g_attacker_item = g_item
-        g_attacker_scroll = g_scroll
+        IF g_attacker_ped_open
+            g_attacker_ped_item = g_item
+            g_attacker_ped_scroll = g_scroll
+        ELSE
+            g_attacker_item = g_item
+            g_attacker_scroll = g_scroll
+        ENDIF
     ELIF g_neon_anim_open
         g_neon_anim_item = g_item
         g_neon_anim_scroll = g_scroll
+    ELIF g_hydro_open
+        g_hydro_item = g_item
+        g_hydro_scroll = g_scroll
+    ELIF g_interior_open
+        g_interior_item = g_item
+        g_interior_scroll = g_scroll
+    ELIF g_wheeltyre_open
+        g_wheeltyre_item = g_item
+        g_wheeltyre_scroll = g_scroll
+    ELIF g_lsc_extras_open
+        g_lsc_extras_item = g_item
+        g_lsc_extras_scroll = g_scroll
+    ELIF g_bennys_open
+        g_bennys_item = g_item
+        g_bennys_scroll = g_scroll
+    ELIF g_support_open
+        g_support_item = g_item
+        g_support_scroll = g_scroll
     ELIF g_lsc_open
         g_lsc_item = g_item
         g_lsc_scroll = g_scroll
@@ -904,6 +1278,29 @@ PROC SAVE_NAVIGATION_STATE()
     ELIF g_timeweather_open
         g_timeweather_item = g_item
         g_timeweather_scroll = g_scroll
+    ELIF g_chauffeur_open
+        IF g_chauffeur_armed_open
+            g_chauffeur_armed_item = g_item
+            g_chauffeur_armed_scroll = g_scroll
+        ELIF g_chauffeur_vehicle_open
+            g_chauffeur_vehicle_item = g_item
+            g_chauffeur_vehicle_scroll = g_scroll
+        ELIF g_chauffeur_ped_open
+            g_chauffeur_ped_item = g_item
+            g_chauffeur_ped_scroll = g_scroll
+        ELSE
+            g_chauffeur_item = g_item
+            g_chauffeur_scroll = g_scroll
+        ENDIF
+    ELIF g_spooner_open
+        g_spooner_item = g_item
+        g_spooner_scroll = g_scroll
+    ELIF g_nsc_loader_open
+        g_nsc_loader_item = g_item
+        g_nsc_loader_scroll = g_scroll
+    ELIF g_persist_open
+        g_persist_item = g_item
+        g_persist_scroll = g_scroll
     ELSE
         g_page_item[g_tab] = g_item
         g_page_scroll[g_tab] = g_scroll
@@ -927,8 +1324,8 @@ PROC DRAW_HOME()
     SET_TEXT_COLOUR(titleR, titleG, titleB, 255)
     BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
         ADD_TEXT_COMPONENT_SUBSTRING_KEYBOARD_DISPLAY("MEGATARD")
-    END_TEXT_COMMAND_DISPLAY_TEXT(g_menu_x - 0.080, 0.100 + g_menu_y)
-    MENU_TEXT(g_menu_x - 0.086, 0.158, 0.390, titleR, titleG, titleB, "Made by: @Geekmaxxer")
+    END_TEXT_COMMAND_DISPLAY_TEXT(g_menu_x - 0.079, 0.100 + g_menu_y)
+    MENU_TEXT(g_menu_x - 0.085, 0.158, 0.390, titleR, titleG, titleB, "Made by: @Geekmaxxer")
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "CATEGORIES")
     DRAW_MENU_VERSION_TAG()
     DRAW_OPTION(0.268, "Player Settings", ">>>", g_item = 0, 2)
@@ -939,6 +1336,7 @@ PROC DRAW_HOME()
     DRAW_OPTION(0.458, "Teleport Options", ">>>", g_item = 5, 2)
     DRAW_OPTION(0.496, "Misc Options", ">>>", g_item = 6, 2)
     DRAW_OPTION(0.534, "Menu Settings", ">>>", g_item = 7, 2)
+    DRAW_PAGE_COUNTER()
     DRAW_DESCRIPTION_PANEL()
     DRAW_INSTRUCTIONAL_BUTTONS()
 ENDPROC
@@ -950,7 +1348,6 @@ PROC WARP_INTO_LAST_PLAYER_VEHICLE()
         SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), vehicle, VS_DRIVER)
     ENDIF
 ENDPROC
-
 
 PROC PROCESS_QUICK_VEHICLE_ENTRY_EXIT()
     PED_INDEX playerPed = PLAYER_PED_ID()
@@ -1003,8 +1400,6 @@ PROC MENU_CAPTURE_INPUT()
     SET_INPUT_EXCLUSIVE(FRONTEND_CONTROL, INPUT_FRONTEND_DOWN)
     SET_INPUT_EXCLUSIVE(FRONTEND_CONTROL, INPUT_FRONTEND_LEFT)
     SET_INPUT_EXCLUSIVE(FRONTEND_CONTROL, INPUT_FRONTEND_RIGHT)
-
-
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_FRONTEND_ACCEPT, TRUE)
     DISABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_FRONTEND_ACCEPT, TRUE)
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_FRONTEND_CANCEL, TRUE)
@@ -1012,8 +1407,10 @@ PROC MENU_CAPTURE_INPUT()
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_FRONTEND_DOWN, TRUE)
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_FRONTEND_LEFT, TRUE)
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_FRONTEND_RIGHT, TRUE)
-
-
+    DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_LOOK_BEHIND, TRUE)
+    DISABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_LOOK_BEHIND, TRUE)
+    DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_LOOK_BEHIND, TRUE)
+    DISABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_VEH_LOOK_BEHIND, TRUE)
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_REPLAY_START_STOP_RECORDING, TRUE)
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_REPLAY_START_STOP_RECORDING_SECONDARY, TRUE)
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_REPLAY_RECORD, TRUE)
@@ -1092,10 +1489,74 @@ PROC MENU_CAPTURE_INPUT()
     DISABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_REPLAY_TIMELINE_DUPLICATE_CLIP, TRUE)
     DISABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_REPLAY_TIMELINE_PLACE_CLIP, TRUE)
     DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_SAVE_REPLAY_CLIP, TRUE)
-
-
-
     DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_JUMP, TRUE)
+ENDPROC
+
+PROC ANNOUNCE_AUTO_SAVE()
+    BEGIN_TEXT_COMMAND_THEFEED_POST("STRING")
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("Autosaved!")
+    END_TEXT_COMMAND_THEFEED_POST_UNLOCK_TU_WITH_COLOR("Autosaved!", 0, "", FALSE, HUD_COLOUR_GREEN, TRUE)
+ENDPROC
+
+PROC ANNOUNCE_MENU_WELCOME()
+    TEXT_LABEL_63 welcomeTitle = "~p~MEGATARD Menu ~s~"
+    welcomeTitle += g_menu_version
+    BEGIN_TEXT_COMMAND_THEFEED_POST("STRING")
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(welcomeTitle)
+    END_TEXT_COMMAND_THEFEED_POST_TICKER(TRUE, FALSE)
+    BEGIN_TEXT_COMMAND_THEFEED_POST("STRING")
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("Press ~y~LB + DPAD Down~s~ at the same time to open the menu.")
+    END_TEXT_COMMAND_THEFEED_POST_TICKER(TRUE, FALSE)
+    BEGIN_TEXT_COMMAND_THEFEED_POST("STRING")
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("Report any bugs or feature requests to ~b~@Geekmaxxer~s~, & ~g~Enjoy!~s~")
+    END_TEXT_COMMAND_THEFEED_POST_TICKER(TRUE, FALSE)
+ENDPROC
+
+FUNC BOOL AUTO_SAVE_STATE_SAFE()
+    IF IS_AUTO_SAVE_IN_PROGRESS() RETURN FALSE ENDIF
+    IF GET_IS_AUTO_SAVE_OFF() RETURN FALSE ENDIF
+    IF GET_MISSION_FLAG() RETURN FALSE ENDIF
+    IF IS_CUTSCENE_PLAYING() OR IS_CUTSCENE_ACTIVE() RETURN FALSE ENDIF
+    IF IS_SCREEN_FADED_OUT() OR IS_SCREEN_FADING_OUT() OR IS_SCREEN_FADING_IN() RETURN FALSE ENDIF
+    IF IS_PAUSE_MENU_ACTIVE() OR IS_WARNING_MESSAGE_ACTIVE() RETURN FALSE ENDIF
+    IF NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) RETURN FALSE ENDIF
+    IF IS_PLAYER_DEAD(PLAYER_ID()) OR IS_ENTITY_DEAD(PLAYER_PED_ID()) RETURN FALSE ENDIF
+    RETURN TRUE
+ENDFUNC
+
+PROC PROCESS_AUTO_SAVE()
+    IF NOT g_auto_save EXIT ENDIF
+    IF g_auto_save_interval <= 0 EXIT ENDIF
+    IF GET_GAME_TIMER() < g_next_auto_save_time EXIT ENDIF
+    IF NOT AUTO_SAVE_STATE_SAFE() EXIT ENDIF
+    DO_AUTO_SAVE()
+    g_next_auto_save_time = GET_GAME_TIMER() + (g_auto_save_interval * 60000)
+    g_auto_save_pending_announce = TRUE
+    g_auto_save_pending_since = GET_GAME_TIMER()
+ENDPROC
+
+PROC PROCESS_AUTO_SAVE_ANNOUNCE()
+    IF NOT g_auto_save_pending_announce EXIT ENDIF
+    IF IS_AUTO_SAVE_IN_PROGRESS()
+        g_auto_save_pending_announce = FALSE
+        ANNOUNCE_AUTO_SAVE()
+        EXIT
+    ENDIF
+    IF GET_GAME_TIMER() > g_auto_save_pending_since + 15000
+        g_auto_save_pending_announce = FALSE
+    ENDIF
+ENDPROC
+
+PROC PROCESS_MENU_WELCOME()
+    IF g_welcome_shown EXIT ENDIF
+    IF GET_GAME_TIMER() < g_menu_start_time + 5000 EXIT ENDIF
+    IF NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) EXIT ENDIF
+    IF IS_PLAYER_DEAD(PLAYER_ID()) OR IS_ENTITY_DEAD(PLAYER_PED_ID()) EXIT ENDIF
+    IF IS_CUTSCENE_PLAYING() OR IS_CUTSCENE_ACTIVE() EXIT ENDIF
+    IF IS_SCREEN_FADED_OUT() OR IS_SCREEN_FADING_OUT() OR IS_SCREEN_FADING_IN() EXIT ENDIF
+    IF IS_PAUSE_MENU_ACTIVE() OR IS_WARNING_MESSAGE_ACTIVE() EXIT ENDIF
+    g_welcome_shown = TRUE
+    ANNOUNCE_MENU_WELCOME()
 ENDPROC
 
 PROC STOP_NPC_BRAWL()
@@ -1119,7 +1580,6 @@ FUNC BOOL IS_TRACKED_BRAWLER(PED_INDEX ped)
     RETURN FALSE
 ENDFUNC
 
-
 PROC TASK_NEARBY_NPCS_TO_BRAWL()
     PED_INDEX nearbyPeds[32]
     INT index = 0
@@ -1139,7 +1599,6 @@ PROC TASK_NEARBY_NPCS_TO_BRAWL()
             ENDIF
         ENDIF
     ENDREPEAT
-
     IF g_brawl_ped_count > 16 g_brawl_ped_count = 16 ENDIF
     pair = 0
     WHILE pair + 1 < g_brawl_ped_count
@@ -1213,7 +1672,6 @@ PROC PROCESS_PLAYER_NOCLIP()
         g_player_noclip_z = resyncPosition.z
         EXIT
     ENDIF
-
     FREEZE_ENTITY_POSITION(playerPed, TRUE)
     SET_ENTITY_HAS_GRAVITY(playerPed, FALSE)
     SET_ENTITY_COLLISION(playerPed, FALSE, FALSE)
@@ -1307,7 +1765,6 @@ PROC SET_PLAYER_NOCLIP_ENABLED(BOOL enabled)
         REQUEST_COLLISION_AT_COORD(GET_ENTITY_COORDS(playerPed))
     ENDIF
 ENDPROC
-
 
 PROC SET_PLAYER_FREECAM_ENABLED(BOOL enabled)
     PED_INDEX playerPed = PLAYER_PED_ID()
@@ -1466,13 +1923,25 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
     IF g_tab = 0 AND g_outfit_open RETURN TRUE ENDIF
     IF g_tab = 0 AND g_radio_open RETURN FALSE ENDIF
     IF g_tab = 0 AND g_bodyguard_open
+        IF g_guard_ped_open RETURN FALSE ENDIF
         IF g_item = 1 OR g_item = 2 OR g_item = 3 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 0 AND g_attacker_open
+        IF g_attacker_ped_open RETURN FALSE ENDIF
         IF g_item = 1 OR g_item = 2 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 3 AND g_neon_anim_open
         IF g_item = 0 OR g_item = 1 OR g_item = 2 RETURN TRUE ENDIF
+    ENDIF
+    IF g_tab = 3 AND g_chauffeur_open
+        IF g_chauffeur_armed_open RETURN FALSE ENDIF
+        IF g_chauffeur_vehicle_open RETURN FALSE ENDIF
+        IF g_chauffeur_ped_open RETURN FALSE ENDIF
+        IF g_item = 3 RETURN TRUE ENDIF
+        RETURN FALSE
+    ENDIF
+    IF g_tab = 3 AND g_vehicle_control_open
+        IF g_item = 0 OR g_item = 1 OR g_item = 6 OR g_item = 7 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 0 AND g_ped_open
         IF g_item = 2 RETURN TRUE ENDIF
@@ -1480,35 +1949,66 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
     IF g_tab = 3 AND g_spawner_open
         IF g_item = 1 OR g_item = 2 OR g_item = 3 OR g_item = 5 OR g_item = 6 RETURN TRUE ENDIF
     ENDIF
-    IF g_tab = 0 AND g_statman_open RETURN TRUE ENDIF
     IF g_tab = 6
-        IF g_item = 5 RETURN TRUE ENDIF
-        IF g_item = 6 RETURN TRUE ENDIF
+        IF g_item = 5 OR g_item = 12 RETURN TRUE ENDIF
     ENDIF
-    IF g_tab = 0 AND NOT g_outfit_open AND NOT g_radio_open AND NOT g_bodyguard_open AND NOT g_attacker_open AND NOT g_ped_open AND NOT g_statman_open AND NOT g_weapon_upgrades_open
-        IF g_item = 18 RETURN TRUE ENDIF
+    IF g_tab = 0 AND NOT g_outfit_open AND NOT g_radio_open AND NOT g_bodyguard_open AND NOT g_attacker_open AND NOT g_ped_open AND NOT g_weapon_upgrades_open
+        IF g_item = 17 RETURN TRUE ENDIF
+    ENDIF
+    IF g_tab = 0 AND NOT g_outfit_open AND NOT g_radio_open AND NOT g_bodyguard_open AND NOT g_attacker_open AND NOT g_ped_open AND NOT g_weapon_upgrades_open
+        IF g_item = 25 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 4
         IF g_timeweather_open
             IF g_item = 0 OR g_item = 1 OR g_item = 2 OR g_item = 3 OR g_item = 5 RETURN TRUE ENDIF
         ELSE
-            IF g_item = 3 RETURN TRUE ENDIF
+            IF g_item = 3 OR g_item = 4 OR g_item = 5 RETURN TRUE ENDIF
         ENDIF
     ENDIF
     IF g_tab = 2 AND g_item = 2 RETURN TRUE ENDIF
     IF g_tab = 1 AND (g_item = 1) AND NOT g_weapon_upgrades_open RETURN TRUE ENDIF
     IF g_tab = 1 AND g_weapon_upgrades_open AND g_item = 6 RETURN TRUE ENDIF
-    IF g_tab = 3 AND g_item = 23 AND NOT g_lsc_open RETURN TRUE ENDIF
-    IF g_tab = 3 AND NOT g_lsc_open AND (g_item = 7 OR g_item = 8) RETURN TRUE ENDIF
+    IF g_tab = 3 AND g_item = 24 AND NOT g_lsc_open AND NOT g_vehicle_control_open RETURN TRUE ENDIF
+    IF g_tab = 3 AND NOT g_lsc_open AND NOT g_vehicle_control_open AND (g_item = 8 OR g_item = 9) RETURN TRUE ENDIF
+    IF g_tab = 3 AND g_hydro_open
+        IF g_item = 1 OR g_item = 3 OR g_item = 5 OR g_item = 6 OR g_item = 7 OR g_item = 8 OR g_item = 10 OR g_item = 11 OR g_item = 12 OR g_item = 13 RETURN TRUE ENDIF
+        RETURN FALSE
+    ENDIF
+    IF g_tab = 3 AND g_interior_open
+        IF g_item = 1 OR g_item = 2 OR g_item = 3 OR g_item = 7 OR g_item = 8 RETURN TRUE ENDIF
+        RETURN FALSE
+    ENDIF
+    IF g_tab = 3 AND g_wheeltyre_open
+        IF g_item = 0 OR g_item = 1 OR g_item = 2 RETURN TRUE ENDIF
+        RETURN FALSE
+    ENDIF
+    IF g_tab = 3 AND g_lsc_extras_open
+        IF g_item = 0 OR g_item = 4 RETURN TRUE ENDIF
+        RETURN FALSE
+    ENDIF
+    IF g_tab = 3 AND g_bennys_open RETURN FALSE ENDIF
+    IF g_tab = 3 AND g_support_open RETURN FALSE ENDIF
     IF g_tab = 3 AND g_lsc_open
-        IF g_item = 2 OR g_item = 3 OR g_item = 5 OR g_item = 6 OR g_item = 7 OR g_item = 8 OR g_item = 9 OR g_item = 12 OR g_item = 14 OR g_item = 15 RETURN TRUE ENDIF
+        IF g_item = 2 OR g_item = 3 OR g_item = 5 OR g_item = 6 OR g_item = 7 OR g_item = 8 OR g_item = 9 OR g_item = 12 OR g_item = 14 OR g_item = 15 OR g_item = 19 RETURN TRUE ENDIF
     ENDIF
     IF g_tab = 7
-        IF g_item = 0 OR g_item = 1 RETURN TRUE ENDIF
+        IF g_spooner_open
+            IF g_item = 0 OR g_item = 3 OR g_item = 4 OR g_item = 5 OR g_item = 6 OR g_item = 7 OR g_item = 12 OR g_item = 13 OR g_item = 14 OR g_item = 15 OR g_item = 16 RETURN TRUE ENDIF
+            RETURN FALSE
+        ENDIF
+        IF g_nsc_loader_open
+            IF g_item = 2 RETURN TRUE ENDIF
+            RETURN FALSE
+        ENDIF
+        IF g_persist_open
+            IF g_item = 0 OR g_item = 5 RETURN TRUE ENDIF
+            RETURN FALSE
+        ENDIF
+        IF g_item = 2 OR g_item = 3 RETURN TRUE ENDIF
         IF g_accent_choice = 14
-            IF g_item = 2 OR g_item = 4 OR g_item = 5 OR g_item = 6 RETURN TRUE ENDIF
+            IF g_item = 4 OR g_item = 6 OR g_item = 7 OR g_item = 8 RETURN TRUE ENDIF
         ELSE
-            IF g_item = 3 OR g_item = 4 OR g_item = 5 RETURN TRUE ENDIF
+            IF g_item = 5 OR g_item = 6 OR g_item = 7 RETURN TRUE ENDIF
         ENDIF
     ENDIF
     RETURN FALSE
@@ -1521,6 +2021,17 @@ PROC ADJUST_SELECTOR(INT direction)
     ENDIF
     IF g_tab = 0 AND g_ped_open
         ADJUST_PED_SELECTOR(direction)
+        EXIT
+    ENDIF
+    IF g_tab = 3 AND g_chauffeur_open
+        IF g_chauffeur_armed_open EXIT ENDIF
+        IF g_chauffeur_vehicle_open EXIT ENDIF
+        IF g_chauffeur_ped_open EXIT ENDIF
+        IF g_item = 3
+            g_chauffeur_style = 1 - g_chauffeur_style
+            REFRESH_CHAUFFEUR_DRIVING_MODE()
+            ISSUE_CHAUFFEUR_DRIVE_TASK()
+        ENDIF
         EXIT
     ENDIF
     IF g_tab = 3 AND g_spawner_open
@@ -1552,11 +2063,7 @@ PROC ADJUST_SELECTOR(INT direction)
         EXIT
     ENDIF
     IF g_tab = 0 AND g_bodyguard_open
-        IF g_item = 1
-            g_bodyguard_model_choice = g_bodyguard_model_choice + direction
-            IF g_bodyguard_model_choice < 0 g_bodyguard_model_choice = 3 ENDIF
-            IF g_bodyguard_model_choice > 3 g_bodyguard_model_choice = 0 ENDIF
-        ENDIF
+        IF g_guard_ped_open EXIT ENDIF
         IF g_item = 2
             g_bodyguard_weapon_choice = g_bodyguard_weapon_choice + direction
             IF g_bodyguard_weapon_choice < 0 g_bodyguard_weapon_choice = 4 ENDIF
@@ -1566,6 +2073,30 @@ PROC ADJUST_SELECTOR(INT direction)
             g_bodyguard_formation_choice = g_bodyguard_formation_choice + direction
             IF g_bodyguard_formation_choice < 0 g_bodyguard_formation_choice = 2 ENDIF
             IF g_bodyguard_formation_choice > 2 g_bodyguard_formation_choice = 0 ENDIF
+        ENDIF
+        EXIT
+    ENDIF
+    IF g_tab = 3 AND g_vehicle_control_open
+        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+        IF g_item = 0
+            g_vehicle_window_action = 1 - g_vehicle_window_action
+            APPLY_VEHICLE_WINDOW_ACTION()
+        ENDIF
+        IF g_item = 1
+            g_vehicle_window_choice = g_vehicle_window_choice + direction
+            IF g_vehicle_window_choice < 0 g_vehicle_window_choice = 5 ENDIF
+            IF g_vehicle_window_choice > 5 g_vehicle_window_choice = 0 ENDIF
+        ENDIF
+        IF g_item = 6
+            g_vehicle_seat_choice = g_vehicle_seat_choice + direction
+            IF g_vehicle_seat_choice < 0 g_vehicle_seat_choice = 3 ENDIF
+            IF g_vehicle_seat_choice > 3 g_vehicle_seat_choice = 0 ENDIF
+        ENDIF
+        IF g_item = 7
+            g_vehicle_dirt_level = g_vehicle_dirt_level + direction
+            IF g_vehicle_dirt_level < 0 g_vehicle_dirt_level = 0 ENDIF
+            IF g_vehicle_dirt_level > 30 g_vehicle_dirt_level = 30 ENDIF
+            APPLY_VEHICLE_DIRT_LEVEL()
         ENDIF
         EXIT
     ENDIF
@@ -1600,21 +2131,11 @@ PROC ADJUST_SELECTOR(INT direction)
         EXIT
     ENDIF
     IF g_tab = 0 AND g_attacker_open
-        IF g_item = 1
-            g_attacker_model_choice = g_attacker_model_choice + direction
-            IF g_attacker_model_choice < 0 g_attacker_model_choice = 3 ENDIF
-            IF g_attacker_model_choice > 3 g_attacker_model_choice = 0 ENDIF
-        ENDIF
+        IF g_attacker_ped_open EXIT ENDIF
         IF g_item = 2
             g_attacker_weapon_choice = g_attacker_weapon_choice + direction
             IF g_attacker_weapon_choice < 0 g_attacker_weapon_choice = 3 ENDIF
             IF g_attacker_weapon_choice > 3 g_attacker_weapon_choice = 0 ENDIF
-        ENDIF
-        EXIT
-    ENDIF
-    IF g_tab = 0 AND g_statman_open
-        IF g_item >= 1 AND g_item <= 8
-            ADJUST_STAT_VALUE(g_item - 1, direction)
         ENDIF
         EXIT
     ENDIF
@@ -1625,13 +2146,24 @@ PROC ADJUST_SELECTOR(INT direction)
             IF g_npc_density_choice > 4 g_npc_density_choice = 0 ENDIF
             APPLY_NPC_DENSITY()
         ENDIF
+        IF g_item = 12
+            g_stripper_choice = g_stripper_choice + direction
+            IF g_stripper_choice < 0 g_stripper_choice = STRIPPER_MODEL_COUNT - 1 ENDIF
+            IF g_stripper_choice >= STRIPPER_MODEL_COUNT g_stripper_choice = 0 ENDIF
+        ENDIF
         EXIT
     ENDIF
-    IF g_tab = 0 AND NOT g_outfit_open AND NOT g_radio_open AND NOT g_bodyguard_open AND NOT g_attacker_open AND NOT g_ped_open AND NOT g_statman_open AND NOT g_weapon_upgrades_open
-        IF g_item = 18
+    IF g_tab = 0 AND NOT g_outfit_open AND NOT g_radio_open AND NOT g_bodyguard_open AND NOT g_attacker_open AND NOT g_ped_open AND NOT g_weapon_upgrades_open
+        IF g_item = 17
             g_cash_amount = g_cash_amount + (direction * 10000)
             IF g_cash_amount < 0 g_cash_amount = 0 ENDIF
             IF g_cash_amount > 2147483647 g_cash_amount = 2147483647 ENDIF
+        ENDIF
+        IF g_item = 25
+            g_auto_save_interval = g_auto_save_interval + direction
+            IF g_auto_save_interval < 0 g_auto_save_interval = 0 ENDIF
+            IF g_auto_save_interval > 120 g_auto_save_interval = 120 ENDIF
+            IF g_auto_save g_next_auto_save_time = GET_GAME_TIMER() + (g_auto_save_interval * 60000) ENDIF
         ENDIF
         EXIT
     ENDIF
@@ -1671,6 +2203,18 @@ PROC ADJUST_SELECTOR(INT direction)
                 IF g_ipl_preset < 0 g_ipl_preset = 24 ENDIF
                 IF g_ipl_preset > 24 g_ipl_preset = 0 ENDIF
             ENDIF
+            IF g_item = 4
+                g_time_scale_level = g_time_scale_level + direction
+                IF g_time_scale_level < 0 g_time_scale_level = 40 ENDIF
+                IF g_time_scale_level > 40 g_time_scale_level = 0 ENDIF
+                APPLY_TIME_SCALE()
+            ENDIF
+            IF g_item = 5
+                g_gravity_choice = g_gravity_choice + direction
+                IF g_gravity_choice < 0 g_gravity_choice = 3 ENDIF
+                IF g_gravity_choice > 3 g_gravity_choice = 0 ENDIF
+                APPLY_GRAVITY_CHOICE()
+            ENDIF
         ENDIF
     ENDIF
     IF g_tab = 2 AND g_item = 2
@@ -1687,6 +2231,140 @@ PROC ADJUST_SELECTOR(INT direction)
         g_weapon_choice = g_weapon_choice + direction
         IF g_weapon_choice < 0 g_weapon_choice = MENU_WEAPON_COUNT() - 1 ENDIF
         IF g_weapon_choice >= MENU_WEAPON_COUNT() g_weapon_choice = 0 ENDIF
+    ENDIF
+    IF g_tab = 3 AND g_hydro_open
+        IF g_item = 1
+            g_hydro_level = g_hydro_level + direction
+            IF g_hydro_level < -1 g_hydro_level = 8 ENDIF
+            IF g_hydro_level > 8 g_hydro_level = -1 ENDIF
+            APPLY_HYDRO_LEVEL()
+        ENDIF
+        IF g_item = 3
+            g_hydro_preset = g_hydro_preset + direction
+            IF g_hydro_preset < 0 g_hydro_preset = HYDRO_PRESET_COUNT - 1 ENDIF
+            IF g_hydro_preset >= HYDRO_PRESET_COUNT g_hydro_preset = 0 ENDIF
+            APPLY_HYDRO_PRESET()
+        ENDIF
+        IF g_item = 5
+            g_hydro_front_height = g_hydro_front_height + direction
+            IF g_hydro_front_height < 0 g_hydro_front_height = HYDRO_HEIGHT_LEVELS - 1 ENDIF
+            IF g_hydro_front_height >= HYDRO_HEIGHT_LEVELS g_hydro_front_height = 0 ENDIF
+            APPLY_HYDRO_HEIGHTS()
+        ENDIF
+        IF g_item = 6
+            g_hydro_rear_height = g_hydro_rear_height + direction
+            IF g_hydro_rear_height < 0 g_hydro_rear_height = HYDRO_HEIGHT_LEVELS - 1 ENDIF
+            IF g_hydro_rear_height >= HYDRO_HEIGHT_LEVELS g_hydro_rear_height = 0 ENDIF
+            APPLY_HYDRO_HEIGHTS()
+        ENDIF
+        IF g_item = 7
+            g_hydro_left_height = g_hydro_left_height + direction
+            IF g_hydro_left_height < 0 g_hydro_left_height = HYDRO_HEIGHT_LEVELS - 1 ENDIF
+            IF g_hydro_left_height >= HYDRO_HEIGHT_LEVELS g_hydro_left_height = 0 ENDIF
+            APPLY_HYDRO_HEIGHTS()
+        ENDIF
+        IF g_item = 8
+            g_hydro_right_height = g_hydro_right_height + direction
+            IF g_hydro_right_height < 0 g_hydro_right_height = HYDRO_HEIGHT_LEVELS - 1 ENDIF
+            IF g_hydro_right_height >= HYDRO_HEIGHT_LEVELS g_hydro_right_height = 0 ENDIF
+            APPLY_HYDRO_HEIGHTS()
+        ENDIF
+        IF g_item = 10
+            g_hydro_wheel = g_hydro_wheel + direction
+            IF g_hydro_wheel < 0 g_hydro_wheel = 5 ENDIF
+            IF g_hydro_wheel > 5 g_hydro_wheel = 0 ENDIF
+        ENDIF
+        IF g_item = 11
+            g_hydro_wheel_height = g_hydro_wheel_height + direction
+            IF g_hydro_wheel_height < 0 g_hydro_wheel_height = HYDRO_HEIGHT_LEVELS - 1 ENDIF
+            IF g_hydro_wheel_height >= HYDRO_HEIGHT_LEVELS g_hydro_wheel_height = 0 ENDIF
+            APPLY_HYDRO_WHEEL()
+        ENDIF
+        IF g_item = 12
+            g_hydro_wheel_state = g_hydro_wheel_state + direction
+            IF g_hydro_wheel_state < 0 g_hydro_wheel_state = 2 ENDIF
+            IF g_hydro_wheel_state > 2 g_hydro_wheel_state = 0 ENDIF
+            APPLY_HYDRO_WHEEL()
+        ENDIF
+        IF g_item = 13
+            g_hydro_raise_speed = g_hydro_raise_speed + direction
+            IF g_hydro_raise_speed < 0 g_hydro_raise_speed = 19 ENDIF
+            IF g_hydro_raise_speed > 19 g_hydro_raise_speed = 0 ENDIF
+            APPLY_HYDRO_WHEEL()
+        ENDIF
+        EXIT
+    ENDIF
+    IF g_tab = 3 AND g_interior_open
+        IF g_item = 1
+            g_interior_fill_index = g_interior_fill_index + direction
+            IF g_interior_fill_index < 0 g_interior_fill_index = 9 ENDIF
+            IF g_interior_fill_index > 9 g_interior_fill_index = 0 ENDIF
+        ENDIF
+        IF g_item = 2
+            g_interior_slot = g_interior_slot + direction
+            IF g_interior_slot < 0 g_interior_slot = INTERIOR_SLOT_COUNT - 1 ENDIF
+            IF g_interior_slot >= INTERIOR_SLOT_COUNT g_interior_slot = 0 ENDIF
+            SYNC_INTERIOR_SLOT()
+        ENDIF
+        IF g_item = 3
+            g_interior_choice = g_interior_choice + direction
+            IF g_interior_choice < -1 g_interior_choice = 9 ENDIF
+            IF g_interior_choice > 9 g_interior_choice = -1 ENDIF
+            APPLY_INTERIOR_SLOT()
+        ENDIF
+        IF g_item = 7
+            g_lsc_trim_colour = g_lsc_trim_colour + direction
+            IF g_lsc_trim_colour < 0 g_lsc_trim_colour = 26 ENDIF
+            IF g_lsc_trim_colour > 26 g_lsc_trim_colour = 0 ENDIF
+            APPLY_INTERIOR_COLOURS()
+        ENDIF
+        IF g_item = 8
+            g_lsc_metal_colour = g_lsc_metal_colour + direction
+            IF g_lsc_metal_colour < 0 g_lsc_metal_colour = 26 ENDIF
+            IF g_lsc_metal_colour > 26 g_lsc_metal_colour = 0 ENDIF
+            APPLY_INTERIOR_COLOURS()
+        ENDIF
+        EXIT
+    ENDIF
+    IF g_tab = 3 AND g_wheeltyre_open
+        IF g_item = 0
+            g_lsc_wheel_type = g_lsc_wheel_type + direction
+            IF g_lsc_wheel_type < 0 g_lsc_wheel_type = WHEEL_FAMILY_COUNT - 1 ENDIF
+            IF g_lsc_wheel_type >= WHEEL_FAMILY_COUNT g_lsc_wheel_type = 0 ENDIF
+            APPLY_WHEEL_FAMILY()
+        ENDIF
+        IF g_item = 1
+            g_wheeltyre_variation = g_wheeltyre_variation + direction
+            IF g_wheeltyre_variation < 0 g_wheeltyre_variation = 1 ENDIF
+            IF g_wheeltyre_variation > 1 g_wheeltyre_variation = 0 ENDIF
+            APPLY_WHEEL_VARIATION()
+        ENDIF
+        IF g_item = 2
+            g_wheeltyre_rear_slot = NOT g_wheeltyre_rear_slot
+        ENDIF
+        EXIT
+    ENDIF
+    IF g_tab = 3 AND g_lsc_extras_open
+        IF g_item = 0
+            g_lsc_livery = g_lsc_livery + direction
+            IF g_lsc_livery < -1 g_lsc_livery = 8 ENDIF
+            IF g_lsc_livery > 8 g_lsc_livery = -1 ENDIF
+            APPLY_LIVERY()
+        ENDIF
+        IF g_item = 4
+            g_lsc_extra = g_lsc_extra + direction
+            IF g_lsc_extra < 0 g_lsc_extra = 11 ENDIF
+            IF g_lsc_extra > 11 g_lsc_extra = 0 ENDIF
+            REFRESH_EXTRA_PROBE()
+        ENDIF
+        EXIT
+    ENDIF
+    IF g_tab = 3 AND g_lsc_open AND g_item = 19
+        g_lsc_kit_choice = LSC_ACTIVE_KIT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) + direction
+        IF g_lsc_kit_choice < 0 g_lsc_kit_choice = LSC_KIT_COUNT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) - 1 ENDIF
+        IF g_lsc_kit_choice >= LSC_KIT_COUNT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) g_lsc_kit_choice = 0 ENDIF
+        LSC_USE_KIT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
+        SYNC_LSC_VEHICLE_STATE()
     ENDIF
     IF g_tab = 3 AND g_lsc_open AND g_item = 2
         g_lsc_slot_choice = g_lsc_slot_choice + direction
@@ -1711,8 +2389,8 @@ PROC ADJUST_SELECTOR(INT direction)
     ENDIF
     IF g_tab = 3 AND g_lsc_open AND g_item = 9
         g_lsc_wheel_type = g_lsc_wheel_type + direction
-        IF g_lsc_wheel_type < 0 g_lsc_wheel_type = 9 ENDIF
-        IF g_lsc_wheel_type > 9 g_lsc_wheel_type = 0 ENDIF
+        IF g_lsc_wheel_type < 0 g_lsc_wheel_type = WHEEL_FAMILY_COUNT - 1 ENDIF
+        IF g_lsc_wheel_type >= WHEEL_FAMILY_COUNT g_lsc_wheel_type = 0 ENDIF
         SET_VEHICLE_WHEEL_TYPE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_WHEEL_TYPE, g_lsc_wheel_type))
     ENDIF
     IF g_tab = 3 AND g_lsc_open AND g_item = 12
@@ -1745,79 +2423,176 @@ PROC ADJUST_SELECTOR(INT direction)
         IF g_lsc_wheel_colour > 26 g_lsc_wheel_colour = 0 ENDIF
         APPLY_LSC_PAINT()
     ENDIF
-    IF g_tab = 3 AND NOT g_lsc_open AND g_item = 22
+    IF g_tab = 3 AND NOT g_lsc_open AND g_item = 24
         g_vehicle_speed_unit = 1 - g_vehicle_speed_unit
     ENDIF
-    IF g_tab = 3 AND NOT g_spawner_open AND NOT g_lsc_open AND g_item = 7
+    IF g_tab = 3 AND NOT g_spawner_open AND NOT g_lsc_open AND NOT g_vehicle_control_open AND g_item = 8
         g_vehicle_acceleration_level = g_vehicle_acceleration_level + direction
         IF g_vehicle_acceleration_level < 0 g_vehicle_acceleration_level = 12 ENDIF
         IF g_vehicle_acceleration_level > 12 g_vehicle_acceleration_level = 0 ENDIF
     ENDIF
-    IF g_tab = 3 AND NOT g_spawner_open AND NOT g_lsc_open AND g_item = 8
+    IF g_tab = 3 AND NOT g_spawner_open AND NOT g_lsc_open AND NOT g_vehicle_control_open AND g_item = 9
         g_vehicle_grip_level = g_vehicle_grip_level + direction
         IF g_vehicle_grip_level < -4 g_vehicle_grip_level = 8 ENDIF
         IF g_vehicle_grip_level > 8 g_vehicle_grip_level = -4 ENDIF
     ENDIF
-    IF g_tab = 6 AND g_item = 6
-        g_npc_vehicle_speed_level = g_npc_vehicle_speed_level + direction
-        IF g_npc_vehicle_speed_level < 0 g_npc_vehicle_speed_level = 12 ENDIF
-        IF g_npc_vehicle_speed_level > 12 g_npc_vehicle_speed_level = 0 ENDIF
-        APPLY_NPC_VEHICLE_SPEED()
-    ENDIF
     IF g_tab = 7
-        IF g_item = 0
+        IF g_spooner_open
+            IF g_item = 0
+                g_spooner_catalog_index = g_spooner_catalog_index + direction
+                IF g_spooner_catalog_index < 0 g_spooner_catalog_index = SPOONER_CATALOG_COUNT - 1 ENDIF
+                IF g_spooner_catalog_index >= SPOONER_CATALOG_COUNT g_spooner_catalog_index = 0 ENDIF
+            ELIF g_item = 3
+                COMPACT_SPOONER_POOL()
+                IF g_spooner_object_count > 0
+                    g_spooner_selected_index = g_spooner_selected_index + direction
+                    IF g_spooner_selected_index < 0 g_spooner_selected_index = g_spooner_object_count - 1 ENDIF
+                    IF g_spooner_selected_index >= g_spooner_object_count g_spooner_selected_index = 0 ENDIF
+                    SYNC_SPOONER_UI_FROM_SELECTED()
+                ENDIF
+            ELIF g_item = 4
+                g_spooner_forward_offset = g_spooner_forward_offset + (TO_FLOAT(direction) * 0.25)
+                IF g_spooner_forward_offset < -50.0 g_spooner_forward_offset = -50.0 ENDIF
+                IF g_spooner_forward_offset > 50.0 g_spooner_forward_offset = 50.0 ENDIF
+                APPLY_SPOONER_OFFSET_TO_SELECTED()
+            ELIF g_item = 5
+                g_spooner_side_offset = g_spooner_side_offset + (TO_FLOAT(direction) * 0.25)
+                IF g_spooner_side_offset < -50.0 g_spooner_side_offset = -50.0 ENDIF
+                IF g_spooner_side_offset > 50.0 g_spooner_side_offset = 50.0 ENDIF
+                APPLY_SPOONER_OFFSET_TO_SELECTED()
+            ELIF g_item = 6
+                g_spooner_height_offset = g_spooner_height_offset + (TO_FLOAT(direction) * 0.25)
+                IF g_spooner_height_offset < -50.0 g_spooner_height_offset = -50.0 ENDIF
+                IF g_spooner_height_offset > 50.0 g_spooner_height_offset = 50.0 ENDIF
+                APPLY_SPOONER_OFFSET_TO_SELECTED()
+            ELIF g_item = 7
+                g_spooner_heading_offset = g_spooner_heading_offset + (TO_FLOAT(direction) * 5.0)
+                IF g_spooner_heading_offset < 0.0 g_spooner_heading_offset = 355.0 ENDIF
+                IF g_spooner_heading_offset >= 360.0 g_spooner_heading_offset = 0.0 ENDIF
+                APPLY_SPOONER_OFFSET_TO_SELECTED()
+            ELIF g_item = 12
+                g_spooner_bone_choice = g_spooner_bone_choice + direction
+                IF g_spooner_bone_choice < 0 g_spooner_bone_choice = SPOONER_BONE_COUNT - 1 ENDIF
+                IF g_spooner_bone_choice >= SPOONER_BONE_COUNT g_spooner_bone_choice = 0 ENDIF
+                COMPACT_SPOONER_POOL()
+                IF g_spooner_object_count > 0 AND IS_ENTITY_ATTACHED(g_spooner_objects[g_spooner_selected_index])
+                    APPLY_SPOONER_ATTACHMENT(TRUE)
+                ENDIF
+            ELIF g_item = 13
+                g_spooner_attach_x = g_spooner_attach_x + (TO_FLOAT(direction) * 0.05)
+                IF g_spooner_attach_x < -5.0 g_spooner_attach_x = -5.0 ENDIF
+                IF g_spooner_attach_x > 5.0 g_spooner_attach_x = 5.0 ENDIF
+                COMPACT_SPOONER_POOL()
+                IF g_spooner_object_count > 0 AND IS_ENTITY_ATTACHED(g_spooner_objects[g_spooner_selected_index])
+                    APPLY_SPOONER_ATTACHMENT(TRUE)
+                ENDIF
+            ELIF g_item = 14
+                g_spooner_attach_y = g_spooner_attach_y + (TO_FLOAT(direction) * 0.05)
+                IF g_spooner_attach_y < -5.0 g_spooner_attach_y = -5.0 ENDIF
+                IF g_spooner_attach_y > 5.0 g_spooner_attach_y = 5.0 ENDIF
+                COMPACT_SPOONER_POOL()
+                IF g_spooner_object_count > 0 AND IS_ENTITY_ATTACHED(g_spooner_objects[g_spooner_selected_index])
+                    APPLY_SPOONER_ATTACHMENT(TRUE)
+                ENDIF
+            ELIF g_item = 15
+                g_spooner_attach_z = g_spooner_attach_z + (TO_FLOAT(direction) * 0.05)
+                IF g_spooner_attach_z < -5.0 g_spooner_attach_z = -5.0 ENDIF
+                IF g_spooner_attach_z > 5.0 g_spooner_attach_z = 5.0 ENDIF
+                COMPACT_SPOONER_POOL()
+                IF g_spooner_object_count > 0 AND IS_ENTITY_ATTACHED(g_spooner_objects[g_spooner_selected_index])
+                    APPLY_SPOONER_ATTACHMENT(TRUE)
+                ENDIF
+            ELIF g_item = 16
+                IF g_spooner_rot_axis = 0
+                    g_spooner_attach_pitch = g_spooner_attach_pitch + (TO_FLOAT(direction) * 5.0)
+                    IF g_spooner_attach_pitch < -180.0 g_spooner_attach_pitch = 175.0 ENDIF
+                    IF g_spooner_attach_pitch > 180.0 g_spooner_attach_pitch = -175.0 ENDIF
+                ELIF g_spooner_rot_axis = 1
+                    g_spooner_attach_roll = g_spooner_attach_roll + (TO_FLOAT(direction) * 5.0)
+                    IF g_spooner_attach_roll < -180.0 g_spooner_attach_roll = 175.0 ENDIF
+                    IF g_spooner_attach_roll > 180.0 g_spooner_attach_roll = -175.0 ENDIF
+                ELSE
+                    g_spooner_attach_yaw = g_spooner_attach_yaw + (TO_FLOAT(direction) * 5.0)
+                    IF g_spooner_attach_yaw < -180.0 g_spooner_attach_yaw = 175.0 ENDIF
+                    IF g_spooner_attach_yaw > 180.0 g_spooner_attach_yaw = -175.0 ENDIF
+                ENDIF
+                COMPACT_SPOONER_POOL()
+                IF g_spooner_object_count > 0 AND IS_ENTITY_ATTACHED(g_spooner_objects[g_spooner_selected_index])
+                    APPLY_SPOONER_ATTACHMENT(TRUE)
+                ENDIF
+            ENDIF
+            EXIT
+        ENDIF
+        IF g_nsc_loader_open
+            IF g_item = 2
+                g_nsc_stack_choice = g_nsc_stack_choice + direction
+                IF g_nsc_stack_choice < 0 g_nsc_stack_choice = 2 ENDIF
+                IF g_nsc_stack_choice > 2 g_nsc_stack_choice = 0 ENDIF
+            ENDIF
+            EXIT
+        ENDIF
+        IF g_persist_open
+            IF g_item = 0
+                g_persist_enabled = NOT g_persist_enabled
+            ENDIF
+            IF g_item = 5
+                g_persist_save_disk = NOT g_persist_save_disk
+            ENDIF
+            EXIT
+        ENDIF
+        IF g_item = 2
             g_accent_choice = g_accent_choice + direction
             IF g_accent_choice < 0 g_accent_choice = 14 ENDIF
             IF g_accent_choice > 14 g_accent_choice = 0 ENDIF
             APPLY_ACCENT_CHOICE()
             IF g_item > ITEM_COUNT() - 1 g_item = ITEM_COUNT() - 1 ENDIF
         ENDIF
-        IF g_item = 1 AND g_accent_choice = 14
+        IF g_item = 3 AND g_accent_choice = 14
             g_accent_rgb_speed_index = g_accent_rgb_speed_index + direction
             IF g_accent_rgb_speed_index < 0 g_accent_rgb_speed_index = 0 ENDIF
             IF g_accent_rgb_speed_index > 41 g_accent_rgb_speed_index = 41 ENDIF
         ENDIF
         IF g_accent_choice = 14
-            IF g_item = 2
+            IF g_item = 4
                 g_respawn_location_choice = g_respawn_location_choice + direction
                 IF g_respawn_location_choice < 0 g_respawn_location_choice = 22 ENDIF
                 IF g_respawn_location_choice > 22 g_respawn_location_choice = 0 ENDIF
             ENDIF
         ELSE
-            IF g_item = 1
+            IF g_item = 3
                 g_respawn_location_choice = g_respawn_location_choice + direction
                 IF g_respawn_location_choice < 0 g_respawn_location_choice = 22 ENDIF
                 IF g_respawn_location_choice > 22 g_respawn_location_choice = 0 ENDIF
             ENDIF
         ENDIF
         IF g_accent_choice = 14
-            IF g_item = 4
+            IF g_item = 6
                 g_menu_x = g_menu_x + (TO_FLOAT(direction) * 0.005)
                 IF g_menu_x < 0.150 g_menu_x = 0.150 ENDIF
                 IF g_menu_x > 0.850 g_menu_x = 0.850 ENDIF
             ENDIF
-            IF g_item = 5
+            IF g_item = 7
                 g_menu_y = g_menu_y + (TO_FLOAT(direction) * 0.005)
                 IF g_menu_y < -0.080 g_menu_y = -0.080 ENDIF
                 IF g_menu_y > 0.120 g_menu_y = 0.120 ENDIF
             ENDIF
-            IF g_item = 6
+            IF g_item = 8
                 g_menu_combo = g_menu_combo + direction
                 IF g_menu_combo < 0 g_menu_combo = 2 ENDIF
                 IF g_menu_combo > 2 g_menu_combo = 0 ENDIF
             ENDIF
         ELSE
-            IF g_item = 3
+            IF g_item = 5
                 g_menu_x = g_menu_x + (TO_FLOAT(direction) * 0.005)
                 IF g_menu_x < 0.150 g_menu_x = 0.150 ENDIF
                 IF g_menu_x > 0.850 g_menu_x = 0.850 ENDIF
             ENDIF
-            IF g_item = 4
+            IF g_item = 6
                 g_menu_y = g_menu_y + (TO_FLOAT(direction) * 0.005)
                 IF g_menu_y < -0.080 g_menu_y = -0.080 ENDIF
                 IF g_menu_y > 0.120 g_menu_y = 0.120 ENDIF
             ENDIF
-            IF g_item = 5
+            IF g_item = 7
                 g_menu_combo = g_menu_combo + direction
                 IF g_menu_combo < 0 g_menu_combo = 2 ENDIF
                 IF g_menu_combo > 2 g_menu_combo = 0 ENDIF

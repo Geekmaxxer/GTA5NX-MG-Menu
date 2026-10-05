@@ -5,8 +5,6 @@ owned game dumps and offline single-player research. This repository contains
 no Rockstar game files, no `update2.rpf`, no stock `.nsc` files, no compiler
 binaries, no keys, and no prebuilt menu archive.
 
-**This source is not updated as frequently as the actual download**
-
 ## What you need
 
 - A version 2699 build of the patched GTA5 Switch port files with Rockstar's internal script build tools already
@@ -16,7 +14,7 @@ binaries, no keys, and no prebuilt menu archive.
 - .NET 8 SDK or newer for the included header adapter.
 - An exported **stock Switch** `script_rel.rpf` script, such as
   `achievement_controller.nsc`, from the exact game/port version you target.
-  This is **not** a static file shipped with this SDK — it's just a
+  This is **not** a static file shipped with this SDK - it's just a
   cross-reference. Pull your own copy straight out of the stock port's
   `update2.rpf` (`switch\levels\gta5\script\script_rel.rpf`) before building
   anything, and re-export it any time you target a different build/version.
@@ -97,7 +95,7 @@ data for the header adapter to cross-reference against.
 
 1. Back up your own working `update2.rpf`.
 2. Open the archive for that rpf file, then navigate to `switch\levels\gta5\script\script_rel.rpf`.
-3. Turn on Edit Mode within your RPF editor and add/replace `ragemenu.nsc`/`achivement_controller.nsc` (or your `Build-Any.ps1` output) from your output folder. It must be a normal RPF binary file entry—not an RPF resource entry. Let the RPF tool apply normal file compression; do not feed it an already-compressed resource payload.
+3. Turn on Edit Mode within your RPF editor and add/replace `ragemenu.nsc`/`achivement_controller.nsc` (or your `Build-Any.ps1` output) from your output folder. It must be a normal RPF binary file entry-not an RPF resource entry. Let the RPF tool apply normal file compression; do not feed it an already-compressed resource payload.
 4. Once you drop your files in you don't need to save, just exit out and replace your existing `update2.rpf` in `atmosphere\contents\0100b00b51230000\romfs\update`
 
 The exact archive, controller, title ID, and native table are build-specific.
@@ -105,7 +103,7 @@ Do not use a reference script from a different version or port.
 
 ## Editing the menu
 
-Modify [source/ragemenu.sc](source/ragemenu.sc) and it's source folders containing schematic (`.sch`) files. It is SanScript/C-like source
+Modify [source/ragemenu.sc](source/ragemenu.sc). It is SanScript/C-like source
 that uses Rockstar native declarations from the `dev_ng` include path. Keep
 changes small and test each one.
 

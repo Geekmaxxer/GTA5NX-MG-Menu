@@ -9,6 +9,9 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\NscCore\NscCore.csproj" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\CodePath.cs" Link="CodePath.cs" />
     <Compile Include="..\third_party\GTA-V-Script-Decompiler\GTA V Script Decompiler\Function.cs" Link="Function.cs" />

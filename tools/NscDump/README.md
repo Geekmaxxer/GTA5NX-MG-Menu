@@ -4,6 +4,11 @@
 containers. It is deliberately separate from the game build and never writes
 to an RPF or to the source scripts.
 
+Container decoding, header field access and the compiled-name checks live in
+`tools\NscCore`, which is shared with `NscAdapter`. Both tools therefore read the
+RSC7 envelope and the header exactly the same way, including the fact that there
+is no compression flag inside the envelope (see `docs\DEVELOPING.md`).
+
 Build it from the repository root:
 
 ```powershell
@@ -67,17 +72,28 @@ The crossmap decodes the stored rotation on both resources and records the
 matching Switch indices, so an unmatched or ambiguous entry can be rejected
 before any script or RPF is changed.
 
-For a separate candidate file, copy only the observed Switch header profile to
-an output resource:
+Copy only the observed Switch header profile onto a candidate, writing a new file:
 
 ```powershell
-dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --adapt-header switch-reference.nsc candidate.ysc output.nsc
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --adapt-header switch-reference.nsc candidate.nsc output.nsc
 ```
 
-This changes only the page-base and build-specific header word, writes a new
-file, and leaves code, pointers, native entries, and the compiled script name
-untouched. It is a preparation/inspection step, not proof that the candidate
-will load in-game or a replacement for packing it into `script_rel.rpf`.
+The reference may be a single `.nsc` or a stock folder (a folder resolves to
+`achievement_controller.nsc`, else the first `.nsc`).
+
+Exactly two header fields are copied: the 8-byte page base at `0x00` and the
+4-byte build word at `0x18`. Code, pointers, native entries and the compiled
+script name are untouched, and every differing offset is verified to lie inside
+those two regions before anything is written.
+
+The default output is a **bare payload**, which is the form `script_rel.rpf`
+accepts as a file entry. `--container` instead re-prepends the candidate's RSC7
+envelope; that form is *not* installable and exists only to reproduce the older
+behaviour - ten `out-*` directories contain `.nsc` files that were adapted
+correctly but were still envelope-wrapped, and so could never be installed.
+`--dry-run` verifies and reports without writing. This is a preparation step, not
+proof that the candidate will load in-game, and not a replacement for packing it
+into `script_rel.rpf`.
 
 Search the extracted resources for references to a script's JOAAT name hash:
 
@@ -91,12 +107,16 @@ alone does not prove that the surrounding code launches the script.
 Validate compiled-name invariants before packaging a resource:
 
 ```powershell
-dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --validate-names path\to\script_rel,rpf
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --validate-names path\to\script_rel.rpf
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --validate-names path\to\ragemenu.nsc
 ```
 
-This checks that each filename matches the internal script name and that the
-header's script-name JOAAT matches it. These checks catch the common mistake of
-renaming a compiled output after it was built.
+Both a directory and a single file are accepted. This checks that each filename
+matches the internal script name and that the header's script-name JOAAT matches
+it, catching the common mistake of renaming a compiled output after it was built.
+A `*.pc.nsc` is flagged by design, because its entry name would be `<Name>.pc`.
+Files that cannot be decoded are reported as `ERROR` lines rather than aborting
+the run.
 
 Run `--native-db` separately on `script,rpf` and `script_rel,rpf`. They contain
 the same filenames but different compiled resources and therefore different

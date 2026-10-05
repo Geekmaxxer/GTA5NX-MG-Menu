@@ -4,6 +4,7 @@ USING "commands_graphics.sch"
 USING "commands_hud.sch"
 USING "commands_player.sch"
 USING "commands_entity.sch"
+USING "commands_object.sch"
 USING "commands_ped.sch"
 USING "commands_weapon.sch"
 USING "commands_law.sch"
@@ -21,32 +22,54 @@ USING "commands_task.sch"
 USING "commands_stats.sch"
 USING "commands_cutscene.sch"
 USING "commands_interiors.sch"
+USING "commands_script.sch"
 USING "stats_enums.sch"
-
-USING "core/core_globals.sch"
 USING "core/core_constants.sch"
+USING "core/core_globals.sch"
 USING "core/core_menu.sch"
 USING "util/util_teleport.sch"
+USING "util/util_door_catalog.sch"
 USING "util/util_world.sch"
 USING "util/util_ped_catalog.sch"
 USING "core/core_outfit.sch"
+USING "util/util_spooner.sch"
+USING "util/util_nsc_loader.sch"
 USING "util/util_vehicle_catalog.sch"
 USING "util/util_weapons.sch"
+USING "util/util_chauffeur.sch"
 USING "features/features_main.sch"
+USING "util/util_persistence.sch"
 USING "submenus/submenus_all.sch"
-
 SCRIPT
+    INIT_MENU_DEFAULTS()
+    INIT_CHAUFFEUR_DEFAULTS()
+    g_menu_start_time = GET_GAME_TIMER()
     WHILE TRUE
+        g_prof_t0 = GET_GAME_TIMER()
+        IF g_prof_last_iter > 0
+            g_prof_t1 = g_prof_t0 - g_prof_last_iter
+            IF g_prof_t1 > g_prof_worst_frame
+                g_prof_worst_frame = g_prof_t1
+            ENDIF
+        ENDIF
         IF MENU_COMBO_OPEN_PRESSED()
             g_open = NOT g_open
             IF g_open
                 g_home = TRUE
                 g_item = g_home_item
                 g_scroll = g_home_scroll
+                g_persist_open = FALSE
+                g_spooner_open = FALSE
+                g_nsc_loader_open = FALSE
+            ELSE
+                IF g_spawner_open
+                    g_spawner_open = FALSE
+                    CLEANUP_VEHICLE_PREVIEW()
+                ENDIF
+                PERSIST_FLUSH_NOW()
             ENDIF
-            PLAY_SOUND_FRONTEND(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", TRUE)
+            MENU_PLAY_SOUND("SELECT")
         ENDIF
-
         IF g_god SET_PLAYER_INVINCIBLE(PLAYER_ID(), TRUE) ENDIF
         IF g_never_wanted CLEAR_PLAYER_WANTED_LEVEL(PLAYER_ID()) ENDIF
         IF g_fast_run SET_RUN_SPRINT_MULTIPLIER_FOR_PLAYER(PLAYER_ID(), 1.49) ELSE SET_RUN_SPRINT_MULTIPLIER_FOR_PLAYER(PLAYER_ID(), 1.0) ENDIF
@@ -66,6 +89,8 @@ SCRIPT
         PROCESS_BODYGUARD_SPAWN()
         PROCESS_BODYGUARD_FOLLOW()
         PROCESS_NEON_ANIM()
+        PROCESS_VEHICLE_HAZARDS()
+        PROCESS_CHAUFFEUR()
         SET_EVERYONE_IGNORE_PLAYER(PLAYER_ID(), g_everyone_ignores)
         DISPLAY_HUD(NOT g_hud_hidden)
         DISPLAY_RADAR(NOT g_radar_hidden)
@@ -74,17 +99,17 @@ SCRIPT
             g_next_npc_brawl_update = GET_GAME_TIMER() + 3000
         ENDIF
         PROCESS_PED_DEATH_RECOVERY()
+        PROCESS_DOOR_SCAN()
+        PROCESS_EXPLODE_QUEUE()
         IF NOT g_respawn_at_death
             g_respawn_pending = FALSE
             g_respawn_ready_ticks = 0
         ELIF IS_ENTITY_DEAD(PLAYER_PED_ID())
-
             g_respawn_pending = TRUE
             g_respawn_ready_ticks = 0
         ELIF g_respawn_pending
             IF IS_PLAYER_CONTROL_ON(PLAYER_ID())
                 g_respawn_ready_ticks = g_respawn_ready_ticks + 1
-
                 IF g_respawn_ready_ticks >= 20
                     MOVE_PLAYER_TO_RESPAWN_LOCATION()
                     g_respawn_pending = FALSE
@@ -119,6 +144,13 @@ SCRIPT
                 g_active_spawn_count = 0
             ENDIF
         ENDIF
+        IF g_convert_pending
+            IF HAS_MODEL_LOADED(g_pending_vehicle_model)
+                FINISH_VEHICLE_CONVERSION()
+            ELIF GET_GAME_TIMER() > g_convert_request_time + CONVERT_REQUEST_TIMEOUT_MS
+                CANCEL_VEHICLE_CONVERSION(5)
+            ENDIF
+        ENDIF
         IF g_attacker_spawn_pending
             IF HAS_MODEL_LOADED(g_pending_attacker_model)
                 FINISH_ATTACKER_SPAWN()
@@ -127,15 +159,23 @@ SCRIPT
                 g_attacker_spawn_pending = FALSE
             ENDIF
         ENDIF
+        PROCESS_STRIPPER_SPAWN()
+        PROCESS_SPOONER_SPAWN_QUEUE()
+        PROCESS_CUSTOM_NSC_LOADER()
         IF g_ped_change_pending
+            MAINTAIN_PED_CHANGE_REQUEST()
             IF HAS_MODEL_LOADED(g_pending_ped_model)
                 FINISH_PED_CHANGE()
             ELIF GET_GAME_TIMER() > g_ped_request_time + 8000
                 SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_ped_model)
                 g_ped_change_pending = FALSE
+                IF g_ped_search_is_custom
+                    g_ped_search_not_found = TRUE
+                    g_ped_search_has_value = FALSE
+                    g_ped_search_is_custom = FALSE
+                ENDIF
             ENDIF
         ENDIF
-        PROCESS_PROJECTILE_SHOT()
         PROCESS_PENDING_TELEPORT()
         PROCESS_SKIP_CUTSCENES()
         PROCESS_VEHICLE_PREVIEW()
@@ -168,8 +208,26 @@ SCRIPT
             g_item = 0
             g_scroll = 0
             g_lsc_vehicle = NULL
+            g_hydro_item = 0
+            g_hydro_scroll = 0
+            g_interior_item = 0
+            g_interior_scroll = 0
+            g_wheeltyre_item = 0
+            g_wheeltyre_scroll = 0
+            g_lsc_extras_item = 0
+            g_lsc_extras_scroll = 0
         ELIF g_lsc_open AND g_player_in_vehicle AND g_lsc_vehicle != GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
             SYNC_LSC_VEHICLE_STATE()
+        ENDIF
+        IF g_hydro_hold MAINTAIN_HYDRO_HOLD() ENDIF
+        IF g_vehicle_control_open AND NOT g_player_in_vehicle
+            g_vehicle_control_item = 0
+            g_vehicle_control_scroll = 0
+            g_item = 0
+            g_scroll = 0
+        ENDIF
+        IF NOT g_player_in_vehicle
+            g_vehicle_hazards = FALSE
         ENDIF
         IF g_mobile_radio AND g_player_in_vehicle AND NOT g_was_in_vehicle
             DISABLE_PORTABLE_RADIO()
@@ -205,7 +263,6 @@ SCRIPT
                     SET_TRAIN_CRUISE_SPEED(currentVehicle, 15.0)
                 ENDIF
             ELSE
-
                 IF g_vehicle_acceleration_level > 0 AND currentVehicleSpeed < 72.0
                     SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, VEHICLE_MULTIPLIER_VALUE(g_vehicle_acceleration_level))
                 ELSE
@@ -218,25 +275,35 @@ SCRIPT
                 ENDIF
                 IF g_vehicle_bulletproof_tyres
                     SET_VEHICLE_TYRES_CAN_BURST(currentVehicle, FALSE)
-                ELSE
+                    g_bulletproof_tyres_applied = TRUE
+                ELIF g_bulletproof_tyres_applied
                     SET_VEHICLE_TYRES_CAN_BURST(currentVehicle, TRUE)
+                    g_bulletproof_tyres_applied = FALSE
+                    g_wheeltyre_can_burst = TRUE
                 ENDIF
             ENDIF
         ENDIF
         PROCESS_QUICK_VEHICLE_ENTRY_EXIT()
         PROCESS_HORN_BOOST()
+        PROCESS_EMERGENCY_SIREN_MUTE()
+        PROCESS_AUTO_SAVE()
+        PROCESS_AUTO_SAVE_ANNOUNCE()
+        PROCESS_MENU_WELCOME()
+        g_prof_t1 = GET_GAME_TIMER()
+        PROCESS_PERSISTENCE()
+        g_prof_t1 = GET_GAME_TIMER() - g_prof_t1
+        IF g_prof_t1 > g_prof_worst_persist
+            g_prof_worst_persist = g_prof_t1
+        ENDIF
         PROCESS_GODMODE_TOW_HOOK()
         IF g_seatbelt
             IF g_player_in_vehicle
-
                 SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(PLAYER_PED_ID(), KNOCKOFFVEHICLE_NEVER)
                 SET_PED_CAN_BE_DRAGGED_OUT(PLAYER_PED_ID(), FALSE)
                 SET_PED_CAN_RAGDOLL(PLAYER_PED_ID(), FALSE)
                 SET_PED_CAN_RAGDOLL_FROM_PLAYER_IMPACT(PLAYER_PED_ID(), FALSE)
                 SET_PED_CONFIG_FLAG(PLAYER_PED_ID(), PCF_WillFlyThroughWindscreen, FALSE)
             ELSE
-                // Restore normal on-foot behavior after an intentional exit;
-                // the seatbelt will be reapplied immediately on re-entry.
                 SET_PED_CAN_BE_KNOCKED_OFF_VEHICLE(PLAYER_PED_ID(), KNOCKOFFVEHICLE_DEFAULT)
                 SET_PED_CAN_BE_DRAGGED_OUT(PLAYER_PED_ID(), TRUE)
                 IF NOT g_no_ragdoll SET_PED_CAN_RAGDOLL(PLAYER_PED_ID(), TRUE) ENDIF
@@ -252,22 +319,26 @@ SCRIPT
             ENABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_FRONTEND_LEFT)
             ENABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_FRONTEND_RIGHT)
             ENABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_JUMP)
+            ENABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_LOOK_BEHIND)
+            ENABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_LOOK_BEHIND)
+            ENABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_VEH_LOOK_BEHIND)
+            ENABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_VEH_LOOK_BEHIND)
             ENABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_FRONTEND_DOWN)
             ENABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_FRONTEND_DOWN)
         ENDIF
         IF g_open
-            IF g_keyboard_active
-                PROCESS_MENU_KEYBOARD()
-            ENDIF
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_PHONE)
             DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_CELLPHONE_UP)
+            IF g_keyboard_active
+                PROCESS_MENU_KEYBOARD()
+            ELSE
             MENU_CAPTURE_INPUT()
             DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_FRONTEND_DOWN, TRUE)
             DISABLE_CONTROL_ACTION(CAMERA_CONTROL, INPUT_FRONTEND_DOWN, TRUE)
             DISABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_JUMP)
             PROCESS_MENU_DIRECTION_INPUT()
-            IF NOT g_keyboard_active AND IS_DISABLED_CONTROL_JUST_RELEASED(PLAYER_CONTROL, INPUT_FRONTEND_ACCEPT)
-                PLAY_SOUND_FRONTEND(-1, "SELECT", "HUD_FRONTEND_DEFAULT_SOUNDSET", TRUE)
+            IF IS_DISABLED_CONTROL_JUST_RELEASED(PLAYER_CONTROL, INPUT_FRONTEND_ACCEPT)
+                MENU_PLAY_SOUND("SELECT")
                 IF g_home
                     g_tab = g_item
                     g_home_item = g_item
@@ -276,18 +347,59 @@ SCRIPT
                     g_item = g_page_item[g_tab]
                     g_scroll = g_page_scroll[g_tab]
                 ELSE
+                    g_prof_t1 = GET_GAME_TIMER()
                     APPLY_SELECTED()
+                    g_prof_t1 = GET_GAME_TIMER() - g_prof_t1
+                    IF g_prof_t1 > g_prof_worst_apply
+                        g_prof_worst_apply = g_prof_t1
+                        g_prof_apply_tab = g_tab
+                        g_prof_apply_row = g_item
+                    ENDIF
+                    MARK_PERSIST_DIRTY()
                 ENDIF
             ENDIF
-            IF NOT g_keyboard_active AND IS_DISABLED_CONTROL_JUST_RELEASED(PLAYER_CONTROL, INPUT_FRONTEND_CANCEL)
-                PLAY_SOUND_FRONTEND(-1, "BACK", "HUD_FRONTEND_DEFAULT_SOUNDSET", TRUE)
+            IF IS_DISABLED_CONTROL_JUST_RELEASED(PLAYER_CONTROL, INPUT_FRONTEND_CANCEL)
+                MENU_PLAY_SOUND("BACK")
                 IF g_home
                     g_open = FALSE
+                    PERSIST_FLUSH_NOW()
+                ELIF g_chauffeur_open
+                    IF g_chauffeur_armed_open
+                        g_chauffeur_armed_item = g_item
+                        g_chauffeur_armed_scroll = g_scroll
+                        g_chauffeur_armed_open = FALSE
+                        g_item = g_chauffeur_item
+                        g_scroll = g_chauffeur_scroll
+                    ELIF g_chauffeur_vehicle_open
+                        g_chauffeur_vehicle_item = g_item
+                        g_chauffeur_vehicle_scroll = g_scroll
+                        g_chauffeur_vehicle_open = FALSE
+                        g_item = g_chauffeur_item
+                        g_scroll = g_chauffeur_scroll
+                    ELIF g_chauffeur_ped_open
+                        g_chauffeur_ped_item = g_item
+                        g_chauffeur_ped_scroll = g_scroll
+                        g_chauffeur_ped_open = FALSE
+                        g_item = g_chauffeur_item
+                        g_scroll = g_chauffeur_scroll
+                    ELSE
+                        g_chauffeur_item = g_item
+                        g_chauffeur_scroll = g_scroll
+                        g_chauffeur_open = FALSE
+                        g_item = g_page_item[3]
+                        g_scroll = g_page_scroll[3]
+                    ENDIF
                 ELIF g_spawner_open
                     g_spawner_item = g_item
                     g_spawner_scroll = g_scroll
                     g_spawner_open = FALSE
                     CLEANUP_VEHICLE_PREVIEW()
+                    g_item = g_page_item[3]
+                    g_scroll = g_page_scroll[3]
+                ELIF g_vehicle_control_open
+                    g_vehicle_control_item = g_item
+                    g_vehicle_control_scroll = g_scroll
+                    g_vehicle_control_open = FALSE
                     g_item = g_page_item[3]
                     g_scroll = g_page_scroll[3]
                 ELIF g_neon_anim_open
@@ -333,35 +445,99 @@ SCRIPT
                     g_item = g_page_item[0]
                     g_scroll = g_page_scroll[0]
                 ELIF g_bodyguard_open
-                    g_bodyguard_item = g_item
-                    g_bodyguard_scroll = g_scroll
-                    g_bodyguard_open = FALSE
-                    g_item = g_page_item[0]
-                    g_scroll = g_page_scroll[0]
+                    IF g_guard_ped_open
+                        g_guard_ped_item = g_item
+                        g_guard_ped_scroll = g_scroll
+                        g_guard_ped_open = FALSE
+                        g_item = g_bodyguard_item
+                        g_scroll = g_bodyguard_scroll
+                    ELSE
+                        g_bodyguard_item = g_item
+                        g_bodyguard_scroll = g_scroll
+                        g_bodyguard_open = FALSE
+                        g_item = g_page_item[0]
+                        g_scroll = g_page_scroll[0]
+                    ENDIF
                 ELIF g_attacker_open
-                    g_attacker_item = g_item
-                    g_attacker_scroll = g_scroll
-                    g_attacker_open = FALSE
-                    g_item = g_page_item[0]
-                    g_scroll = g_page_scroll[0]
-                ELIF g_statman_open
-                    g_statman_item = g_item
-                    g_statman_scroll = g_scroll
-                    g_statman_open = FALSE
-                    g_item = g_page_item[0]
-                    g_scroll = g_page_scroll[0]
+                    IF g_attacker_ped_open
+                        g_attacker_ped_item = g_item
+                        g_attacker_ped_scroll = g_scroll
+                        g_attacker_ped_open = FALSE
+                        g_item = g_attacker_item
+                        g_scroll = g_attacker_scroll
+                    ELSE
+                        g_attacker_item = g_item
+                        g_attacker_scroll = g_scroll
+                        g_attacker_open = FALSE
+                        g_item = g_page_item[0]
+                        g_scroll = g_page_scroll[0]
+                    ENDIF
                 ELIF g_ped_open
                     g_ped_item = g_item
                     g_ped_scroll = g_scroll
                     g_ped_open = FALSE
                     g_item = g_page_item[0]
                     g_scroll = g_page_scroll[0]
+                ELIF g_hydro_open
+                    g_hydro_item = g_item
+                    g_hydro_scroll = g_scroll
+                    g_hydro_open = FALSE
+                    g_item = g_lsc_item
+                    g_scroll = g_lsc_scroll
+                ELIF g_interior_open
+                    g_interior_item = g_item
+                    g_interior_scroll = g_scroll
+                    g_interior_open = FALSE
+                    g_item = g_lsc_item
+                    g_scroll = g_lsc_scroll
+                ELIF g_wheeltyre_open
+                    g_wheeltyre_item = g_item
+                    g_wheeltyre_scroll = g_scroll
+                    g_wheeltyre_open = FALSE
+                    g_item = g_lsc_item
+                    g_scroll = g_lsc_scroll
+                ELIF g_lsc_extras_open
+                    g_lsc_extras_item = g_item
+                    g_lsc_extras_scroll = g_scroll
+                    g_lsc_extras_open = FALSE
+                    g_item = g_lsc_item
+                    g_scroll = g_lsc_scroll
+                ELIF g_bennys_open
+                    g_bennys_item = g_item
+                    g_bennys_scroll = g_scroll
+                    g_bennys_open = FALSE
+                    g_item = g_lsc_item
+                    g_scroll = g_lsc_scroll
+                ELIF g_support_open
+                    g_support_item = g_item
+                    g_support_scroll = g_scroll
+                    g_support_open = FALSE
+                    g_item = g_lsc_item
+                    g_scroll = g_lsc_scroll
                 ELIF g_lsc_open
                     g_lsc_item = g_item
                     g_lsc_scroll = g_scroll
                     g_lsc_open = FALSE
                     g_item = g_page_item[3]
                     g_scroll = g_page_scroll[3]
+                ELIF g_spooner_open
+                    g_spooner_item = g_item
+                    g_spooner_scroll = g_scroll
+                    g_spooner_open = FALSE
+                    g_item = g_page_item[7]
+                    g_scroll = g_page_scroll[7]
+                ELIF g_nsc_loader_open
+                    g_nsc_loader_item = g_item
+                    g_nsc_loader_scroll = g_scroll
+                    g_nsc_loader_open = FALSE
+                    g_item = g_page_item[7]
+                    g_scroll = g_page_scroll[7]
+                ELIF g_persist_open
+                    g_persist_item = g_item
+                    g_persist_scroll = g_scroll
+                    g_persist_open = FALSE
+                    g_item = g_page_item[7]
+                    g_scroll = g_page_scroll[7]
                 ELSE
                     g_page_item[g_tab] = g_item
                     g_page_scroll[g_tab] = g_scroll
@@ -372,11 +548,23 @@ SCRIPT
             ENDIF
             UPDATE_SCROLL()
             SAVE_NAVIGATION_STATE()
+            g_prof_t1 = GET_GAME_TIMER()
             IF g_home DRAW_HOME() ELSE DRAW_PAGE() ENDIF
+            g_prof_t1 = GET_GAME_TIMER() - g_prof_t1
+            IF g_prof_t1 > g_prof_worst_draw
+                g_prof_worst_draw = g_prof_t1
+            ENDIF
+            ENDIF
         ELIF g_instructional_scaleform != NULL
             SET_SCALEFORM_MOVIE_AS_NO_LONGER_NEEDED(g_instructional_scaleform)
         ENDIF
         DRAW_SPEEDOMETER()
+        DRAW_AUTO_SAVE_TIMER()
+        g_prof_last_iter = GET_GAME_TIMER()
+        g_prof_t1 = g_prof_last_iter - g_prof_t0
+        IF g_prof_t1 > g_prof_worst_work
+            g_prof_worst_work = g_prof_t1
+        ENDIF
         WAIT(0)
     ENDWHILE
 ENDSCRIPT

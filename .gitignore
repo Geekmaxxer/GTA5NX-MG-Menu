@@ -1,0 +1,10 @@
+out*
+sdk*
+*.sco
+*.rpf
+*.nsc
+*.nso
+*.scd
+bin/
+obj/
+.vs/

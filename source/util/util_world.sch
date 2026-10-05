@@ -1,5 +1,4 @@
 PROC PREPARE_NORTH_YANKTON()
-
     REQUEST_IPL("prologue01")
     REQUEST_IPL("prologue01c")
     REQUEST_IPL("prologue01d")
@@ -72,7 +71,6 @@ PROC REQUEST_CAYO_IPLS_EARLY()
 ENDPROC
 
 FUNC BOOL PREPARE_CAYO_PERICO()
-
     IF NOT IS_DLC_PRESENT(HASH("mpheist4")) RETURN FALSE ENDIF
     REQUEST_CAYO_IPLS_EARLY()
     SET_ISLAND_ENABLED("HeistIsland", TRUE)
@@ -83,7 +81,6 @@ FUNC BOOL PREPARE_CAYO_PERICO()
     NEW_LOAD_SCENE_START_SPHERE(<<5014.21, -5134.19, 2.5>>, 1400.0, NEWLOADSCENE_FLAG_REQUIRE_COLLISION | NEWLOADSCENE_FLAG_INTERIOR_AND_EXTERIOR)
     RETURN TRUE
 ENDFUNC
-
 
 PROC REQUEST_CAYO_IPLS(BOOL load, BOOL damaged)
     STRING islandIpls[40]
@@ -408,6 +405,28 @@ PROC APPLY_TIME_CHOICE()
     ENDSWITCH
 ENDPROC
 
+PROC APPLY_TIME_SCALE()
+    FLOAT scale = 1.0
+    IF g_time_scale_level = 0 scale = 0.0 ENDIF
+    IF g_time_scale_level = 1 scale = 0.25 ENDIF
+    IF g_time_scale_level = 2 scale = 0.5 ENDIF
+    IF g_time_scale_level = 3 scale = 0.75 ENDIF
+    IF g_time_scale_level = 4 scale = 1.0 ENDIF
+    IF g_time_scale_level = 5 scale = 1.25 ENDIF
+    IF g_time_scale_level = 6 scale = 1.5 ENDIF
+    IF g_time_scale_level = 7 scale = 1.75 ENDIF
+    IF g_time_scale_level = 8 scale = 2.0 ENDIF
+    IF g_time_scale_level >= 9 scale = TO_FLOAT(g_time_scale_level) * 0.25 ENDIF
+    SET_TIME_SCALE(scale)
+ENDPROC
+
+PROC APPLY_GRAVITY_CHOICE()
+    IF g_gravity_choice = 1 SET_GRAVITY_LEVEL(GRAV_MOON) ENDIF
+    IF g_gravity_choice = 2 SET_GRAVITY_LEVEL(GRAV_LOW) ENDIF
+    IF g_gravity_choice = 3 SET_GRAVITY_LEVEL(GRAV_ZERO) ENDIF
+    IF g_gravity_choice = 0 SET_GRAVITY_LEVEL(GRAV_EARTH) ENDIF
+ENDPROC
+
 PROC APPLY_EDITABLE_TIME()
     IF g_pause_time
         g_pause_time = FALSE
@@ -443,4 +462,69 @@ PROC DISABLE_PORTABLE_RADIO()
     SET_MOBILE_RADIO_ENABLED_DURING_GAMEPLAY(FALSE)
     SET_MOBILE_PHONE_RADIO_STATE(FALSE)
     SET_USER_RADIO_CONTROL_ENABLED(FALSE)
+ENDPROC
+
+PROC PROBE_DOOR_MODEL(INT modelIndex, VECTOR searchCoords)
+    MODEL_NAMES doorModel = DOOR_MODEL_FOR_CHOICE(modelIndex)
+    VECTOR foundCoords = <<0.0, 0.0, 0.0>>
+    VECTOR foundRotation = <<0.0, 0.0, 0.0>>
+    FLOAT distance = 0.0
+    IF NOT GET_COORDS_AND_ROTATION_OF_CLOSEST_OBJECT_OF_TYPE(searchCoords, DOOR_SEARCH_RADIUS, doorModel, foundCoords, foundRotation)
+        EXIT
+    ENDIF
+    distance = GET_DISTANCE_BETWEEN_COORDS(searchCoords, foundCoords, TRUE)
+    IF distance < g_door_candidate_distance
+        g_door_candidate_distance = distance
+        g_door_candidate_model_index = modelIndex
+        g_door_candidate_coords = foundCoords
+    ENDIF
+ENDPROC
+
+PROC START_DOOR_SCAN()
+    g_door_scan_active = TRUE
+    g_door_scan_index = 0
+    g_door_candidate_model_index = -1
+    g_door_candidate_distance = 9999.0
+    g_door_feedback = 0
+    g_door_feedback_until = 0
+ENDPROC
+
+FUNC BOOL OPEN_DOOR_AT_COORDS(MODEL_NAMES doorModel, VECTOR doorCoords)
+    BOOL readLockState = FALSE
+    FLOAT readOpenRatio = 0.0
+    INT doorHash = 0
+    SET_STATE_OF_CLOSEST_DOOR_OF_TYPE(doorModel, doorCoords, FALSE, 1.0, TRUE)
+    IF DOOR_SYSTEM_FIND_EXISTING_DOOR(doorCoords, doorModel, doorHash)
+        DOOR_SYSTEM_SET_DOOR_STATE(doorHash, DOORSTATE_FORCE_UNLOCKED_THIS_FRAME, TRUE, TRUE)
+        DOOR_SYSTEM_SET_OPEN_RATIO(doorHash, 1.0, TRUE, TRUE)
+        DOOR_SYSTEM_SET_HOLD_OPEN(doorHash, TRUE)
+        DOOR_SYSTEM_SET_SPRING_REMOVED(doorHash, TRUE, TRUE, TRUE)
+    ENDIF
+    GET_STATE_OF_CLOSEST_DOOR_OF_TYPE(doorModel, doorCoords, readLockState, readOpenRatio)
+    RETURN readOpenRatio > 0.5
+ENDFUNC
+
+PROC FINISH_DOOR_SCAN()
+    g_door_scan_active = FALSE
+    IF g_door_candidate_model_index < 0
+        g_door_feedback = 1
+    ELIF OPEN_DOOR_AT_COORDS(DOOR_MODEL_FOR_CHOICE(g_door_candidate_model_index), g_door_candidate_coords)
+        g_door_feedback = 2
+    ELSE
+        g_door_feedback = 3
+    ENDIF
+    g_door_feedback_until = GET_GAME_TIMER() + DOOR_FEEDBACK_MS
+ENDPROC
+
+PROC PROCESS_DOOR_SCAN()
+    INT probes = 0
+    VECTOR searchCoords = <<0.0, 0.0, 0.0>>
+    IF NOT g_door_scan_active EXIT ENDIF
+    searchCoords = GET_ENTITY_COORDS(PLAYER_PED_ID())
+    WHILE g_door_scan_index < DOOR_MODEL_COUNT() AND probes < DOOR_SCAN_PER_FRAME
+        PROBE_DOOR_MODEL(g_door_scan_index, searchCoords)
+        g_door_scan_index = g_door_scan_index + 1
+        probes = probes + 1
+    ENDWHILE
+    IF g_door_scan_index >= DOOR_MODEL_COUNT() FINISH_DOOR_SCAN() ENDIF
 ENDPROC

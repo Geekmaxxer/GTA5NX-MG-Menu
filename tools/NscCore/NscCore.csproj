@@ -1,15 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>NscAdapter</AssemblyName>
-    <RootNamespace>NscAdapter</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>NscCore</AssemblyName>
+    <RootNamespace>NscCore</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\NscCore\NscCore.csproj" />
-  </ItemGroup>
 </Project>

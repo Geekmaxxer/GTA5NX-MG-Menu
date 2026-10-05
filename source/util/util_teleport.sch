@@ -6,7 +6,6 @@ PROC TELEPORT_PLAYER_WITH_VEHICLE(VECTOR destination)
     NEW_LOAD_SCENE_START_SPHERE(destination, 250.0, NEWLOADSCENE_FLAG_REQUIRE_COLLISION | NEWLOADSCENE_FLAG_INTERIOR_AND_EXTERIOR)
 ENDPROC
 
-
 PROC TELEPORT_PLAYER_FAST(VECTOR destination)
     PED_INDEX playerPed = PLAYER_PED_ID()
     IF IS_PED_IN_ANY_VEHICLE(playerPed)
@@ -119,7 +118,6 @@ PROC TELEPORT_TO_OBJECTIVE()
     TELEPORT_TO_BLIP_TYPE(RADAR_TRACE_OBJECTIVE_RED)
 ENDPROC
 
-
 PROC PROCESS_AUTO_OBJECTIVE_TELEPORT()
     IF NOT g_auto_objective
         g_auto_objective_was_in_cutscene = FALSE
@@ -163,8 +161,9 @@ PROC NUDGE_PLAYER_BY_OFFSET(VECTOR offset)
     worldOffset = <<offset.y * heading.x - offset.x * heading.y, offset.y * heading.y + offset.x * heading.x, offset.z>>
     IF IS_PED_IN_ANY_VEHICLE(playerPed)
         SET_ENTITY_COORDS(occupied, basePosition + worldOffset, TRUE, TRUE, TRUE, TRUE)
+    ELSE
+        SET_ENTITY_COORDS(playerPed, basePosition + worldOffset, TRUE, TRUE, TRUE, TRUE)
     ENDIF
-    SET_ENTITY_COORDS(playerPed, basePosition + worldOffset, TRUE, TRUE, TRUE, TRUE)
     REQUEST_COLLISION_AT_COORD(basePosition + worldOffset)
 ENDPROC
 
@@ -206,7 +205,6 @@ PROC OPEN_PLANE_CARGO_DOORS()
     IF NOT IS_PED_IN_ANY_VEHICLE(playerPed) EXIT ENDIF
     vehicle = GET_VEHICLE_PED_IS_IN(playerPed)
     IF NOT IS_THIS_MODEL_A_PLANE(GET_ENTITY_MODEL(vehicle)) EXIT ENDIF
-
     SET_VEHICLE_USES_LARGE_REAR_RAMP(vehicle, TRUE)
     OPEN_BOMB_BAY_DOORS(vehicle)
     SET_VEHICLE_DOOR_OPEN(vehicle, SC_DOOR_BOOT, FALSE, TRUE)
