@@ -1,6 +1,6 @@
-# MEGATARD GTA5-NX Menu SDK
+# MG GTA5-NX Menu SDK
 
-Source and build tooling for the MEGATARD single-player menu script. It is for
+Source and build tooling for the MG single-player menu script. It is for
 owned game dumps and offline single-player research. This repository contains
 no Rockstar game files, no `update2.rpf`, no stock `.nsc` files, no compiler
 binaries, no keys, and no prebuilt menu archive.
