@@ -58,7 +58,7 @@ Keep a native-table report from stock scripts in the target `script_rel.rpf`
 and compare every newly compiled script before putting it in an RPF. This SDK
 does not pretend that PC and Switch native tables are universally identical.
 
-Verified checks (run from the workspace root, `c:\Users\Megatard\Desktop\switchgta5`):
+Verified checks (run from the workspace root, `c:\Users\MG\Desktop\switchgta5`):
 
 ```powershell
 # One-row summary per file (a single .nsc path also works, not just folders).
