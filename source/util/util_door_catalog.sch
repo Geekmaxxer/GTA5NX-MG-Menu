@@ -1,3 +1,17 @@
+// GENERATED FILE - DO NOT HAND-EDIT THE TABLES BELOW.
+// Regenerate with: tools\Gen-DoorCatalog.ps1
+//
+// Source: ModelEnums model_enums.sch /DOOR|GATE|GARAGE|SHUTTER|BARRIER/ minus /_L1$|_L2$|_LD$|_LOD$|_SLOD$|_HIP$|FRAME|POST|HINGE|HANDLE|BELL|KNOB|PLATE|SIGN|GLASS|LIGHT|LAMP|BUZZER|MARKER|_LOCK|_LID|WINCH|RAILING|TRIM|COLLISION|CRASH|PLUG/
+// Entries: 746 over 8 page(s) of up to 96.
+//
+// Model names come from the game metadata because there is no door
+// enumeration native: the door API takes a model plus a position.
+//
+// The compiler limits individual SWITCH blocks, so the complete list is
+// segmented internally while remaining one contiguous scan of 746 models.
+//
+// DOOR_MODEL_FOR_CHOICE() is the only entry point callers need; it maps a flat
+// index to the model and hides the paging entirely.
 FUNC INT DOOR_MODEL_COUNT()
     RETURN 746
 ENDFUNC
@@ -515,9 +529,9 @@ ENDFUNC
 FUNC MODEL_NAMES DOOR_MODEL_PAGE_5(INT choice)
     SWITCH choice
         CASE 0 RETURN SM_27_GROUNDC_GATES_01 BREAK
-        CASE 1 RETURN S_M_Y_DOORMAN_01 BREAK
-        CASE 2 RETURN TAILGATER BREAK
-        CASE 3 RETURN TAILGATER2 BREAK
+        CASE 1 RETURN INT_TO_ENUM(MODEL_NAMES, HASH("v_ilev_csr_door_l")) BREAK
+        CASE 2 RETURN INT_TO_ENUM(MODEL_NAMES, HASH("v_ilev_csr_door_r")) BREAK
+        CASE 3 RETURN INT_TO_ENUM(MODEL_NAMES, HASH("v_ilev_csr_garagedoor")) BREAK
         CASE 4 RETURN VB_43_DOOR_L_MP BREAK
         CASE 5 RETURN VB_43_DOOR_R_MP BREAK
         CASE 6 RETURN VEND_WATER_DOOR BREAK

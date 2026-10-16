@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-16",
+  "version": "v1.0.6",
+  "menu_source_files_synced": 24,
+  "source_byte_identical_to_workspace": true,
+  "menu_and_binding_byte_identical_to_description_fix_build": true,
+  "tool_tests": {
+    "passed": 54,
+    "failed": 0,
+    "optional_historical_fixture_tests": 8,
+    "optional_fixtures_present": false
+  },
+  "native_checks": {
+    "menu_self_rotation_matches": 487,
+    "menu_self_direct_matches": 487,
+    "menu_stock_matches": 472,
+    "menu_custom_entries": 15,
+    "custom_entries_equal_binding_manifest": true,
+    "controller_stock_matches": 89,
+    "stock_scripts_read": 1020
+  },
+  "artifacts": {
+    "ragemenu.nsc": {
+      "bytes": 760176,
+      "sha256": "b0f0a0a4668f60574284fd2d612993bca92a27b29a8b8569b07db12dc8f5a977"
+    },
+    "ragemenu.snb": {
+      "bytes": 304,
+      "sha256": "6092cf327f34959d344e125618f9e00336b3be1f6cb6aa7bb25e669a4a923886"
+    },
+    "achievement_controller.nsc": {
+      "bytes": 81920,
+      "sha256": "717b8b19ab45b0eb47277a29ce5fafd5f6f97332449ecfb998cc175bb86afc1a"
+    }
+  },
+  "switch_tested_this_checkout_build": false,
+  "description_visual_test_pending": true,
+  "git_committed": false,
+  "git_pushed": false
+}

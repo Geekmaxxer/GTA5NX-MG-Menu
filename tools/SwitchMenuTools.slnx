@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="NscAdapter/NscAdapter.csproj" />
+  <Project Path="NscCore/NscCore.csproj" />
+  <Project Path="NscDump/NscDump.csproj" />
+  <Project Path="NscTests/NscTests.csproj" />
+</Solution>

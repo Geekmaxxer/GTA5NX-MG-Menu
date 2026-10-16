@@ -1,4 +1,5 @@
 namespace NscAdapter;
+
 internal static class NscAdapterUsage
 {
     public static void Write(TextWriter writer)

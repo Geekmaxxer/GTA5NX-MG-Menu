@@ -1,19 +1,27 @@
 namespace NscAdapter;
+
 internal sealed class NscAdapterOptions
 {
     public const string AdaptHeader = "--adapt-header";
     public const string Info = "--info";
     public const string ValidateNames = "--validate-names";
+
     public string Mode { get; private init; } = string.Empty;
+
     public List<string> Positional { get; } = new();
+
+    /// <summary>Script name used to pick the reference out of a folder.</summary>
     public string? PreferredName { get; private set; }
+
     public bool DryRun { get; private set; }
     public bool Validate { get; private set; }
     public bool Verbose { get; private set; }
+
     public static bool TryParse(string[] args, out NscAdapterOptions options, out string problem)
     {
         options = new NscAdapterOptions { Mode = args.Length > 0 ? args[0] : string.Empty };
         problem = string.Empty;
+
         for (int i = 1; i < args.Length; i++)
         {
             string arg = args[i];
@@ -46,6 +54,7 @@ internal sealed class NscAdapterOptions
                     break;
             }
         }
+
         return true;
     }
 }

@@ -1,153 +1,104 @@
-# MG GTA5-NX Menu SDK
+# MEGATARD Menu v1.0.6 for GTA V Nintendo Switch
 
-Source and build tooling for the MG single-player menu script. It is for
-owned game dumps and offline single-player research. This repository contains
-no Rockstar game files, no `update2.rpf`, no stock `.nsc` files, no compiler
-binaries, no keys, and no prebuilt menu archive.
+SanScript source and build tools for MEGATARD's single-player mod menu, with
+[ScriptHookV-NX](https://github.com/Geekmaxxer/ScriptHookV-NX) SD settings and plugin management.
+Created by **MEGATARD / @Geekmaxxer**.
 
-## What you need
+Player, weapon, vehicle, world, teleport and NPC options sit alongside Object
+Spooner, Custom NSC Loader, custom story PEDs, language settings and persistence.
+See [Features](docs/FEATURES.md) and [v1.0.6 changes](docs/CHANGELOG.md).
 
-- A version 2699 build of the patched GTA5 Switch port files with Rockstar's internal script build tools already
-  available to you. Point `-DevNgRoot` at the folder containing `sc.exe`,
-  `scriptrc_x64.exe`, and `singleplayer\GTA5_SP.scproj`.
-- A partition or drive with the driver letter `X:\` and the GTA 5 SRC in it `X:\gta5\`
-- .NET 8 SDK or newer for the included header adapter.
-- An exported **stock Switch** `script_rel.rpf` script, such as
-  `achievement_controller.nsc`, from the exact game/port version you target.
-  This is **not** a static file shipped with this SDK - it's just a
-  cross-reference. Pull your own copy straight out of the stock port's
-  `update2.rpf` (`switch\levels\gta5\script\script_rel.rpf`) before building
-  anything, and re-export it any time you target a different build/version.
-- An RPF editor/library that can replace a file in `script_rel.rpf` as a normal compressed file entry. The original `achievement_controller.nsc` must
-  already be present if you don't have the edited nsc already; this SDK does not supply or modify it. --> [OpenIV RPF Editor](https://openiv.com/) / [CodeWalker RPF Editor](https://www.gta5-mods.com/tools/codewalker-gtav-interactive-3d-map)
+## Requirements
 
-## Build the menu script
+- Windows, PowerShell 5.1 or newer, Python 3, and the .NET SDK selected by
+  [tools/global.json](tools/global.json) (10.0.401 or a compatible later feature band).
+  The adapter/tests target .NET 8, so its runtime must also be installed.
+- Your own SanScript compiler tree containing `sc.exe`, `scriptrc_x64.exe`,
+  `singleplayer/GTA5_SP.scproj`, and its matching includes. Pass its location
+  through `-DevNgRoot`; compiler/project dependencies must also resolve there.
+- Your own stock **Switch `script_rel.rpf`** reference script or extraction from
+  the exact game build you target. `script.rpf` is a different archive.
+- The ScriptHookV-NX SDK or source checkout for its binding generator, and the
+  matching runtime installed on the Switch. v1.0.6 uses manager API 3 and custom
+  natives; install the runtime and the matched binding before launching it.
+- An RPF editor to install the compiled scripts into your own archive.
 
-From PowerShell in tools:
+The current integration targets title `0100b00b51230000`, executable build
+`6e3e9b3af5746e74b615bd981080c9271bc226620`. Other game builds require a compatibility audit.
+Compiler binaries, engine headers, keys, game archives and stock binary scripts
+are external inputs. No prebuilt runtime or menu is included here.
 
-```powershell
-./tools/Build-Menu.ps1 `
-  -DevNgRoot 'X:\gta5\script\dev_ng' `
-  -SwitchHeaderReference 'path\to\achievement_controller.nsc' `
-  -OutputDirectory './out'
-```
+## Build the menu and matching binding
 
-The installable output is `out\ragemenu.nsc`: a raw Switch script payload with
-the Switch header adaptation applied. `out\ragemenu.pc.nsc` is only the Win64
-compiler intermediate; never put that file in `script_rel.rpf`. The script and
-archive entry name must remain `ragemenu.nsc`. Add it as an ordinary compressed
-file entry; do not make it an RPF resource entry or add an outer RSC7 wrapper.
-
-## Build the loader script
-
-From PowerShell in tools:
+Run from this repository's root; replace the example paths with your locations:
 
 ```powershell
-./tools/Build-Controller.ps1 `
-  -DevNgRoot 'X:\gta5\script\dev_ng' `
-  -SwitchHeaderReference 'path\to\achievement_controller.nsc' `
-  -OutputDirectory './out'
+./tools/Build-MenuRelease.ps1 `
+  -DevNgRoot 'C:/modding/dev_ng' `
+  -ScriptHookRoot 'C:/modding/ScriptHookV-NX' `
+  -SwitchHeaderReferenceFolder 'C:/modding/stock/script_rel.rpf' `
+  -OutputDirectory './out-v106-test1'
 ```
 
-The output is `out\achivement_controller.nsc`
+Use a new output directory for each build. This produces `ragemenu.nsc`,
+`achievement_controller.nsc` and **the matching `ragemenu.snb`**, plus source
+snapshots, intermediates and build manifests. It does not install anything.
+`-SwitchHeaderReference <file>` can replace the folder option.
 
-Note that `-SwitchHeaderReference` here is your own **stock** copy pulled from
-`update2.rpf` - not this script's output. They happen to share a filename, but
-the reference is the unmodified stock cross-reference you feed in, while
-`out\achivement_controller.nsc` is the modified build you get out.
+The lower-level `Build-Menu.ps1`, `Build-Controller.ps1`, `Build-Both.ps1` and
+`Build-Any.ps1` remain available. They compile/adapt scripts but do **not**
+generate ScriptHookV-NX bindings. See [Developing](docs/DEVELOPING.md).
 
-## Build both
-From PowerShell in tools:
+## Install your build
 
-```powershell
-./tools/Build-Both.ps1 `
-  -DevNgRoot 'X:\gta5\script\dev_ng' `
-  -SwitchHeaderReference 'path\to\achievement_controller.nsc' `
-  -OutputDirectory './out'
-```
-The output is `out\ragemenu.nsc` & `out\achivement_controller.nsc`
+Close GTA and back up your working files first.
 
-## Build any script
+1. Install the matching ScriptHookV-NX runtime's `subsdk5` under
+   `atmosphere/contents/0100b00b51230000/exefs/`.
+2. Add/replace `ragemenu.nsc` and `achievement_controller.nsc` in your own
+   `update2.rpf/switch/levels/gta5/script/script_rel.rpf` as **normal compressed
+   file entries**, then install your updated archive in the title's `romfs/update/`.
+3. Copy the generated `ragemenu.snb` to `switch/gtav-scripthook/bindings/`.
 
-From PowerShell in tools:
+Keep the existing `shop_controller.nsc`; this repository does not rebuild it.
+Never install `*.pc.nsc` or `*.sco`, rename compiled scripts, or use an RPF
+resource entry. Regenerate the `.snb` after every menu rebuild. It is a small
+custom-native binding manifest, not a compiler debug database.
 
-```powershell
-./tools/Build-Any.ps1 `
-  -DevNgRoot 'X:\gta5\script\dev_ng' `
-  -SwitchHeaderReference 'path\to\achievement_controller.nsc' `
-  -OutputDirectory './out' `
-  -Source 'source\my_script.sc'
-```
+Open the menu with **LB + D-Pad Down** by default. Use D-Pad to navigate,
+**A** to apply/open, **B** to return, and Left/Right on selectors. The combo
+is configurable. **R3** jumps to the top of a page.
 
-Unlike the three build scripts above, `Build-Any.ps1` isn't hardcoded to
-`ragemenu` or `achievement_controller` - `-Source` is required, and the output
-name is taken directly from the source file. Building
-`source\my_script.sc` produces `out\my_script.nsc` (plus the matching
-`out\my_script.sco` / `out\my_script.pc.nsc` intermediates). Use this for any
-extra or one-off `.sc` script beyond the two built-in ones.
+## Plugins and settings
 
-`-SwitchHeaderReference` isn't limited to `achievement_controller.nsc` here
-either - any stock `.nsc` exported from the same build's `script_rel.rpf`
-works as the cross-reference. Bigger stock scripts are the better pick: more
-data for the header adapter to cross-reference against.
+Install NROs in `switch/gtav-scripthook/plugins/`. In
+**Menu Settings -> ScriptHookV-NX Plugins**, select a plugin to view its status:
 
-## Add it to your own archive
+- **Load Now** starts a Manual or Auto plugin without changing its startup mode.
+- **Startup Mode** selects Disabled, Manual or Auto; press A to save and confirm.
+  This determines startup behavior. It does not stop a running plugin.
+- **Kill Process** stops that plugin's cooperative scripts. Its executable and
+  custom native handlers remain mapped until GTA exits; this does not reclaim a
+  resident slot or reverse gameplay changes made by the plugin.
 
-1. Back up your own working `update2.rpf`.
-2. Open the archive for that rpf file, then navigate to `switch\levels\gta5\script\script_rel.rpf`.
-3. Turn on Edit Mode within your RPF editor and add/replace `ragemenu.nsc`/`achivement_controller.nsc` (or your `Build-Any.ps1` output) from your output folder. It must be a normal RPF binary file entry-not an RPF resource entry. Let the RPF tool apply normal file compression; do not feed it an already-compressed resource payload.
-4. Once you drop your files in you don't need to save, just exit out and replace your existing `update2.rpf` in `atmosphere\contents\0100b00b51230000\romfs\update`
+The runtime supports four resident NROs per session. Rescan discovers files;
+replacing a resident NRO needs a game restart. A standalone manager is available
+in the ScriptHookV-NX project for players without this menu.
 
-The exact archive, controller, title ID, and native table are build-specific.
-Do not use a reference script from a different version or port.
+Legacy menu SD settings remain under `switch/gtav-megatard/`. Keep existing
+settings when updating. General portable native APIs and NRO SDK documentation
+belong to the separate ScriptHookV-NX project.
 
-## Editing the menu
+## Development and validation
 
-Modify [source/ragemenu.sc](source/ragemenu.sc). It is SanScript/C-like source
-that uses Rockstar native declarations from the `dev_ng` include path. Keep
-changes small and test each one.
+Edit the modules under `source/core`, `features`, `submenus` and `util`.
+[Developing](docs/DEVELOPING.md) covers builds, native checks and contributions.
 
-- Add persistent state near the other `g_` globals.
-- Add an item to the desired category in `DRAW_PAGE`, then match it in
-  `ITEM_COUNT` and `APPLY_SELECTED`.
-- Per-frame natives belong in the main `SCRIPT` loop; avoid issuing permanent
-  gameplay changes every frame unless that native is documented to be
-  frame-scoped.
-- When adding a toggle, implement its OFF/reset path too. Test fresh boot,
-  enable, disable, changing vehicle, dying, and closing the menu.
-- Controls that share the menu's accept button must be blocked with
-  `DISABLE_CONTROL_ACTION` while the menu is open. Keep menu navigation on
-  `FRONTEND_CONTROL`; block gameplay actions on `PLAYER_CONTROL`.
+Menu persistence and manager startup policies were confirmed on Switch after
+restart. The latest shared description-renderer repair passed local compiled
+checks; **its visual behavior still needs Switch testing**. Compilation, header
+validation and native-table coverage do not establish in-game behavior.
 
-`Build-*.ps1` performs these steps:
-
-1. `sc.exe` compiles `.sc` to `.sco`. The compiler's include path (`-ipath`)
-   also has `source/` itself appended, so any `.sch` header file in `source/`
-   can be `#include`d by name without extra configuration.
-2. `scriptrc_x64.exe` converts `.sco` to an **uncompressed** RSC7 script
-   container with the `gta5` AES key label. Falls back to `fefffff` if it can't recognize the AES key name of your `.sc` script.
-3. The included adapter copies only the observed Switch page-base and unknown
-   header field from your same-build stock reference into the candidate.
-
-Every `Build-*.ps1` run also copies every `.sch` file found in `source/`
-(preserving subfolders) into the output directory alongside the compiled
-`.sc`/`.nsc` files, so a given build's exact headers are snapshotted along
-with its source and can always be reproduced or reverted later.
-
-This is not an ARM64 compilation step. GTA's RAGE script VM executes the
-script bytecode; the Switch-specific header values and the target's native
-table must match the running port.
-
-## Safety and limits
-
-- Intended only for offline single-player. GTA Online will be supported once released on this build of the port.
-- This project does not distribute game content, leaked sources, encryption
-  keys, or console executable patches.
-- Header adaptation is intentionally narrow. It does not crossmap native
-  hashes. A newly used native must already be supported by your exact target;
-  otherwise it can crash or fail to load.
-- Build success is not a hardware test. Always keep a known-good archive and
-  test one small change at a time.
-
-### Contribution/Development
-See [docs/DEVELOPING.md](docs/DEVELOPING.md) for a fuller checklist.
+This project retains its [GPL-2.0 license](LICENSE). ScriptHookV-NX is a separate
+project with its own license. Third-party decompiler code retains its original
+notices. No GTA Online support is claimed.

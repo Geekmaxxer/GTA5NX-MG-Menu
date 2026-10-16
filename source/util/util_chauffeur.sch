@@ -1,3 +1,33 @@
+// ===========================================================================
+// Chauffeur submenu - Vehicle Settings tab (row 25).
+//
+// A hired driver: spawns a black SUV with an NPC driver, seats the player in
+// the front passenger seat, and drives to the player's waypoint - or cruises
+// when there is not one.
+//
+// The driving model is NOT invented.  It is Rockstar's own taxi driver, from
+// this build's dev source:
+//   X:\gta5\script\dev_ng\singleplayer\scripts\Ambient\Misc\taxiService.sc
+//     taxiDrivingModeStandard / taxiDrivingModeHurry   (the two flag sets)
+//     TAXI_SPEED_NORMAL 12.0 / TAXI_SPEED_FAST 25.0    (the two cruise speeds)
+//   X:\gta5\script\dev_ng\singleplayer\scripts\Ambient\Misc\taxiLauncher.sc
+//     TASK_VEHICLE_DRIVE_TO_COORD(driver, car, coords, speed,
+//                                 DRIVINGSTYLE_NORMAL, model, mode, radius, sl)
+//
+// Every native called here was read out of the dev_ng headers, and the
+// task-status idiom is the stock helper TAXI_IS_PED_PERFORMING_TASK's:
+// PERFORMING_TASK or WAITING_TO_START_TASK.
+//
+// SUBURBAN is deliberately absent: it is not a model in this port's
+// MODEL_NAMES enum.  GRANGER stands in for it and is painted black (colour
+// 0), the same black APPLY_LSC_STOCK_TO_VEHICLE already uses.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Selectable chauffeur cars.  Executive sedans, black-car SUVs and a
+// limousine - all base-game models that already appear in this menu's own
+// vehicle spawner, so none of them can be missing from an install.
+// ---------------------------------------------------------------------------
 FUNC MODEL_NAMES CHAUFFEUR_VEHICLE_MODEL(INT choice)
     SWITCH choice
         CASE 0 RETURN GRANGER BREAK
@@ -29,7 +59,7 @@ FUNC STRING CHAUFFEUR_VEHICLE_NAME(INT choice)
         CASE 6 RETURN "Seminole" BREAK
         CASE 7 RETURN "Landstalker" BREAK
         CASE 8 RETURN "Dubsta" BREAK
-        CASE 9 RETURN "Stretch Limo" BREAK
+        CASE 9 RETURN TR("Stretch Limo", "Limusina Stretch", "加长礼宾车", "Stretch-Limousine", "ストレッチリムジン", "Лимузин Stretch", "Limusine Stretch", "Limousine Stretch") BREAK
         CASE 10 RETURN "Schafter 2" BREAK
         CASE 11 RETURN "Washington" BREAK
         CASE 12 RETURN "Felon" BREAK
@@ -46,23 +76,9 @@ FUNC INT CHAUFFEUR_VEHICLE_CHOICE_FOR_MODEL(MODEL_NAMES model)
     ENDWHILE
     RETURN -1
 ENDFUNC
-
-PROC REFRESH_CHAUFFEUR_DRIVING_MODE()
-    IF g_chauffeur_style = 1
-        g_chauffeur_driving_mode = DF_SwerveAroundAllCars|DF_StopForPeds|DF_ChangeLanesAroundObstructions|DF_StopForCars|DF_ForceJoinInRoadDirection|DF_SteerAroundObjects|DF_UseSwitchedOffNodes|DF_UseShortCutLinks|DF_AvoidRestrictedAreas|DF_UseWanderFallbackInsteadOfStraightLine
-        EXIT
-    ENDIF
-    IF g_chauffeur_ignore_lights
-        g_chauffeur_driving_mode = DF_SteerAroundStationaryCars|DF_StopForPeds|DF_ChangeLanesAroundObstructions|DF_StopForCars|DF_ForceJoinInRoadDirection|DF_SteerAroundObjects|DF_UseSwitchedOffNodes|DF_AvoidRestrictedAreas|DF_UseWanderFallbackInsteadOfStraightLine
-    ELSE
-        g_chauffeur_driving_mode = DF_SteerAroundStationaryCars|DF_StopForPeds|DF_StopAtLights|DF_ChangeLanesAroundObstructions|DF_StopForCars|DF_ForceJoinInRoadDirection|DF_SteerAroundObjects|DF_UseSwitchedOffNodes|DF_AvoidRestrictedAreas|DF_UseWanderFallbackInsteadOfStraightLine
-    ENDIF
-ENDPROC
-
-FUNC FLOAT CHAUFFEUR_CRUISE_SPEED()
-    IF g_chauffeur_style = 1 RETURN CHAUFFEUR_SPEED_RUSHED ENDIF
-    RETURN CHAUFFEUR_SPEED_NORMAL
-ENDFUNC
+// ---------------------------------------------------------------------------
+// Live-entity helpers.
+// ---------------------------------------------------------------------------
 
 FUNC BOOL CHAUFFEUR_DRIVER_ALIVE()
     IF NOT DOES_ENTITY_EXIST(g_chauffeur_driver) RETURN FALSE ENDIF
@@ -77,16 +93,66 @@ FUNC BOOL CHAUFFEUR_VEHICLE_ALIVE()
     RETURN TRUE
 ENDFUNC
 
+// ---------------------------------------------------------------------------
+// Driving model.
+// ---------------------------------------------------------------------------
+
+// Rebuilds g_chauffeur_driving_mode from the style and the traffic-light
+// toggle.  Rushed reuses taxiDrivingModeHurry verbatim - note it has no
+// DF_StopAtLights, which is exactly why a rushed taxi runs the lights; the
+// Ignore Traffic Lights toggle can only add that to Normal, so on Rushed it
+// is honestly a no-op, the same way it is on the stock taxi.
+// Aggressive (g_chauffeur_style = 2) drops DF_StopForCars, DF_StopForPeds,
+// DF_StopAtLights, and DF_AvoidRestrictedAreas, and enables overtaking into
+// oncoming traffic, off-road avoidance, swerving around all cars, and maximum
+// driver ability/aggressiveness.
+PROC REFRESH_CHAUFFEUR_DRIVING_MODE()
+    IF g_chauffeur_style = 2
+        IF CHAUFFEUR_DRIVER_ALIVE()
+            SET_DRIVER_ABILITY(g_chauffeur_driver, 1.0)
+            SET_DRIVER_AGGRESSIVENESS(g_chauffeur_driver, 1.0)
+        ENDIF
+        g_chauffeur_driving_mode = DF_SwerveAroundAllCars|DF_SteerAroundStationaryCars|DF_SteerAroundObjects|DF_GoOffRoadWhenAvoiding|DF_DriveIntoOncomingTraffic|DF_ChangeLanesAroundObstructions|DF_UseShortCutLinks|DF_UseSwitchedOffNodes|DF_UseStringPullingAtJunctions|DF_ForceJoinInRoadDirection|DF_UseWanderFallbackInsteadOfStraightLine
+        EXIT
+    ENDIF
+    IF CHAUFFEUR_DRIVER_ALIVE()
+        SET_DRIVER_ABILITY(g_chauffeur_driver, 0.5)
+        SET_DRIVER_AGGRESSIVENESS(g_chauffeur_driver, 0.5)
+    ENDIF
+    IF g_chauffeur_style = 1
+        g_chauffeur_driving_mode = DF_SwerveAroundAllCars|DF_StopForPeds|DF_ChangeLanesAroundObstructions|DF_StopForCars|DF_ForceJoinInRoadDirection|DF_SteerAroundObjects|DF_UseSwitchedOffNodes|DF_UseShortCutLinks|DF_AvoidRestrictedAreas|DF_UseWanderFallbackInsteadOfStraightLine
+        EXIT
+    ENDIF
+    IF g_chauffeur_ignore_lights
+        g_chauffeur_driving_mode = DF_SteerAroundStationaryCars|DF_StopForPeds|DF_ChangeLanesAroundObstructions|DF_StopForCars|DF_ForceJoinInRoadDirection|DF_SteerAroundObjects|DF_UseSwitchedOffNodes|DF_AvoidRestrictedAreas|DF_UseWanderFallbackInsteadOfStraightLine
+    ELSE
+        g_chauffeur_driving_mode = DF_SteerAroundStationaryCars|DF_StopForPeds|DF_StopAtLights|DF_ChangeLanesAroundObstructions|DF_StopForCars|DF_ForceJoinInRoadDirection|DF_SteerAroundObjects|DF_UseSwitchedOffNodes|DF_AvoidRestrictedAreas|DF_UseWanderFallbackInsteadOfStraightLine
+    ENDIF
+ENDPROC
+
+FUNC FLOAT CHAUFFEUR_CRUISE_SPEED()
+    IF g_chauffeur_style = 2 RETURN CHAUFFEUR_SPEED_AGGRESSIVE ENDIF
+    IF g_chauffeur_style = 1 RETURN CHAUFFEUR_SPEED_RUSHED ENDIF
+    RETURN CHAUFFEUR_SPEED_NORMAL
+ENDFUNC
+
+// Stock task-status idiom (TAXI_IS_PED_PERFORMING_TASK in taxi_functions.sch):
+// both PERFORMING_TASK and WAITING_TO_START_TASK mean "this task owns him".
 FUNC BOOL CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_NAME task)
     IF NOT CHAUFFEUR_DRIVER_ALIVE() RETURN FALSE ENDIF
     IF GET_SCRIPT_TASK_STATUS(g_chauffeur_driver, task) = PERFORMING_TASK RETURN TRUE ENDIF
     IF GET_SCRIPT_TASK_STATUS(g_chauffeur_driver, task) = WAITING_TO_START_TASK RETURN TRUE ENDIF
     RETURN FALSE
 ENDFUNC
-
+// ---------------------------------------------------------------------------
+// The drive task itself.  Waypoint wins; otherwise cruise.
+// ---------------------------------------------------------------------------
 PROC ISSUE_CHAUFFEUR_DRIVE_TASK()
     IF NOT CHAUFFEUR_VEHICLE_ALIVE() EXIT ENDIF
     IF NOT CHAUFFEUR_DRIVER_ALIVE() EXIT ENDIF
+    // Only a driver actually sitting in the driver's seat can be tasked to
+    // drive; if the player took the wheel or the driver bailed out, stay out
+    // of the way instead of fighting the game for control.
     IF GET_PED_IN_VEHICLE_SEAT(g_chauffeur_vehicle, VS_DRIVER) != g_chauffeur_driver EXIT ENDIF
     IF IS_WAYPOINT_ACTIVE()
         BLIP_INDEX waypointBlip = GET_FIRST_BLIP_INFO_ID(GET_WAYPOINT_BLIP_ENUM_ID())
@@ -99,6 +165,11 @@ PROC ISSUE_CHAUFFEUR_DRIVE_TASK()
     TASK_VEHICLE_DRIVE_WANDER(g_chauffeur_driver, g_chauffeur_vehicle, CHAUFFEUR_CRUISE_SPEED(), g_chauffeur_driving_mode)
 ENDPROC
 
+// ---------------------------------------------------------------------------
+// God mode / tyres.  Re-asserted on the bounded tick, for the same reason the
+// hazard lights and the hydraulic hold are: the game resets some of this
+// state on its own.
+// ---------------------------------------------------------------------------
 PROC APPLY_CHAUFFEUR_EXTRAS()
     IF CHAUFFEUR_DRIVER_ALIVE() SET_ENTITY_INVINCIBLE(g_chauffeur_driver, g_chauffeur_god) ENDIF
     IF CHAUFFEUR_VEHICLE_ALIVE()
@@ -106,6 +177,9 @@ PROC APPLY_CHAUFFEUR_EXTRAS()
     ENDIF
 ENDPROC
 
+// ---------------------------------------------------------------------------
+// Armed Driver.
+// ---------------------------------------------------------------------------
 PROC APPLY_CHAUFFEUR_ARMED_STATE()
     IF NOT CHAUFFEUR_DRIVER_ALIVE() EXIT ENDIF
     IF g_chauffeur_armed
@@ -122,6 +196,10 @@ PROC APPLY_CHAUFFEUR_ARMED_STATE()
     ENDIF
 ENDPROC
 
+// Nearest ped hostile to the player, within CHAUFFEUR_ARMED_RANGE of the car.
+// GET_CLOSEST_PED scans only random and mission peds and excludes the
+// player's own peds, so the driver cannot be told to shoot the passenger, a
+// bodyguard or himself.
 PROC PROCESS_CHAUFFEUR_ARMED()
     IF NOT g_chauffeur_armed EXIT ENDIF
     IF NOT CHAUFFEUR_DRIVER_ALIVE() EXIT ENDIF
@@ -129,9 +207,11 @@ PROC PROCESS_CHAUFFEUR_ARMED()
     IF NOT IS_PED_IN_VEHICLE(g_chauffeur_driver, g_chauffeur_vehicle) EXIT ENDIF
     PED_INDEX target
     VECTOR centre = GET_ENTITY_COORDS(g_chauffeur_vehicle)
-    IF GET_CLOSEST_PED(centre, CHAUFFEUR_ARMED_RANGE, TRUE, TRUE, target, FALSE, FALSE)
+    IF GET_CLOSEST_PED(centre, CHAUFFEUR_ARMED_RANGE, TRUE, TRUE, target)
         IF target != NULL
             IF target = g_chauffeur_armed_target EXIT ENDIF
+            IF target = PLAYER_PED_ID() OR IS_PED_A_PLAYER(target) EXIT ENDIF
+            IF IS_PED_IN_GROUP(target) OR GET_PED_RELATIONSHIP_GROUP_HASH(target) = RELGROUPHASH_PLAYER EXIT ENDIF
             IF IS_PED_INJURED(target) EXIT ENDIF
             IF IS_PED_IN_VEHICLE(target, g_chauffeur_vehicle) EXIT ENDIF
             g_chauffeur_armed_target = target
@@ -141,10 +221,18 @@ PROC PROCESS_CHAUFFEUR_ARMED()
         g_chauffeur_armed_target = NULL
     ENDIF
 ENDPROC
+// ---------------------------------------------------------------------------
+// Spawn / replace / remove.
+// ---------------------------------------------------------------------------
 
+// Deletes the car and the driver and forgets them.  Safe to call with nothing
+// alive.  DELETE_PED / DELETE_VEHICLE clear the handle themselves, but the
+// globals are nulled anyway so no stale index can survive into a later frame.
 PROC CLEAR_CHAUFFEUR()
     IF DOES_ENTITY_EXIST(g_chauffeur_driver)
         IF NOT IS_ENTITY_DEAD(g_chauffeur_driver)
+            // Hand the task back before deletion, otherwise the engine keeps a
+            // finished ped's drive task on the queue.
             SET_PED_KEEP_TASK(g_chauffeur_driver, FALSE)
         ENDIF
         DELETE_PED(g_chauffeur_driver)
@@ -152,18 +240,25 @@ PROC CLEAR_CHAUFFEUR()
     g_chauffeur_driver = NULL
     IF DOES_ENTITY_EXIST(g_chauffeur_vehicle) DELETE_VEHICLE(g_chauffeur_vehicle) ENDIF
     g_chauffeur_vehicle = NULL
-    g_chauffeur_player_was_in = FALSE
     g_chauffeur_armed_target = NULL
 ENDPROC
 
+// Staged: both models are requested, then FINISH_CHAUFFEUR_SPAWN runs once the
+// pair has streamed.  Re-pressing replaces the current chauffeur rather than
+// leaking one car and driver per press.
 PROC START_CHAUFFEUR_SPAWN()
     IF g_chauffeur_spawn_pending EXIT ENDIF
     IF g_chauffeur_ped_search_is_custom
+        // Typed by name and not in the catalog: spawn it directly, exactly
+        // like the player ped changer and the bodyguard spawn do.
         g_pending_chauffeur_ped_model = g_chauffeur_ped_model
     ELSE
         g_pending_chauffeur_ped_model = PED_MODEL_FOR_CHOICE(g_chauffeur_ped_choice)
     ENDIF
     g_pending_chauffeur_vehicle_model = CHAUFFEUR_VEHICLE_MODEL(g_chauffeur_vehicle_choice)
+    // Same validation as the bodyguard/attacker spawn: a DLC model that is not
+    // streamed on this install is a clean no-op rather than a request that can
+    // only time out.
     IF NOT IS_MODEL_IN_CDIMAGE(g_pending_chauffeur_ped_model) OR NOT IS_MODEL_VALID(g_pending_chauffeur_ped_model) EXIT ENDIF
     IF NOT IS_MODEL_IN_CDIMAGE(g_pending_chauffeur_vehicle_model) OR NOT IS_MODEL_VALID(g_pending_chauffeur_vehicle_model) EXIT ENDIF
     CLEAR_CHAUFFEUR()
@@ -187,26 +282,39 @@ PROC FINISH_CHAUFFEUR_SPAWN()
     ENDIF
     SET_ENTITY_AS_MISSION_ENTITY(car, TRUE, TRUE)
     SET_VEHICLE_ON_GROUND_PROPERLY(car)
+    // Black on black - colour 0, the same black APPLY_LSC_STOCK_TO_VEHICLE uses.
     SET_VEHICLE_COLOURS(car, 0, 0)
     SET_VEHICLE_DIRT_LEVEL(car, 0.0)
     driver = CREATE_PED(PEDTYPE_CIVMALE, g_pending_chauffeur_ped_model, spawnPosition, spawnHeading, FALSE, TRUE)
-    IF DOES_ENTITY_EXIST(driver)
-        SET_ENTITY_AS_MISSION_ENTITY(driver, TRUE, TRUE)
-        SET_PED_INTO_VEHICLE(driver, car, VS_DRIVER)
+    IF NOT DOES_ENTITY_EXIST(driver)
+        DELETE_VEHICLE(car)
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_chauffeur_ped_model)
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_chauffeur_vehicle_model)
+        g_chauffeur_spawn_pending = FALSE
+        EXIT
+    ENDIF
+    SET_ENTITY_AS_MISSION_ENTITY(driver, TRUE, TRUE)
+    SET_PED_INTO_VEHICLE(driver, car, VS_DRIVER)
+    // Same driver tuning the taxi dispatcher applies (SET_DRIVER_ABILITY
+    // 0.5) for Normal/Rushed, or 1.0 for Aggressive.
+    IF g_chauffeur_style = 2
+        SET_DRIVER_ABILITY(driver, 1.0)
+        SET_DRIVER_AGGRESSIVENESS(driver, 1.0)
+    ELSE
         SET_DRIVER_ABILITY(driver, 0.5)
         SET_DRIVER_AGGRESSIVENESS(driver, 0.5)
-        SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(driver, FALSE)
-        SET_PED_KEEP_TASK(driver, TRUE)
-        SET_PED_RELATIONSHIP_GROUP_HASH(driver, RELGROUPHASH_PLAYER)
-        SET_PED_FLEE_ATTRIBUTES(driver, FA_NEVER_FLEE, TRUE)
-        SET_PED_COMBAT_ABILITY(driver, CAL_PROFESSIONAL)
-        SET_PED_CAN_BE_DRAGGED_OUT(driver, FALSE)
-        SET_ENTITY_INVINCIBLE(driver, g_chauffeur_god)
-        g_chauffeur_driver = driver
     ENDIF
+    SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(driver, FALSE)
+    SET_PED_KEEP_TASK(driver, TRUE)
+    SET_PED_RELATIONSHIP_GROUP_HASH(driver, RELGROUPHASH_PLAYER)
+    SET_PED_FLEE_ATTRIBUTES(driver, FA_NEVER_FLEE, TRUE)
+    SET_PED_COMBAT_ABILITY(driver, CAL_PROFESSIONAL)
+    SET_PED_CAN_BE_DRAGGED_OUT(driver, FALSE)
+    SET_ENTITY_INVINCIBLE(driver, g_chauffeur_god)
+    g_chauffeur_driver = driver
     g_chauffeur_vehicle = car
+    // The whole point of the feature: the player rides, the driver drives.
     SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), car, VS_FRONT_RIGHT)
-    g_chauffeur_player_was_in = TRUE
     APPLY_CHAUFFEUR_EXTRAS()
     APPLY_CHAUFFEUR_ARMED_STATE()
     ISSUE_CHAUFFEUR_DRIVE_TASK()
@@ -215,26 +323,11 @@ PROC FINISH_CHAUFFEUR_SPAWN()
     g_chauffeur_spawn_pending = FALSE
 ENDPROC
 
-PROC PROCESS_CHAUFFEUR_AUTO_STEP()
-    IF NOT g_chauffeur_auto_step EXIT ENDIF
-    IF NOT CHAUFFEUR_DRIVER_ALIVE() EXIT ENDIF
-    IF NOT CHAUFFEUR_VEHICLE_ALIVE() EXIT ENDIF
-    PED_INDEX playerPed = PLAYER_PED_ID()
-    IF IS_PED_IN_VEHICLE(playerPed, g_chauffeur_vehicle)
-        g_chauffeur_player_was_in = TRUE
-        IF NOT IS_PED_IN_VEHICLE(g_chauffeur_driver, g_chauffeur_vehicle) AND NOT IS_PED_GETTING_INTO_A_VEHICLE(g_chauffeur_driver)
-            TASK_ENTER_VEHICLE(g_chauffeur_driver, g_chauffeur_vehicle)
-        ENDIF
-    ELSE
-        IF g_chauffeur_player_was_in
-            g_chauffeur_player_was_in = FALSE
-            IF IS_PED_IN_VEHICLE(g_chauffeur_driver, g_chauffeur_vehicle)
-                TASK_LEAVE_VEHICLE(g_chauffeur_driver, g_chauffeur_vehicle)
-            ENDIF
-        ENDIF
-    ENDIF
-ENDPROC
-
+// ---------------------------------------------------------------------------
+// Per-frame chauffeur upkeep.  Runs even while the menu is closed, so the
+// driver keeps driving to the waypoint.  Every native call that repeats is
+// gated behind CHAUFFEUR_TICK_MS, so this can never become a per-frame burst.
+// ---------------------------------------------------------------------------
 PROC PROCESS_CHAUFFEUR()
     IF g_chauffeur_spawn_pending
         IF HAS_MODEL_LOADED(g_pending_chauffeur_ped_model) AND HAS_MODEL_LOADED(g_pending_chauffeur_vehicle_model)
@@ -247,7 +340,9 @@ PROC PROCESS_CHAUFFEUR()
         EXIT
     ENDIF
     IF NOT DOES_ENTITY_EXIST(g_chauffeur_vehicle) EXIT ENDIF
-    IF NOT CHAUFFEUR_VEHICLE_ALIVE() OR NOT CHAUFFEUR_DRIVER_ALIVE()
+    // The player or chauffeur died or the car was destroyed: clear the menu's own state
+    // rather than leaving two dead handles behind.
+    IF IS_ENTITY_DEAD(PLAYER_PED_ID()) OR NOT CHAUFFEUR_VEHICLE_ALIVE() OR NOT CHAUFFEUR_DRIVER_ALIVE()
         CLEAR_CHAUFFEUR()
         EXIT
     ENDIF
@@ -255,13 +350,20 @@ PROC PROCESS_CHAUFFEUR()
         g_chauffeur_tick = GET_GAME_TIMER() + CHAUFFEUR_TICK_MS
         APPLY_CHAUFFEUR_EXTRAS()
         PROCESS_CHAUFFEUR_ARMED()
-        IF NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_TO_COORD) AND NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_WANDER) AND NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_TEMP_ACTION)
+        // Re-issue the drive task when the driver has none, or when waypoint state
+        // changed while cruising/driving.
+        IF (IS_WAYPOINT_ACTIVE() AND NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_TO_COORD)) OR (NOT IS_WAYPOINT_ACTIVE() AND CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_TO_COORD))
+            ISSUE_CHAUFFEUR_DRIVE_TASK()
+        ELIF NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_TO_COORD) AND NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_WANDER) AND NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_TEMP_ACTION)
             ISSUE_CHAUFFEUR_DRIVE_TASK()
         ENDIF
     ENDIF
-    PROCESS_CHAUFFEUR_AUTO_STEP()
 ENDPROC
 
+// ---------------------------------------------------------------------------
+// Random chauffeur PED - same validated-retry loop APPLY_RANDOM_GUARD_PED uses,
+// so an unstreamed model can never be selected.
+// ---------------------------------------------------------------------------
 PROC APPLY_RANDOM_CHAUFFEUR_PED()
     INT attempts = 0
     INT choice = 0
@@ -278,34 +380,47 @@ PROC APPLY_RANDOM_CHAUFFEUR_PED()
     ENDWHILE
 ENDPROC
 
+// ---------------------------------------------------------------------------
+// Drawing.
+// ---------------------------------------------------------------------------
+
+// Vehicle Settings row 25.  ACTIVE while a chauffeur car exists, so the base
+// page says at a glance whether one is already hired.
 PROC DRAW_CHAUFFEUR_ENTRY(FLOAT y, BOOL selected)
     IF DOES_ENTITY_EXIST(g_chauffeur_vehicle)
-        DRAW_OPTION(y, "Chauffeur", "ACTIVE", selected, 1)
+        DRAW_OPTION(y, TR("Chauffeur", "Chófer", "专属司机", "Chauffeur", "運転手", "Шофёр", "Motorista", "Chauffeur"), TR("ACTIVE", "ACTIVO", "已激活", "AKTIV", "稼働中", "АКТИВЕН", "ATIVO", "ACTIF"), selected, 1)
     ELSE
-        DRAW_OPTION(y, "Chauffeur", "OPEN", selected, 2)
+        DRAW_OPTION(y, TR("Chauffeur", "Chófer", "专属司机", "Chauffeur", "運転手", "Шофёр", "Motorista", "Chauffeur"), "OPEN", selected, 2)
     ENDIF
 ENDPROC
 
 PROC DRAW_CHAUFFEUR_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 DRAW_OPTION(y, "Spawn Car & TP In", "APPLY", g_item = index, 2) BREAK
-        CASE 1 DRAW_OPTION(y, "Driver PED:", g_chauffeur_ped_name, g_item = index, 2) BREAK
-        CASE 2 DRAW_OPTION(y, "Vehicle:", CHAUFFEUR_VEHICLE_NAME(g_chauffeur_vehicle_choice), g_item = index, 2) BREAK
+        CASE 0 DRAW_OPTION(y, TR("Spawn Car & TP In", "Generar auto y entrar", "生成专车并入座", "Auto spawnen & einsteigen", "車両出現＆乗車", "Создать авто и сесть", "Gerar carro e entrar", "Créer voiture et monter"), "APPLY", g_item = index, 2) BREAK
+        CASE 1 DRAW_OPTION(y, TR("Driver PED:", "PED del chófer:", "司机人物:", "Fahrer-PED:", "運転手PED:", "PED водителя:", "PED do motorista:", "PED chauffeur :"), g_chauffeur_ped_name, g_item = index, 2) BREAK
+        CASE 2 DRAW_OPTION(y, TR("Vehicle:", "Vehículo:", "载具:", "Fahrzeug:", "車両:", "Транспорт:", "Veículo:", "Véhicule :"), CHAUFFEUR_VEHICLE_NAME(g_chauffeur_vehicle_choice), g_item = index, 2) BREAK
         CASE 3
-            IF g_chauffeur_style = 0 DRAW_OPTION(y, "Driving Style", "< Normal >", g_item = index, 3) ELSE DRAW_OPTION(y, "Driving Style", "< Rushed >", g_item = index, 3) ENDIF
+            IF g_chauffeur_style = 0
+                DRAW_OPTION(y, TR("Driving Style", "Estilo de conducción", "驾驶风格", "Fahrstil", "運転スタイル", "Стиль вождения", "Estilo de direção", "Style de conduite"), TR("< Normal >", "< Normal >", "< 正常 >", "< Normal >", "< 通常 >", "< Обычный >", "< Normal >", "< Normal >"), g_item = index, 3)
+            ELIF g_chauffeur_style = 1
+                DRAW_OPTION(y, TR("Driving Style", "Estilo de conducción", "驾驶风格", "Fahrstil", "運転スタイル", "Стиль вождения", "Estilo de direção", "Style de conduite"), TR("< Rushed >", "< Apresurado >", "< 急促 >", "< Eilig >", "< 急ぎ >", "< Спешка >", "< Apressado >", "< Pressé >"), g_item = index, 3)
+            ELSE
+                DRAW_OPTION(y, TR("Driving Style", "Estilo de conducción", "驾驶风格", "Fahrstil", "運転スタイル", "Стиль вождения", "Estilo de direção", "Style de conduite"), TR("< Aggressive >", "< Agresivo >", "< 狂暴 >", "< Aggressiv >", "< アグレッシブ >", "< Агрессивный >", "< Agressivo >", "< Agressif >"), g_item = index, 3)
+            ENDIF
         BREAK
-        CASE 4 IF g_chauffeur_ignore_lights DRAW_OPTION(y, "Ignore Traffic Lights", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Ignore Traffic Lights", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 5 IF g_chauffeur_god DRAW_OPTION(y, "Driver God Mode", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Driver God Mode", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 6 IF g_chauffeur_bulletproof_tyres DRAW_OPTION(y, "Bulletproof Tires", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Bulletproof Tires", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 4 IF g_chauffeur_ignore_lights DRAW_OPTION(y, TR("Ignore Traffic Lights", "Ignorar semáforos", "无视红绿灯", "Ampeln ignorieren", "信号無視", "Игнорировать светофоры", "Ignorar semáforos", "Ignorer les feux"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Ignore Traffic Lights", "Ignorar semáforos", "无视红绿灯", "Ampeln ignorieren", "信号無視", "Игнорировать светофоры", "Ignorar semáforos", "Ignorer les feux"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 5 IF g_chauffeur_god DRAW_OPTION(y, TR("Driver God Mode", "Chófer invencible", "司机无敌", "Fahrer-Gottmodus", "運転手無敵", "Бессмертие водителя", "Motorista invencível", "Chauffeur invincible"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Driver God Mode", "Chófer invencible", "司机无敌", "Fahrer-Gottmodus", "運転手無敵", "Бессмертие водителя", "Motorista invencível", "Chauffeur invincible"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 6 IF g_chauffeur_bulletproof_tyres DRAW_OPTION(y, TR("Bulletproof Tires", "Neumáticos antibalas", "防弹轮胎", "Kugelsichere Reifen", "防弾タイヤ", "Пуленепробиваемые шины", "Pneus à prova de balas", "Pneus pare-balles"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Bulletproof Tires", "Neumáticos antibalas", "防弹轮胎", "Kugelsichere Reifen", "防弾タイヤ", "Пуленепробиваемые шины", "Pneus à prova de balas", "Pneus pare-balles"), "OFF", g_item = index, 0) ENDIF BREAK
         CASE 7
-            IF g_chauffeur_armed DRAW_OPTION(y, "Armed Driver:", MENU_WEAPON_NAME_FOR_CHOICE(g_chauffeur_weapon_choice), g_item = index, 1) ELSE DRAW_OPTION(y, "Armed Driver:", "OFF", g_item = index, 0) ENDIF
+            // Green when armed, red when off - the same red/green pair every
+            // other ON/OFF row uses, so "is he carrying" reads instantly.
+            IF g_chauffeur_armed DRAW_OPTION(y, TR("Armed Driver:", "Chófer armado:", "武装司机:", "Bewaffneter Fahrer:", "武装運転手:", "Вооружённый водитель:", "Motorista armado:", "Chauffeur armé :"), MENU_WEAPON_NAME_FOR_CHOICE(g_chauffeur_weapon_choice), g_item = index, 1) ELSE DRAW_OPTION(y, TR("Armed Driver:", "Chófer armado:", "武装司机:", "Bewaffneter Fahrer:", "武装運転手:", "Вооружённый водитель:", "Motorista armado:", "Chauffeur armé :"), "OFF", g_item = index, 0) ENDIF
         BREAK
-        CASE 8 IF g_chauffeur_auto_step DRAW_OPTION(y, "Auto Step-Out / In", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Auto Step-Out / In", "OFF", g_item = index, 0) ENDIF BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_CHAUFFEUR_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "CHAUFFEUR")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("CHAUFFEUR", "CHÓFER", "专属司机", "CHAUFFEUR", "運転手", "ШОФЁР", "MOTORISTA", "CHAUFFEUR"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_chauffeur_scroll
     INT row = 0
@@ -316,8 +431,10 @@ PROC DRAW_CHAUFFEUR_PAGE()
     ENDWHILE
 ENDPROC
 
+// Mirrors DRAW_GUARD_PED_PAGE exactly: row 0 search, row 1 random, then the
+// browsable catalog.
 PROC DRAW_CHAUFFEUR_PED_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "CHAUFFEUR PED")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("CHAUFFEUR PED", "PED DEL CHÓFER", "司机人物模型", "FAHRER-PED", "運転手PED", "PED ШОФЁРА", "PED DO MOTORISTA", "PED DU CHAUFFEUR"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_chauffeur_ped_scroll
     INT row = 0
@@ -325,14 +442,14 @@ PROC DRAW_CHAUFFEUR_PED_PAGE()
         FLOAT y = 0.268 + (TO_FLOAT(row) * ROW_H)
         IF index = 0
             IF g_chauffeur_ped_search_not_found
-                DRAW_OPTION(y, "PED Search", "NOT FOUND", g_item = index, 0)
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "NOT FOUND", g_item = index, 0)
             ELSE
-                DRAW_OPTION(y, "PED Search", g_chauffeur_ped_name, g_item = index, 2)
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), g_chauffeur_ped_name, g_item = index, 2)
             ENDIF
         ELIF index = 1
-            DRAW_OPTION(y, "Random PED", "APPLY", g_item = index, 2)
+            DRAW_OPTION(y, TR("Random PED", "PED aleatorio", "随机人物模型", "Zufälliger PED", "ランダムPED", "Случайный PED", "PED aleatório", "PED aléatoire"), "APPLY", g_item = index, 2)
         ELSE
-            DRAW_OPTION(y, "PED:", PED_NAME_FOR_CHOICE(index - 2), g_item = index, 2)
+            DRAW_OPTION(y, TR("PED:", "PED:", "人物:", "PED:", "PED:", "PED:", "PED:", "PED :"), PED_NAME_FOR_CHOICE(index - 2), g_item = index, 2)
         ENDIF
         index = index + 1
         row = row + 1
@@ -340,40 +457,55 @@ PROC DRAW_CHAUFFEUR_PED_PAGE()
 ENDPROC
 
 PROC DRAW_CHAUFFEUR_VEHICLE_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "CHAUFFEUR VEHICLE")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("CHAUFFEUR VEHICLE", "VEHÍCULO DEL CHÓFER", "司机载具", "FAHRER-FAHRZEUG", "運転手の車両", "ТРАНСПОРТ ШОФЁРА", "VEÍCULO DO MOTORISTA", "VÉHICULE DU CHAUFFEUR"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_chauffeur_vehicle_scroll
     INT row = 0
     WHILE row < 8 AND index < CHAUFFEUR_VEHICLE_COUNT
-        DRAW_OPTION(0.268 + (TO_FLOAT(row) * ROW_H), "Vehicle:", CHAUFFEUR_VEHICLE_NAME(index), g_item = index, 2)
+        DRAW_OPTION(0.268 + (TO_FLOAT(row) * ROW_H), TR("Vehicle:", "Vehículo:", "载具:", "Fahrzeug:", "車両:", "Транспорт:", "Veículo:", "Véhicule :"), CHAUFFEUR_VEHICLE_NAME(index), g_item = index, 2)
         index = index + 1
         row = row + 1
     ENDWHILE
 ENDPROC
 
+// Row 0 is the ON/OFF arm toggle; rows 1+ are the menu's own weapon list, so
+// the Armed Driver page can never offer a weapon the menu itself cannot give.
 PROC DRAW_CHAUFFEUR_ARMED_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "ARMED DRIVER")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("ARMED DRIVER", "CHÓFER ARMADO", "武装司机", "BEWAFFNETER FAHRER", "武装運転手", "ВООРУЖЁННЫЙ ШОФЁР", "MOTORISTA ARMADO", "CHAUFFEUR ARMÉ"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_chauffeur_armed_scroll
     INT row = 0
     WHILE row < 8 AND index < MENU_WEAPON_COUNT() + 1
         FLOAT y = 0.268 + (TO_FLOAT(row) * ROW_H)
         IF index = 0
-            IF g_chauffeur_armed DRAW_OPTION(y, "Armed Driver", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Armed Driver", "OFF", g_item = index, 0) ENDIF
+            IF g_chauffeur_armed DRAW_OPTION(y, TR("Armed Driver", "Chófer armado", "武装司机", "Bewaffneter Fahrer", "武装運転手", "Вооружённый водитель", "Motorista armado", "Chauffeur armé"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Armed Driver", "Chófer armado", "武装司机", "Bewaffneter Fahrer", "武装運転手", "Вооружённый водитель", "Motorista armado", "Chauffeur armé"), "OFF", g_item = index, 0) ENDIF
         ELSE
-            DRAW_OPTION(y, "Weapon:", MENU_WEAPON_NAME_FOR_CHOICE(index - 1), g_item = index, 2)
+            DRAW_OPTION(y, TR("Weapon:", "Arma:", "武器:", "Waffe:", "武器:", "Оружие:", "Arma:", "Arme :"), MENU_WEAPON_NAME_FOR_CHOICE(index - 1), g_item = index, 2)
         ENDIF
         index = index + 1
         row = row + 1
     ENDWHILE
 ENDPROC
 
+// ---------------------------------------------------------------------------
+// Binds the chauffeur defaults to real catalog entries.
+//
+// This cannot live in INIT_MENU_DEFAULTS() (util_ped_catalog.sch): that file
+// is inlined before this one, so the two chauffeur functions it would have to
+// call are not declared yet.  ragemenu.sc calls this straight after
+// INIT_MENU_DEFAULTS(), where every module is in scope.
+// ---------------------------------------------------------------------------
 PROC INIT_CHAUFFEUR_DEFAULTS()
+    // The driver: a smart-casual male ped reads as a hired driver, and the
+    // choice is resolved from the name rather than hardcoded as an index, so
+    // the label and the spawned model follow the catalog if it ever moves.
     g_chauffeur_ped_choice = FIND_PED_CHOICE_BY_NAME("S_M_M_BOUNCER_01")
     IF g_chauffeur_ped_choice < 0 g_chauffeur_ped_choice = 0 ENDIF
     g_chauffeur_ped_name = PED_NAME_FOR_CHOICE(g_chauffeur_ped_choice)
     g_chauffeur_ped_model = PED_MODEL_FOR_CHOICE(g_chauffeur_ped_choice)
     g_chauffeur_ped_search_is_custom = FALSE
+    // The car: GRANGER, the black federal SUV that stands in for the
+    // (absent on this port) SUBURBAN.
     g_chauffeur_vehicle_choice = CHAUFFEUR_VEHICLE_CHOICE_FOR_MODEL(GRANGER)
     IF g_chauffeur_vehicle_choice < 0 g_chauffeur_vehicle_choice = 0 ENDIF
     REFRESH_CHAUFFEUR_DRIVING_MODE()

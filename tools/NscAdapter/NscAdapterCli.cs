@@ -1,5 +1,13 @@
 using NscCore;
+
 namespace NscAdapter;
+
+/// <summary>
+/// Adapts a compiled Win64 script to the Switch header profile by copying only
+/// the bytes proven to differ between the two builds. Nothing is written until
+/// the result has been verified, and every failure path has a distinct exit
+/// code so a build script can tell the cases apart.
+/// </summary>
 public static class NscAdapterCli
 {
     public static int Run(string[] args, TextWriter output, TextWriter error)
@@ -30,6 +38,7 @@ public static class NscAdapterCli
             NscAdapterUsage.Write(error);
             return NscExitCodes.Usage;
         }
+
         string first = args[0];
         if (Is(first, "--help") || Is(first, "-h") || Is(first, "/?"))
         {
@@ -42,16 +51,19 @@ public static class NscAdapterCli
             output.WriteLine("Writes only the 8-byte page base at 0x00 and the 4-byte build word at 0x18, copied from a verified reference script.");
             return NscExitCodes.Ok;
         }
+
         if (!NscAdapterOptions.TryParse(args, out NscAdapterOptions options, out string problem))
         {
             error.WriteLine($"ERROR {problem}");
             NscAdapterUsage.Write(error);
             return NscExitCodes.Usage;
         }
+
         string mode = options.Mode.ToLowerInvariant();
         if (mode == NscAdapterOptions.AdaptHeader) return AdaptHeader(options, output, error);
         if (mode == NscAdapterOptions.Info) return NscAdapterInfo.Info(options, output, error);
         if (mode == NscAdapterOptions.ValidateNames) return NscAdapterInfo.ValidateNames(options, output, error);
+
         error.WriteLine($"ERROR unknown mode '{options.Mode}'");
         NscAdapterUsage.Write(error);
         return NscExitCodes.Usage;
@@ -65,22 +77,30 @@ public static class NscAdapterCli
             NscAdapterUsage.Write(error);
             return NscExitCodes.Usage;
         }
+
         string referenceInput = options.Positional[0];
         string candidatePath = options.Positional[1];
         string outputPath = options.Positional[2];
+
         NscReferenceResolution resolution = NscReferenceResolver.Resolve(referenceInput, options.PreferredName);
         NscAdapterReport.WriteReferenceLine(output, resolution);
+
         NscPayload reference = NscContainer.ReadFile(resolution.Path, NscExitCodes.InvalidReference);
         NscPayload candidate = NscContainer.ReadFile(candidatePath, NscExitCodes.InvalidCandidate);
+
         output.WriteLine($"REFERENCE_PAYLOAD {reference.Bytes.Length} bytes, {reference.KindLabel}");
         output.WriteLine($"CANDIDATE_PAYLOAD {candidate.Bytes.Length} bytes, {candidate.KindLabel}");
+
         NscAdapterReport.CheckReference(reference, candidate, error);
+
         if (string.Equals(Path.GetFullPath(resolution.Path), Path.GetFullPath(candidatePath), StringComparison.OrdinalIgnoreCase))
         {
             error.WriteLine("WARNING the same file is being used as both the reference and the candidate; the header will not really be adapted");
         }
+
         NscAdaptResult result = NscAdapt.Adapt(reference, candidate, outputPath, options.DryRun);
         NscAdapterReport.WriteTrace(output, result, outputPath, options.DryRun);
+
         if (options.Validate && !options.DryRun && result.WrittenPath != null)
         {
             NscNameValidationResult validation = NscNameValidation.ValidateFile(result.WrittenPath);
@@ -94,6 +114,7 @@ public static class NscAdapterCli
                 throw new NscFormatException("the adapted output does not satisfy the script name invariants", NscExitCodes.VerifyFailed);
             }
         }
+
         return NscExitCodes.Ok;
     }
 

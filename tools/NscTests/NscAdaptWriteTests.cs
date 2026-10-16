@@ -1,6 +1,13 @@
 using NscCore;
 using Xunit;
+
 namespace NscTests;
+
+/// <summary>
+/// The adapter must land a bare payload (no RSC7 envelope) on disk, because an
+/// envelope-wrapped .nsc is not installable in script_rel.rpf. Ten files in the
+/// old out-* directories have exactly that defect.
+/// </summary>
 public class NscAdaptWriteTests
 {
     [Fact]
@@ -13,7 +20,9 @@ public class NscAdaptWriteTests
             byte[] candidatePayload = SyntheticNsc.Payload("ragemenu", SyntheticNsc.CandidatePageBase, SyntheticNsc.CandidateBuildWord);
             NscPayload reference = NscContainer.Read(SyntheticNsc.CompressedContainer(referenceBytes), "achievement_controller.nsc");
             NscPayload candidate = NscContainer.Read(SyntheticNsc.CompressedContainer(candidatePayload), "ragemenu.pc.nsc");
+
             NscAdaptResult result = NscAdapt.Adapt(reference, candidate, Path.Combine(dir, "ragemenu.nsc"));
+
             Assert.NotNull(result.WrittenPath);
             byte[] onDisk = File.ReadAllBytes(result.WrittenPath!);
             Assert.Equal(result.Payload, onDisk);
@@ -26,6 +35,7 @@ public class NscAdaptWriteTests
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     }
+
     [Fact]
     public void Write_atomic_produces_the_exact_bytes_and_leaves_no_temp_file()
     {
@@ -34,7 +44,9 @@ public class NscAdaptWriteTests
         {
             byte[] payload = SyntheticNsc.Payload("ragemenu");
             string output = Path.Combine(dir, "nested", "ragemenu.nsc");
+
             string written = NscAdapt.WriteAtomic(output, payload);
+
             Assert.True(File.Exists(written));
             Assert.Equal(payload, File.ReadAllBytes(written));
             Assert.Empty(Directory.GetFiles(Path.GetDirectoryName(written)!, "*.tmp-*"));
@@ -44,6 +56,7 @@ public class NscAdaptWriteTests
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     }
+
     [Fact]
     public void Write_atomic_overwrites_an_existing_output()
     {
@@ -54,7 +67,9 @@ public class NscAdaptWriteTests
             Directory.CreateDirectory(dir);
             File.WriteAllBytes(output, new byte[] { 0xDE, 0xAD });
             byte[] payload = SyntheticNsc.Payload("ragemenu");
+
             NscAdapt.WriteAtomic(output, payload);
+
             Assert.Equal(payload, File.ReadAllBytes(output));
         }
         finally
@@ -62,6 +77,7 @@ public class NscAdaptWriteTests
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
     }
+
     [Fact]
     public void Adapt_dry_run_writes_nothing()
     {
@@ -70,7 +86,9 @@ public class NscAdaptWriteTests
         byte[] candidateBytes = SyntheticNsc.Payload("ragemenu", SyntheticNsc.CandidatePageBase, SyntheticNsc.CandidateBuildWord);
         NscPayload reference = NscContainer.Read(referenceBytes, "reference");
         NscPayload candidate = NscContainer.Read(candidateBytes, "candidate");
+
         NscAdaptResult result = NscAdapt.Adapt(reference, candidate, Path.Combine(dir, "should-not-exist.nsc"), dryRun: true);
+
         Assert.Null(result.WrittenPath);
         Assert.False(Directory.Exists(dir));
     }

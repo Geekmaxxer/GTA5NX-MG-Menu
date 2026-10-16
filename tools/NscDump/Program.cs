@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Linq;
 using System.Text;
 using NscCore;
+
 namespace Decompiler
 {
     internal static class Program
@@ -25,6 +26,7 @@ namespace Decompiler
         public static bool Upper_Natives { get { return false; } }
         public static bool Reverse_Hashes { get { return true; } }
         public static bool Show_Array_Size { get { return true; } }
+
         public static int Main(string[] args)
         {
             if (args.Length == 2 && string.Equals(args[0], "--scan-dir", StringComparison.OrdinalIgnoreCase) && (Directory.Exists(args[1]) || File.Exists(args[1])))
@@ -160,6 +162,7 @@ namespace Decompiler
                     observation.Occurrences.Add(new NativeOccurrence(relative, i, stored));
                 }
             }
+
             string fullOutput = Path.GetFullPath(outputPath);
             string parent = Path.GetDirectoryName(fullOutput);
             if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
@@ -194,6 +197,7 @@ namespace Decompiler
         }
 
         private static string EscapeJson(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
         private sealed class NativeObservation
         {
             public NativeObservation(ulong decoded) { Decoded = decoded; }
@@ -209,7 +213,6 @@ namespace Decompiler
                 Index = index;
                 Stored = stored;
             }
-
             public string Script { get; }
             public uint Index { get; }
             public ulong Stored { get; }
@@ -273,10 +276,13 @@ namespace Decompiler
 
         private static void ValidateScriptNames(string target)
         {
+            // Delegates to the shared implementation so NscAdapter's
+            // --validate-names and this one can never drift apart.
             bool isDirectory = Directory.Exists(target);
             NscNameValidationResult result = isDirectory
                 ? NscNameValidation.ValidateDirectory(target)
                 : NscNameValidation.ValidateFile(target);
+
             foreach (NscNameProblem problem in result.Problems)
             {
                 string label = isDirectory ? Path.GetRelativePath(target, problem.File).Replace('\\', '/') : problem.File;
@@ -339,6 +345,10 @@ namespace Decompiler
             Console.WriteLine($"DIRECT_STORED_MATCHES {directMatches}/{pcCount}");
         }
 
+        // Folder form: check every decoded native in the candidate against the
+        // union of decoded natives across a stock folder (e.g. script_rel.rpf).
+        // A zero unmatched count means every compiled native exists somewhere in
+        // stock; per-script index coverage still needs a single-file compare.
         private static void CompareAgainstFolder(string candidatePath, string folder)
         {
             byte[] candidate = ReadNscPayload(candidatePath);
@@ -406,6 +416,7 @@ namespace Decompiler
                 }
                 indices.Add(i);
             }
+
             string fullOutput = Path.GetFullPath(outputPath);
             string parent = Path.GetDirectoryName(fullOutput);
             if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
@@ -439,16 +450,29 @@ namespace Decompiler
             Console.WriteLine($"WROTE_CROSSMAP {fullOutput}");
         }
 
+        // Uses the same NscAdapt path as NscAdapter, so the two tools can never
+        // disagree about the output format again. The default output is a raw
+        // payload, which is the only form script_rel.rpf accepts.
+        //
+        // --container is an opt-in reproduction of the old behaviour, which
+        // re-prepended the candidate's RSC7 envelope. That is what produced the
+        // unwrapped-but-enveloped .nsc files in the older out-* directories: the
+        // header was adapted correctly, but the file was not installable.
         private static void AdaptHeader(string referenceArg, string candidatePath, string outputPath, bool keepEnvelope, bool dryRun)
         {
             NscReferenceResolution resolution = NscReferenceResolver.Resolve(referenceArg, null);
             Console.WriteLine($"HEADER_REFERENCE {resolution.Path}");
+
             NscPayload reference = NscContainer.ReadFile(resolution.Path, NscExitCodes.InvalidReference);
             NscPayload candidate = NscContainer.ReadFile(candidatePath, NscExitCodes.InvalidCandidate);
+
+            // Verify before writing anything, so a bad pair never produces a file.
             NscAdaptResult result = NscAdapt.Adapt(reference, candidate, null, dryRun: true);
+
             Console.WriteLine($"PAGE_BASE 0x{result.CandidatePageBase:X16} -> 0x{result.ReferencePageBase:X16}");
             Console.WriteLine($"BUILD_WORD 0x{result.CandidateBuildWord:X8} -> 0x{result.ReferenceBuildWord:X8}");
             Console.WriteLine($"ADAPTED_BYTES changed={result.ChangedOffsets.Count} offsets={NscAdaptResult.DescribeOffsets(result.ChangedOffsets)}");
+
             byte[] output = result.Payload;
             if (keepEnvelope)
             {
@@ -457,6 +481,7 @@ namespace Decompiler
                 output = candidate.FileBytes.Take(NscContainer.Rsc7HeaderSize).Concat(result.Payload).ToArray();
                 Console.WriteLine("NOTE --container keeps the RSC7 envelope; that form is NOT installable as a script_rel.rpf file entry");
             }
+
             if (dryRun) Console.WriteLine("DRY_RUN (not written)");
             else Console.WriteLine($"WROTE_ADAPTED_HEADER {NscAdapt.WriteAtomic(outputPath, output)}");
             Console.WriteLine("NOTE native tables and code were preserved; inspect and compare before packaging");
@@ -470,18 +495,31 @@ namespace Decompiler
             return string.Join(",", matches);
         }
 
+        // Container decoding, hashing and pointer maths now live in NscCore so
+        // this tool and NscAdapter share exactly one implementation.
+        //
+        // There is no compression flag inside the RSC7 envelope: byte@0x08 takes
+        // 19 distinct values across the stock scripts and 0x80 appears on both a
+        // deflate stock file and our own uncompressed output. NscCore therefore
+        // decodes by trial and verifies the resulting page base, where the old
+        // heuristic only guessed.
         private static byte[] ReadNscPayload(byte[] data, string sourceName) => NscContainer.Read(data, sourceName).Bytes;
+
         private static byte[] ReadNscPayload(string path) => NscContainer.ReadFile(path).Bytes;
+
         private static uint Joaat(string value) => NscHeader.Joaat(value);
         private static ulong U64(byte[] data, int offset) => NscHeader.ReadU64(data, offset);
         private static uint U32(byte[] data, int offset) => NscHeader.ReadU32(data, offset);
         private static void WriteU64(byte[] data, int offset, ulong value) => NscHeader.WriteU64(data, offset, value);
         private static void WriteU32(byte[] data, int offset, uint value) => NscHeader.WriteU32(data, offset, value);
+
         private static int ResourceOffset(ulong value) => NscHeader.ResourceOffset(value);
+
         private static void DumpSwitchResource(string path)
         {
             byte[] data = ReadNscPayload(path);
             if (data.Length < 0x78) throw new InvalidDataException("file is too small for a Switch NSC header");
+
             ulong codeBlocksRef = U64(data, 0x10);
             uint codeLength = U32(data, 0x1c);
             uint parameters = U32(data, 0x20);
@@ -492,11 +530,13 @@ namespace Decompiler
             ulong scriptNameRef = U64(data, 0x60);
             ulong stringsRef = U64(data, 0x68);
             uint stringsSize = U32(data, 0x70);
+
             int codeBlocksOffset = ResourceOffset(codeBlocksRef);
             int nativeOffset = ResourceOffset(nativeRef);
             int scriptNameOffset = ResourceOffset(scriptNameRef);
             int stringsOffset = ResourceOffset(stringsRef);
             int blockCount = (int)((codeLength + 0x3fffU) / 0x4000U);
+
             string scriptName = ReadNullTerminated(data, scriptNameOffset);
             Console.WriteLine("SCRIPT " + scriptName);
             Console.WriteLine($"CODE_LENGTH {codeLength}");
@@ -517,6 +557,7 @@ namespace Decompiler
                 string name = x64nativefile.ContainsKey(decoded) ? x64nativefile[decoded] : "<unmapped>";
                 Console.WriteLine($"{i:X4}: {Convert.ToHexString(data, offset, 8)} => {decoded:X16} {name}");
             }
+
             Console.WriteLine("CALL_NATIVE_SITES");
             for (int block = 0; block < blockCount; block++)
             {
@@ -529,6 +570,9 @@ namespace Decompiler
                     if (data[p] == 0x2c)
                     {
                         byte signature = data[p + 1];
+                        // The Switch bytecode keeps the opcode/signature bytes in the same
+                        // order as the legacy format, but stores the 16-bit native index
+                        // big-endian (e.g. 00 04 means table entry 4).
                         ushort index = (ushort)((data[p + 2] << 8) | data[p + 3]);
                         int parameterCount = signature >> 2;
                         int returnCount = signature & 3;
@@ -565,7 +609,7 @@ namespace Decompiler
             if (op == 44) return remaining >= 4 ? 4 : 0;
             if (op == 45) return remaining >= 5 ? 5 + data[offset + 4] : 0;
             if (op == 46) return remaining >= 3 ? 3 : 0;
-            if (op == 63) return 1; 
+            if (op == 63) return 1; // GetImmP (stack form)
             if (op >= 52 && op <= 62) return remaining >= 2 ? 2 : 0;
             if (op >= 64 && op <= 66) return remaining >= 2 ? 2 : 0;
             if (op == 67) return remaining >= 3 ? 3 : 0;
@@ -580,6 +624,9 @@ namespace Decompiler
                 return 2 + cases * 6;
             }
             if (op == 99) return remaining >= 4 ? 4 : 0;
+            // 0x27/0x28/0x29 are variable-size immediates handled above;
+            // anything else is an unclassified opcode, so stop rather than
+            // accidentally treating data bytes as instructions.
             return 1;
         }
 

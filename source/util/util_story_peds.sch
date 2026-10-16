@@ -1,0 +1,1443 @@
+// ===========================================================================
+// Custom Story PEDs (PED Changer Row 0, util_story_peds.sch)
+//
+// Lets the player replace the PED model of 112 named GTA V story characters
+// (the other two playable protagonists, main cast, family, friends, heist
+// crew, FIB/IAA/antagonists, Strangers & Freaks, and minor cutscene NPCs).
+//
+// Dynamic 3-protagonist filtering:
+//   - Whichever protagonist is currently selected as the player's active
+//     character (0 = Franklin / PLAYER_ZERO, 1 = Michael / PLAYER_ONE,
+//     2 = Trevor / PLAYER_TWO) is hidden from Custom Story PEDs, and the
+//     other two protagonists are shown at rows 0 and 1.
+//
+// Runtime replacement strategy (Switch script_rel.rpf verified):
+//   1. Cutscenes: while IS_CUTSCENE_ACTIVE() is true, any customized story
+//      character whose scene handle exists in the active cutscene has its
+//      target model streamed and a cutscene ped registered via
+//      REGISTER_ENTITY_FOR_CUTSCENE(..., CU_ANIMATE_EXISTING_SCRIPT_ENTITY,
+//      ..., CEO_IGNORE_MODEL_NAME) (plus alpha/transform fallback if an
+//      instant seamless cutscene already created its own entity).
+//   2. Gameplay encounters: nearby non-player peds whose model matches a
+//      customized story character's IG_* / CS_* / CSB_* / HC_* / U_* / PLAYER_*
+//      model are hidden with SET_ENTITY_ALPHA(realPed, 0, FALSE) (leaving the
+//      mission's PED_INDEX handle, tasks, vehicle seat, dialogue, and blips
+//      100% intact) while a visual proxy ped of the chosen model tracks them.
+// ===========================================================================
+
+FUNC STRING STORY_CHAR_DISPLAY_NAME_PAGE_0(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "Franklin Clinton" BREAK
+        CASE 1 RETURN "Michael De Santa" BREAK
+        CASE 2 RETURN "Trevor Philips" BREAK
+        CASE 3 RETURN "Lamar Davis" BREAK
+        CASE 4 RETURN "Lester Crest" BREAK
+        CASE 5 RETURN "Amanda De Santa" BREAK
+        CASE 6 RETURN "Jimmy De Santa" BREAK
+        CASE 7 RETURN "Tracey De Santa" BREAK
+        CASE 8 RETURN "Chop" BREAK
+        CASE 9 RETURN "Ron Jakowski" BREAK
+        CASE 10 RETURN "Wade Hebert" BREAK
+        CASE 11 RETURN "Chef" BREAK
+        CASE 12 RETURN "Floyd Hebert" BREAK
+        CASE 13 RETURN "Debra" BREAK
+        CASE 14 RETURN "Denise Clinton" BREAK
+        CASE 15 RETURN "Tanisha Jackson" BREAK
+        CASE 16 RETURN "Stretch (Harold Joseph)" BREAK
+        CASE 17 RETURN "Brad Snider" BREAK
+        CASE 18 RETURN "Mrs. Philips" BREAK
+        CASE 19 RETURN "Patricia Madrazo" BREAK
+        CASE 20 RETURN "Dr. Isiah Friedlander" BREAK
+        CASE 21 RETURN "Fabien LaRouche" BREAK
+        CASE 22 RETURN "Carlos (Gardener)" BREAK
+        CASE 23 RETURN "Eva (Maid)" BREAK
+        CASE 24 RETURN "Dave Norton" BREAK
+        CASE 25 RETURN "Steve Haines" BREAK
+        CASE 26 RETURN "Andreas Sanchez" BREAK
+        CASE 27 RETURN "Devin Weston" BREAK
+        CASE 28 RETURN "Molly Schultz" BREAK
+        CASE 29 RETURN "Solomon Richards" BREAK
+        CASE 30 RETURN "Milton McIlroy" BREAK
+        CASE 31 RETURN "Anton Beaudelaire" BREAK
+        CASE 32 RETURN "Rocco Pelosi" BREAK
+        CASE 33 RETURN "Simeon Yetarian" BREAK
+        CASE 34 RETURN "Martin Madrazo" BREAK
+        CASE 35 RETURN "Javier Madrazo" BREAK
+        CASE 36 RETURN "Wei Cheng" BREAK
+        CASE 37 RETURN "Tao Cheng" BREAK
+        CASE 38 RETURN "Tao's Translator" BREAK
+        CASE 39 RETURN "Lazlow Jones" BREAK
+        CASE 40 RETURN "Ferdinand Kerimov (Mr. K)" BREAK
+        CASE 41 RETURN "Karen Daniels (Michelle)" BREAK
+        CASE 42 RETURN "United Paper Man (IAA)" BREAK
+        CASE 43 RETURN "Agent ULP (FIB Suit)" BREAK
+        CASE 44 RETURN "Casey (Gruppe Sechs)" BREAK
+        CASE 45 RETURN "Johnny Klebitz" BREAK
+        CASE 46 RETURN "Ashley Butler" BREAK
+        CASE 47 RETURN "Terry Thorpe" BREAK
+        CASE 48 RETURN "Clay Simons" BREAK
+        CASE 49 RETURN "Ortega" BREAK
+        CASE 50 RETURN "Elwood O'Neil" BREAK
+        CASE 51 RETURN "D (Ballas OG)" BREAK
+        CASE 52 RETURN "Chad Mulligan" BREAK
+        CASE 53 RETURN "ental / Car Buyer" BREAK
+        CASE 54 RETURN "Packie McReary (Gunman)" BREAK
+        CASE 55 RETURN "Karim Denz / Eddie Toh" BREAK
+    ENDSWITCH
+    RETURN "Story Character"
+ENDFUNC
+
+FUNC STRING STORY_CHAR_DISPLAY_NAME_PAGE_1(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "Rickie Lukens (Hacker)" BREAK
+        CASE 1 RETURN "Paige Harris" BREAK
+        CASE 2 RETURN "Taliana Martinez" BREAK
+        CASE 3 RETURN "Chef (Heist Gunman)" BREAK
+        CASE 4 RETURN "Daryl Johns / Norm Richards" BREAK
+        CASE 5 RETURN "Hugh Welsh" BREAK
+        CASE 6 RETURN "Karl Abolaji" BREAK
+        CASE 7 RETURN "Gustavo Mota" BREAK
+        CASE 8 RETURN "Christian Feltz" BREAK
+        CASE 9 RETURN "Agent 14" BREAK
+        CASE 10 RETURN "Maxim Rashkovsky" BREAK
+        CASE 11 RETURN "Tonya Wiggins" BREAK
+        CASE 12 RETURN "Hao" BREAK
+        CASE 13 RETURN "Beverly Felton" BREAK
+        CASE 14 RETURN "Barry" BREAK
+        CASE 15 RETURN "Dom Beasley" BREAK
+        CASE 16 RETURN "Mary-Ann Quinn" BREAK
+        CASE 17 RETURN "Maude Eccles" BREAK
+        CASE 18 RETURN "Cletus Ewing" BREAK
+        CASE 19 RETURN "Omega" BREAK
+        CASE 20 RETURN "Peter Dreyfuss" BREAK
+        CASE 21 RETURN "Josh Bernstein" BREAK
+        CASE 22 RETURN "Nigel" BREAK
+        CASE 23 RETURN "Mrs. Thornhill" BREAK
+        CASE 24 RETURN "Abigail Mathers" BREAK
+        CASE 25 RETURN "Cris Formage" BREAK
+        CASE 26 RETURN "Jimmy Boston" BREAK
+        CASE 27 RETURN "Marnie Allen" BREAK
+        CASE 28 RETURN "Tom (Epsilon)" BREAK
+        CASE 29 RETURN "Joe (Minute Man)" BREAK
+        CASE 30 RETURN "Josef (Minute Man)" BREAK
+        CASE 31 RETURN "Manuel" BREAK
+        CASE 32 RETURN "Sasquatch" BREAK
+        CASE 33 RETURN "Hunter" BREAK
+        CASE 34 RETURN "Oscar Guzman" BREAK
+        CASE 35 RETURN "Rampage Redneck" BREAK
+        CASE 36 RETURN "Rampage Hipster" BREAK
+        CASE 37 RETURN "Rampage Gangbanger" BREAK
+        CASE 38 RETURN "Rampage Vagos" BREAK
+        CASE 39 RETURN "Rampage Soldier" BREAK
+        CASE 40 RETURN "Jay Norris" BREAK
+        CASE 41 RETURN "Al Di Napoli" BREAK
+        CASE 42 RETURN "Kerry McIntosh" BREAK
+        CASE 43 RETURN "Tyler Dixon" BREAK
+        CASE 44 RETURN "Poppy Mitchell" BREAK
+        CASE 45 RETURN "Miranda Cowan" BREAK
+        CASE 46 RETURN "Bank Manager" BREAK
+        CASE 47 RETURN "Vangelico Jewel Clerk" BREAK
+        CASE 48 RETURN "Harvey Molina (Janitor)" BREAK
+        CASE 49 RETURN "FIB Architect" BREAK
+        CASE 50 RETURN "Janet" BREAK
+        CASE 51 RETURN "Natalia Zverev" BREAK
+        CASE 52 RETURN "Clay PG Jackson" BREAK
+        CASE 53 RETURN "Dale" BREAK
+        CASE 54 RETURN "Zimbor" BREAK
+        CASE 55 RETURN "Benny" BREAK
+    ENDSWITCH
+    RETURN "Story Character"
+ENDFUNC
+
+FUNC STRING STORY_CHAR_DISPLAY_NAME(INT charId)
+    IF charId < 56 RETURN STORY_CHAR_DISPLAY_NAME_PAGE_0(charId) ENDIF
+    RETURN STORY_CHAR_DISPLAY_NAME_PAGE_1(charId - 56)
+ENDFUNC
+
+FUNC MODEL_NAMES STORY_CHAR_DEFAULT_MODEL_PAGE_0(INT charId)
+    SWITCH charId
+        CASE 0 RETURN PLAYER_ZERO BREAK
+        CASE 1 RETURN PLAYER_ONE BREAK
+        CASE 2 RETURN PLAYER_TWO BREAK
+        CASE 3 RETURN IG_LAMARDAVIS BREAK
+        CASE 4 RETURN IG_LESTERCREST BREAK
+        CASE 5 RETURN IG_AMANDATOWNLEY BREAK
+        CASE 6 RETURN IG_JIMMYDISANTO BREAK
+        CASE 7 RETURN IG_TRACYDISANTO BREAK
+        CASE 8 RETURN A_C_CHOP BREAK
+        CASE 9 RETURN IG_NERVOUSRON BREAK
+        CASE 10 RETURN IG_WADE BREAK
+        CASE 11 RETURN IG_CHEF BREAK
+        CASE 12 RETURN IG_FLOYD BREAK
+        CASE 13 RETURN CS_DEBRA BREAK
+        CASE 14 RETURN IG_DENISE BREAK
+        CASE 15 RETURN IG_TANISHA BREAK
+        CASE 16 RETURN IG_STRETCH BREAK
+        CASE 17 RETURN IG_BRAD BREAK
+        CASE 18 RETURN IG_MRSPHILLIPS BREAK
+        CASE 19 RETURN IG_PATRICIA BREAK
+        CASE 20 RETURN IG_DRFRIEDLANDER BREAK
+        CASE 21 RETURN IG_FABIEN BREAK
+        CASE 22 RETURN S_M_M_GARDENER_01 BREAK
+        CASE 23 RETURN S_F_M_MAID_01 BREAK
+        CASE 24 RETURN IG_DAVENORTON BREAK
+        CASE 25 RETURN IG_STEVEHAINS BREAK
+        CASE 26 RETURN IG_ANDREAS BREAK
+        CASE 27 RETURN IG_DEVIN BREAK
+        CASE 28 RETURN IG_MOLLY BREAK
+        CASE 29 RETURN IG_SOLOMON BREAK
+        CASE 30 RETURN IG_MILTON BREAK
+        CASE 31 RETURN U_M_Y_ANTONB BREAK
+        CASE 32 RETURN IG_ROCCOPELOSI BREAK
+        CASE 33 RETURN IG_SIEMONYETARIAN BREAK
+        CASE 34 RETURN CS_MARTINMADRAZO BREAK
+        CASE 35 RETURN CS_MANUEL BREAK
+        CASE 36 RETURN IG_CHENGSR BREAK
+        CASE 37 RETURN IG_TAOCHENG BREAK
+        CASE 38 RETURN IG_TAOSTRANSLATOR BREAK
+        CASE 39 RETURN IG_LAZLOW BREAK
+        CASE 40 RETURN IG_MRK BREAK
+        CASE 41 RETURN IG_KAREN_DANIELS BREAK
+        CASE 42 RETURN IG_PAPER BREAK
+        CASE 43 RETURN IG_FBISUIT_01 BREAK
+        CASE 44 RETURN IG_CASEY BREAK
+        CASE 45 RETURN IG_JOHNNYKLEBITZ BREAK
+        CASE 46 RETURN IG_ASHLEY BREAK
+        CASE 47 RETURN IG_TERRY BREAK
+        CASE 48 RETURN IG_CLAY BREAK
+        CASE 49 RETURN IG_ORTEGA BREAK
+        CASE 50 RETURN IG_ONEIL BREAK
+        CASE 51 RETURN IG_BALLASOG BREAK
+        CASE 52 RETURN IG_CAR3GUY1 BREAK
+        CASE 53 RETURN CS_CARBUYER BREAK
+        CASE 54 RETURN HC_GUNMAN BREAK
+        CASE 55 RETURN HC_DRIVER BREAK
+    ENDSWITCH
+    RETURN PLAYER_ZERO
+ENDFUNC
+
+FUNC MODEL_NAMES STORY_CHAR_DEFAULT_MODEL_PAGE_1(INT charId)
+    SWITCH charId
+        CASE 0 RETURN HC_HACKER BREAK
+        CASE 1 RETURN IG_PAIGE BREAK
+        CASE 2 RETURN IG_TALINA BREAK
+        CASE 3 RETURN IG_CHEF2 BREAK
+        CASE 4 RETURN IG_CAR3GUY2 BREAK
+        CASE 5 RETURN CSB_HUGH BREAK
+        CASE 6 RETURN U_M_O_FINGURU_01 BREAK
+        CASE 7 RETURN G_M_Y_MEXGOON_01 BREAK
+        CASE 8 RETURN IG_LIFEINVAD_02 BREAK
+        CASE 9 RETURN IG_AGENT14 BREAK
+        CASE 10 RETURN IG_RASHCOSVKI BREAK
+        CASE 11 RETURN IG_TONYA BREAK
+        CASE 12 RETURN IG_HAO BREAK
+        CASE 13 RETURN IG_BEVERLY BREAK
+        CASE 14 RETURN IG_BARRY BREAK
+        CASE 15 RETURN IG_DOM BREAK
+        CASE 16 RETURN IG_MARYANN BREAK
+        CASE 17 RETURN IG_MAUDE BREAK
+        CASE 18 RETURN IG_CLETUS BREAK
+        CASE 19 RETURN IG_OMEGA BREAK
+        CASE 20 RETURN IG_DREYFUSS BREAK
+        CASE 21 RETURN IG_JOSH BREAK
+        CASE 22 RETURN IG_NIGEL BREAK
+        CASE 23 RETURN IG_MRS_THORNHILL BREAK
+        CASE 24 RETURN IG_ABIGAIL BREAK
+        CASE 25 RETURN IG_CHRISFORMAGE BREAK
+        CASE 26 RETURN IG_JIMMYBOSTON BREAK
+        CASE 27 RETURN IG_MARNIE BREAK
+        CASE 28 RETURN IG_TOMEPSILON BREAK
+        CASE 29 RETURN IG_JOEMINUTEMAN BREAK
+        CASE 30 RETURN IG_JOSEF BREAK
+        CASE 31 RETURN IG_MANUEL BREAK
+        CASE 32 RETURN IG_ORLEANS BREAK
+        CASE 33 RETURN IG_HUNTER BREAK
+        CASE 34 RETURN CSB_OSCAR BREAK
+        CASE 35 RETURN IG_RAMP_HIC BREAK
+        CASE 36 RETURN IG_RAMP_HIPSTER BREAK
+        CASE 37 RETURN IG_RAMP_GANG BREAK
+        CASE 38 RETURN IG_RAMP_MEX BREAK
+        CASE 39 RETURN CSB_RAMP_MARINE BREAK
+        CASE 40 RETURN IG_JAY_NORRIS BREAK
+        CASE 41 RETURN U_M_M_ALDINAPOLI BREAK
+        CASE 42 RETURN IG_KERRYMCINTOSH BREAK
+        CASE 43 RETURN IG_TYLERDIX BREAK
+        CASE 44 RETURN U_F_Y_POPPYMICH BREAK
+        CASE 45 RETURN U_F_M_MIRANDA BREAK
+        CASE 46 RETURN IG_BANKMAN BREAK
+        CASE 47 RETURN IG_JEWELASS BREAK
+        CASE 48 RETURN CSB_JANITOR BREAK
+        CASE 49 RETURN U_M_M_FIBARCHITECT BREAK
+        CASE 50 RETURN IG_JANET BREAK
+        CASE 51 RETURN IG_NATALIA BREAK
+        CASE 52 RETURN IG_CLAYPAIN BREAK
+        CASE 53 RETURN IG_DALE BREAK
+        CASE 54 RETURN IG_ZIMBOR BREAK
+        CASE 55 RETURN IG_BENNY BREAK
+    ENDSWITCH
+    RETURN PLAYER_ZERO
+ENDFUNC
+
+FUNC MODEL_NAMES STORY_CHAR_DEFAULT_MODEL(INT charId)
+    IF charId < 56 RETURN STORY_CHAR_DEFAULT_MODEL_PAGE_0(charId) ENDIF
+    RETURN STORY_CHAR_DEFAULT_MODEL_PAGE_1(charId - 56)
+ENDFUNC
+
+FUNC MODEL_NAMES STORY_CHAR_ALT_MODEL_PAGE_0(INT charId)
+    SWITCH charId
+        CASE 0 RETURN PLAYER_ZERO BREAK
+        CASE 1 RETURN PLAYER_ONE BREAK
+        CASE 2 RETURN PLAYER_TWO BREAK
+        CASE 3 RETURN CS_LAMARDAVIS BREAK
+        CASE 4 RETURN CS_LESTERCREST BREAK
+        CASE 5 RETURN CS_AMANDATOWNLEY BREAK
+        CASE 6 RETURN CS_JIMMYDISANTO BREAK
+        CASE 7 RETURN CS_TRACYDISANTO BREAK
+        CASE 8 RETURN A_C_ROTTWEILER BREAK
+        CASE 9 RETURN CS_NERVOUSRON BREAK
+        CASE 10 RETURN CS_WADE BREAK
+        CASE 11 RETURN CSB_CHEF BREAK
+        CASE 12 RETURN CS_FLOYD BREAK
+        CASE 13 RETURN CS_DEBRA BREAK
+        CASE 14 RETURN CS_DENISE BREAK
+        CASE 15 RETURN CS_TANISHA BREAK
+        CASE 16 RETURN CS_STRETCH BREAK
+        CASE 17 RETURN CS_BRAD BREAK
+        CASE 18 RETURN CS_MRSPHILLIPS BREAK
+        CASE 19 RETURN CS_PATRICIA BREAK
+        CASE 20 RETURN CS_DRFRIEDLANDER BREAK
+        CASE 21 RETURN CS_FABIEN BREAK
+        CASE 22 RETURN S_M_M_GARDENER_01 BREAK
+        CASE 23 RETURN S_F_M_MAID_01 BREAK
+        CASE 24 RETURN CS_DAVENORTON BREAK
+        CASE 25 RETURN CS_STEVEHAINS BREAK
+        CASE 26 RETURN CS_ANDREAS BREAK
+        CASE 27 RETURN CS_DEVIN BREAK
+        CASE 28 RETURN CS_MOLLY BREAK
+        CASE 29 RETURN CS_SOLOMON BREAK
+        CASE 30 RETURN CS_MILTON BREAK
+        CASE 31 RETURN CSB_ANTON BREAK
+        CASE 32 RETURN CSB_ROCCOPELOSI BREAK
+        CASE 33 RETURN CS_SIEMONYETARIAN BREAK
+        CASE 34 RETURN CS_MARTINMADRAZO BREAK
+        CASE 35 RETURN IG_MANUEL BREAK
+        CASE 36 RETURN CS_CHENGSR BREAK
+        CASE 37 RETURN CS_TAOCHENG BREAK
+        CASE 38 RETURN CS_TAOSTRANSLATOR BREAK
+        CASE 39 RETURN CS_LAZLOW BREAK
+        CASE 40 RETURN CS_MRK BREAK
+        CASE 41 RETURN CS_KAREN_DANIELS BREAK
+        CASE 42 RETURN CS_PAPER BREAK
+        CASE 43 RETURN CS_FBISUIT_01 BREAK
+        CASE 44 RETURN CS_CASEY BREAK
+        CASE 45 RETURN CS_JOHNNYKLEBITZ BREAK
+        CASE 46 RETURN CS_ASHLEY BREAK
+        CASE 47 RETURN CS_TERRY BREAK
+        CASE 48 RETURN CS_CLAY BREAK
+        CASE 49 RETURN CSB_ORTEGA BREAK
+        CASE 50 RETURN IG_ONEIL BREAK
+        CASE 51 RETURN CSB_BALLASOG BREAK
+        CASE 52 RETURN CSB_CAR3GUY1 BREAK
+        CASE 53 RETURN CS_CARBUYER BREAK
+        CASE 54 RETURN HC_GUNMAN BREAK
+        CASE 55 RETURN U_M_M_EDTOH BREAK
+    ENDSWITCH
+    RETURN PLAYER_ZERO
+ENDFUNC
+
+FUNC MODEL_NAMES STORY_CHAR_ALT_MODEL_PAGE_1(INT charId)
+    SWITCH charId
+        CASE 0 RETURN IG_LIFEINVAD_01 BREAK
+        CASE 1 RETURN CSB_PAIGE BREAK
+        CASE 2 RETURN IG_TALINA BREAK
+        CASE 3 RETURN CSB_CHEF2 BREAK
+        CASE 4 RETURN CSB_CAR3GUY2 BREAK
+        CASE 5 RETURN CSB_HUGH BREAK
+        CASE 6 RETURN U_M_O_FINGURU_01 BREAK
+        CASE 7 RETURN G_M_Y_MEXGOON_01 BREAK
+        CASE 8 RETURN CS_LIFEINVAD_01 BREAK
+        CASE 9 RETURN CSB_AGENT14 BREAK
+        CASE 10 RETURN CSB_RASHCOSVKI BREAK
+        CASE 11 RETURN CSB_TONYA BREAK
+        CASE 12 RETURN CSB_HAO BREAK
+        CASE 13 RETURN CS_BEVERLY BREAK
+        CASE 14 RETURN CS_BARRY BREAK
+        CASE 15 RETURN CS_DOM BREAK
+        CASE 16 RETURN CS_MARYANN BREAK
+        CASE 17 RETURN CSB_MAUDE BREAK
+        CASE 18 RETURN CSB_CLETUS BREAK
+        CASE 19 RETURN CS_OMEGA BREAK
+        CASE 20 RETURN CS_DREYFUSS BREAK
+        CASE 21 RETURN CS_JOSH BREAK
+        CASE 22 RETURN CS_NIGEL BREAK
+        CASE 23 RETURN CS_MRS_THORNHILL BREAK
+        CASE 24 RETURN CSB_ABIGAIL BREAK
+        CASE 25 RETURN CS_CHRISFORMAGE BREAK
+        CASE 26 RETURN CS_JIMMYBOSTON BREAK
+        CASE 27 RETURN CS_MARNIE BREAK
+        CASE 28 RETURN CS_TOMEPSILON BREAK
+        CASE 29 RETURN CS_JOEMINUTEMAN BREAK
+        CASE 30 RETURN CS_JOSEF BREAK
+        CASE 31 RETURN CS_MANUEL BREAK
+        CASE 32 RETURN CS_ORLEANS BREAK
+        CASE 33 RETURN CS_HUNTER BREAK
+        CASE 34 RETURN CSB_OSCAR BREAK
+        CASE 35 RETURN CSB_RAMP_HIC BREAK
+        CASE 36 RETURN CSB_RAMP_HIPSTER BREAK
+        CASE 37 RETURN CSB_RAMP_GANG BREAK
+        CASE 38 RETURN CSB_RAMP_MEX BREAK
+        CASE 39 RETURN CSB_RAMP_MARINE BREAK
+        CASE 40 RETURN IG_JAY_NORRIS BREAK
+        CASE 41 RETURN U_M_M_ALDINAPOLI BREAK
+        CASE 42 RETURN IG_KERRYMCINTOSH BREAK
+        CASE 43 RETURN IG_TYLERDIX BREAK
+        CASE 44 RETURN U_F_Y_POPPYMICH BREAK
+        CASE 45 RETURN U_F_M_MIRANDA BREAK
+        CASE 46 RETURN CS_BANKMAN BREAK
+        CASE 47 RETURN CS_JEWELASS BREAK
+        CASE 48 RETURN S_M_M_JANITOR BREAK
+        CASE 49 RETURN U_M_M_FIBARCHITECT BREAK
+        CASE 50 RETURN CS_JANET BREAK
+        CASE 51 RETURN CS_NATALIA BREAK
+        CASE 52 RETURN IG_CLAYPAIN BREAK
+        CASE 53 RETURN CS_DALE BREAK
+        CASE 54 RETURN CS_ZIMBOR BREAK
+        CASE 55 RETURN IG_BENNY BREAK
+    ENDSWITCH
+    RETURN PLAYER_ZERO
+ENDFUNC
+
+FUNC MODEL_NAMES STORY_CHAR_ALT_MODEL(INT charId)
+    IF charId < 56 RETURN STORY_CHAR_ALT_MODEL_PAGE_0(charId) ENDIF
+    RETURN STORY_CHAR_ALT_MODEL_PAGE_1(charId - 56)
+ENDFUNC
+
+FUNC STRING STORY_CHAR_DEFAULT_MODEL_NAME_PAGE_0(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "PLAYER_ZERO" BREAK
+        CASE 1 RETURN "PLAYER_ONE" BREAK
+        CASE 2 RETURN "PLAYER_TWO" BREAK
+        CASE 3 RETURN "IG_LAMARDAVIS" BREAK
+        CASE 4 RETURN "IG_LESTERCREST" BREAK
+        CASE 5 RETURN "IG_AMANDATOWNLEY" BREAK
+        CASE 6 RETURN "IG_JIMMYDISANTO" BREAK
+        CASE 7 RETURN "IG_TRACYDISANTO" BREAK
+        CASE 8 RETURN "A_C_CHOP" BREAK
+        CASE 9 RETURN "IG_NERVOUSRON" BREAK
+        CASE 10 RETURN "IG_WADE" BREAK
+        CASE 11 RETURN "IG_CHEF" BREAK
+        CASE 12 RETURN "IG_FLOYD" BREAK
+        CASE 13 RETURN "CS_DEBRA" BREAK
+        CASE 14 RETURN "IG_DENISE" BREAK
+        CASE 15 RETURN "IG_TANISHA" BREAK
+        CASE 16 RETURN "IG_STRETCH" BREAK
+        CASE 17 RETURN "IG_BRAD" BREAK
+        CASE 18 RETURN "IG_MRSPHILLIPS" BREAK
+        CASE 19 RETURN "IG_PATRICIA" BREAK
+        CASE 20 RETURN "IG_DRFRIEDLANDER" BREAK
+        CASE 21 RETURN "IG_FABIEN" BREAK
+        CASE 22 RETURN "S_M_M_GARDENER_01" BREAK
+        CASE 23 RETURN "S_F_M_MAID_01" BREAK
+        CASE 24 RETURN "IG_DAVENORTON" BREAK
+        CASE 25 RETURN "IG_STEVEHAINS" BREAK
+        CASE 26 RETURN "IG_ANDREAS" BREAK
+        CASE 27 RETURN "IG_DEVIN" BREAK
+        CASE 28 RETURN "IG_MOLLY" BREAK
+        CASE 29 RETURN "IG_SOLOMON" BREAK
+        CASE 30 RETURN "IG_MILTON" BREAK
+        CASE 31 RETURN "U_M_Y_ANTONB" BREAK
+        CASE 32 RETURN "IG_ROCCOPELOSI" BREAK
+        CASE 33 RETURN "IG_SIEMONYETARIAN" BREAK
+        CASE 34 RETURN "CS_MARTINMADRAZO" BREAK
+        CASE 35 RETURN "CS_MANUEL" BREAK
+        CASE 36 RETURN "IG_CHENGSR" BREAK
+        CASE 37 RETURN "IG_TAOCHENG" BREAK
+        CASE 38 RETURN "IG_TAOSTRANSLATOR" BREAK
+        CASE 39 RETURN "IG_LAZLOW" BREAK
+        CASE 40 RETURN "IG_MRK" BREAK
+        CASE 41 RETURN "IG_KAREN_DANIELS" BREAK
+        CASE 42 RETURN "IG_PAPER" BREAK
+        CASE 43 RETURN "IG_FBISUIT_01" BREAK
+        CASE 44 RETURN "IG_CASEY" BREAK
+        CASE 45 RETURN "IG_JOHNNYKLEBITZ" BREAK
+        CASE 46 RETURN "IG_ASHLEY" BREAK
+        CASE 47 RETURN "IG_TERRY" BREAK
+        CASE 48 RETURN "IG_CLAY" BREAK
+        CASE 49 RETURN "IG_ORTEGA" BREAK
+        CASE 50 RETURN "IG_ONEIL" BREAK
+        CASE 51 RETURN "IG_BALLASOG" BREAK
+        CASE 52 RETURN "IG_CAR3GUY1" BREAK
+        CASE 53 RETURN "CS_CARBUYER" BREAK
+        CASE 54 RETURN "HC_GUNMAN" BREAK
+        CASE 55 RETURN "HC_DRIVER" BREAK
+    ENDSWITCH
+    RETURN "PLAYER_ZERO"
+ENDFUNC
+
+FUNC STRING STORY_CHAR_DEFAULT_MODEL_NAME_PAGE_1(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "HC_HACKER" BREAK
+        CASE 1 RETURN "IG_PAIGE" BREAK
+        CASE 2 RETURN "IG_TALINA" BREAK
+        CASE 3 RETURN "IG_CHEF2" BREAK
+        CASE 4 RETURN "IG_CAR3GUY2" BREAK
+        CASE 5 RETURN "CSB_HUGH" BREAK
+        CASE 6 RETURN "U_M_O_FINGURU_01" BREAK
+        CASE 7 RETURN "G_M_Y_MEXGOON_01" BREAK
+        CASE 8 RETURN "IG_LIFEINVAD_02" BREAK
+        CASE 9 RETURN "IG_AGENT14" BREAK
+        CASE 10 RETURN "IG_RASHCOSVKI" BREAK
+        CASE 11 RETURN "IG_TONYA" BREAK
+        CASE 12 RETURN "IG_HAO" BREAK
+        CASE 13 RETURN "IG_BEVERLY" BREAK
+        CASE 14 RETURN "IG_BARRY" BREAK
+        CASE 15 RETURN "IG_DOM" BREAK
+        CASE 16 RETURN "IG_MARYANN" BREAK
+        CASE 17 RETURN "IG_MAUDE" BREAK
+        CASE 18 RETURN "IG_CLETUS" BREAK
+        CASE 19 RETURN "IG_OMEGA" BREAK
+        CASE 20 RETURN "IG_DREYFUSS" BREAK
+        CASE 21 RETURN "IG_JOSH" BREAK
+        CASE 22 RETURN "IG_NIGEL" BREAK
+        CASE 23 RETURN "IG_MRS_THORNHILL" BREAK
+        CASE 24 RETURN "IG_ABIGAIL" BREAK
+        CASE 25 RETURN "IG_CHRISFORMAGE" BREAK
+        CASE 26 RETURN "IG_JIMMYBOSTON" BREAK
+        CASE 27 RETURN "IG_MARNIE" BREAK
+        CASE 28 RETURN "IG_TOMEPSILON" BREAK
+        CASE 29 RETURN "IG_JOEMINUTEMAN" BREAK
+        CASE 30 RETURN "IG_JOSEF" BREAK
+        CASE 31 RETURN "IG_MANUEL" BREAK
+        CASE 32 RETURN "IG_ORLEANS" BREAK
+        CASE 33 RETURN "IG_HUNTER" BREAK
+        CASE 34 RETURN "CSB_OSCAR" BREAK
+        CASE 35 RETURN "IG_RAMP_HIC" BREAK
+        CASE 36 RETURN "IG_RAMP_HIPSTER" BREAK
+        CASE 37 RETURN "IG_RAMP_GANG" BREAK
+        CASE 38 RETURN "IG_RAMP_MEX" BREAK
+        CASE 39 RETURN "CSB_RAMP_MARINE" BREAK
+        CASE 40 RETURN "IG_JAY_NORRIS" BREAK
+        CASE 41 RETURN "U_M_M_ALDINAPOLI" BREAK
+        CASE 42 RETURN "IG_KERRYMCINTOSH" BREAK
+        CASE 43 RETURN "IG_TYLERDIX" BREAK
+        CASE 44 RETURN "U_F_Y_POPPYMICH" BREAK
+        CASE 45 RETURN "U_F_M_MIRANDA" BREAK
+        CASE 46 RETURN "IG_BANKMAN" BREAK
+        CASE 47 RETURN "IG_JEWELASS" BREAK
+        CASE 48 RETURN "CSB_JANITOR" BREAK
+        CASE 49 RETURN "U_M_M_FIBARCHITECT" BREAK
+        CASE 50 RETURN "IG_JANET" BREAK
+        CASE 51 RETURN "IG_NATALIA" BREAK
+        CASE 52 RETURN "IG_CLAYPAIN" BREAK
+        CASE 53 RETURN "IG_DALE" BREAK
+        CASE 54 RETURN "IG_ZIMBOR" BREAK
+        CASE 55 RETURN "IG_BENNY" BREAK
+    ENDSWITCH
+    RETURN "PLAYER_ZERO"
+ENDFUNC
+
+FUNC STRING STORY_CHAR_DEFAULT_MODEL_NAME(INT charId)
+    IF charId < 56 RETURN STORY_CHAR_DEFAULT_MODEL_NAME_PAGE_0(charId) ENDIF
+    RETURN STORY_CHAR_DEFAULT_MODEL_NAME_PAGE_1(charId - 56)
+ENDFUNC
+
+FUNC STRING STORY_CHAR_SCENE_HANDLE_1_PAGE_0(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "Franklin" BREAK
+        CASE 1 RETURN "Michael" BREAK
+        CASE 2 RETURN "Trevor" BREAK
+        CASE 3 RETURN "Lamar" BREAK
+        CASE 4 RETURN "Lester" BREAK
+        CASE 5 RETURN "Amanda" BREAK
+        CASE 6 RETURN "Jimmy" BREAK
+        CASE 7 RETURN "Tracey" BREAK
+        CASE 8 RETURN "Chop" BREAK
+        CASE 9 RETURN "Ron" BREAK
+        CASE 10 RETURN "Wade" BREAK
+        CASE 11 RETURN "Chef" BREAK
+        CASE 12 RETURN "Floyd" BREAK
+        CASE 13 RETURN "Debra" BREAK
+        CASE 14 RETURN "Denise" BREAK
+        CASE 15 RETURN "Tanisha" BREAK
+        CASE 16 RETURN "Stretch" BREAK
+        CASE 17 RETURN "Brad" BREAK
+        CASE 18 RETURN "Mrs_Phillips" BREAK
+        CASE 19 RETURN "Patricia" BREAK
+        CASE 20 RETURN "Dr_Friedlander" BREAK
+        CASE 21 RETURN "Fabien" BREAK
+        CASE 22 RETURN "Gardener" BREAK
+        CASE 23 RETURN "Maid" BREAK
+        CASE 24 RETURN "Dave" BREAK
+        CASE 25 RETURN "Steve" BREAK
+        CASE 26 RETURN "Andreas" BREAK
+        CASE 27 RETURN "Devin" BREAK
+        CASE 28 RETURN "Molly" BREAK
+        CASE 29 RETURN "Solomon" BREAK
+        CASE 30 RETURN "Milton" BREAK
+        CASE 31 RETURN "Anton" BREAK
+        CASE 32 RETURN "Rocco" BREAK
+        CASE 33 RETURN "Simeon" BREAK
+        CASE 34 RETURN "Martin" BREAK
+        CASE 35 RETURN "Javier" BREAK
+        CASE 36 RETURN "Cheng" BREAK
+        CASE 37 RETURN "Tao" BREAK
+        CASE 38 RETURN "Translator" BREAK
+        CASE 39 RETURN "Lazlow" BREAK
+        CASE 40 RETURN "Mr_K" BREAK
+        CASE 41 RETURN "Karen" BREAK
+        CASE 42 RETURN "Paper" BREAK
+        CASE 43 RETURN "FBI_Suit" BREAK
+        CASE 44 RETURN "Casey" BREAK
+        CASE 45 RETURN "Johnny" BREAK
+        CASE 46 RETURN "Ashley" BREAK
+        CASE 47 RETURN "Terry" BREAK
+        CASE 48 RETURN "Clay" BREAK
+        CASE 49 RETURN "Ortega" BREAK
+        CASE 50 RETURN "ONeil" BREAK
+        CASE 51 RETURN "Ballas_OG" BREAK
+        CASE 52 RETURN "Chad" BREAK
+        CASE 53 RETURN "CarBuyer" BREAK
+        CASE 54 RETURN "Packie" BREAK
+        CASE 55 RETURN "HC_Driver" BREAK
+    ENDSWITCH
+    RETURN ""
+ENDFUNC
+
+FUNC STRING STORY_CHAR_SCENE_HANDLE_1_PAGE_1(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "Rickie" BREAK
+        CASE 1 RETURN "Paige" BREAK
+        CASE 2 RETURN "Taliana" BREAK
+        CASE 3 RETURN "Chef2" BREAK
+        CASE 4 RETURN "Daryl" BREAK
+        CASE 5 RETURN "Hugh" BREAK
+        CASE 6 RETURN "Karl" BREAK
+        CASE 7 RETURN "Gustavo" BREAK
+        CASE 8 RETURN "Christian" BREAK
+        CASE 9 RETURN "Agent14" BREAK
+        CASE 10 RETURN "Rashkovsky" BREAK
+        CASE 11 RETURN "Tonya" BREAK
+        CASE 12 RETURN "Hao" BREAK
+        CASE 13 RETURN "Beverly" BREAK
+        CASE 14 RETURN "Barry" BREAK
+        CASE 15 RETURN "Dom" BREAK
+        CASE 16 RETURN "MaryAnn" BREAK
+        CASE 17 RETURN "Maude" BREAK
+        CASE 18 RETURN "Cletus" BREAK
+        CASE 19 RETURN "Omega" BREAK
+        CASE 20 RETURN "Dreyfuss" BREAK
+        CASE 21 RETURN "Josh" BREAK
+        CASE 22 RETURN "Nigel" BREAK
+        CASE 23 RETURN "Mrs_Thornhill" BREAK
+        CASE 24 RETURN "Abigail" BREAK
+        CASE 25 RETURN "Cris" BREAK
+        CASE 26 RETURN "Jimmy_Boston" BREAK
+        CASE 27 RETURN "Marnie" BREAK
+        CASE 28 RETURN "Tom" BREAK
+        CASE 29 RETURN "Joe" BREAK
+        CASE 30 RETURN "Josef" BREAK
+        CASE 31 RETURN "Manuel" BREAK
+        CASE 32 RETURN "Orleans" BREAK
+        CASE 33 RETURN "Hunter" BREAK
+        CASE 34 RETURN "Oscar" BREAK
+        CASE 35 RETURN "Ramp_Hic" BREAK
+        CASE 36 RETURN "Ramp_Hipster" BREAK
+        CASE 37 RETURN "Ramp_Gang" BREAK
+        CASE 38 RETURN "Ramp_Mex" BREAK
+        CASE 39 RETURN "Ramp_Marine" BREAK
+        CASE 40 RETURN "Jay_Norris" BREAK
+        CASE 41 RETURN "Al_Di_Napoli" BREAK
+        CASE 42 RETURN "Kerry" BREAK
+        CASE 43 RETURN "Tyler" BREAK
+        CASE 44 RETURN "Poppy" BREAK
+        CASE 45 RETURN "Miranda" BREAK
+        CASE 46 RETURN "Bankman" BREAK
+        CASE 47 RETURN "JewelAss" BREAK
+        CASE 48 RETURN "Janitor" BREAK
+        CASE 49 RETURN "Architect" BREAK
+        CASE 50 RETURN "Janet" BREAK
+        CASE 51 RETURN "Natalia" BREAK
+        CASE 52 RETURN "Clay_Pain" BREAK
+        CASE 53 RETURN "Dale" BREAK
+        CASE 54 RETURN "Zimbor" BREAK
+        CASE 55 RETURN "Benny" BREAK
+    ENDSWITCH
+    RETURN ""
+ENDFUNC
+
+FUNC STRING STORY_CHAR_SCENE_HANDLE_1(INT charId)
+    IF charId < 56 RETURN STORY_CHAR_SCENE_HANDLE_1_PAGE_0(charId) ENDIF
+    RETURN STORY_CHAR_SCENE_HANDLE_1_PAGE_1(charId - 56)
+ENDFUNC
+
+FUNC STRING STORY_CHAR_SCENE_HANDLE_2_PAGE_0(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "Player_Zero" BREAK
+        CASE 1 RETURN "Player_One" BREAK
+        CASE 2 RETURN "Player_Two" BREAK
+        CASE 3 RETURN "Lamar_Davis" BREAK
+        CASE 4 RETURN "Lester_Crest" BREAK
+        CASE 5 RETURN "Amanda_Townley" BREAK
+        CASE 6 RETURN "Jimmy_Disanto" BREAK
+        CASE 7 RETURN "Tracy" BREAK
+        CASE 8 RETURN "Chop_Dog" BREAK
+        CASE 9 RETURN "Nervous_Ron" BREAK
+        CASE 10 RETURN "Wade_Hebert" BREAK
+        CASE 11 RETURN "CSB_Chef" BREAK
+        CASE 12 RETURN "Floyd_Hebert" BREAK
+        CASE 13 RETURN "CS_Debra" BREAK
+        CASE 14 RETURN "Aunt_Denise" BREAK
+        CASE 15 RETURN "CS_Tanisha" BREAK
+        CASE 16 RETURN "CS_Stretch" BREAK
+        CASE 17 RETURN "CS_Brad" BREAK
+        CASE 18 RETURN "MrsPhillips" BREAK
+        CASE 19 RETURN "CS_Patricia" BREAK
+        CASE 20 RETURN "Friedlander" BREAK
+        CASE 21 RETURN "Fabian" BREAK
+        CASE 22 RETURN "Carlos" BREAK
+        CASE 23 RETURN "Eva" BREAK
+        CASE 24 RETURN "Dave_Norton" BREAK
+        CASE 25 RETURN "Steve_Hains" BREAK
+        CASE 26 RETURN "Sanchez" BREAK
+        CASE 27 RETURN "Devin_Weston" BREAK
+        CASE 28 RETURN "CS_Molly" BREAK
+        CASE 29 RETURN "Solomon_Richards" BREAK
+        CASE 30 RETURN "CS_Milton" BREAK
+        CASE 31 RETURN "CSB_Anton" BREAK
+        CASE 32 RETURN "Rocco_Pelosi" BREAK
+        CASE 33 RETURN "Siemon" BREAK
+        CASE 34 RETURN "Martin_Madrazo" BREAK
+        CASE 35 RETURN "CS_Manuel" BREAK
+        CASE 36 RETURN "Cheng_Sr" BREAK
+        CASE 37 RETURN "Tao_Cheng" BREAK
+        CASE 38 RETURN "Taos_Translator" BREAK
+        CASE 39 RETURN "CS_Lazlow" BREAK
+        CASE 40 RETURN "MrK" BREAK
+        CASE 41 RETURN "Michelle" BREAK
+        CASE 42 RETURN "United_Paper" BREAK
+        CASE 43 RETURN "Agent" BREAK
+        CASE 44 RETURN "CS_Casey" BREAK
+        CASE 45 RETURN "Johnny_Klebitz" BREAK
+        CASE 46 RETURN "CS_Ashley" BREAK
+        CASE 47 RETURN "CS_Terry" BREAK
+        CASE 48 RETURN "CS_Clay" BREAK
+        CASE 49 RETURN "CSB_Ortega" BREAK
+        CASE 50 RETURN "Elwood" BREAK
+        CASE 51 RETURN "D" BREAK
+        CASE 52 RETURN "Car3Guy1" BREAK
+        CASE 53 RETURN "CS_CarBuyer" BREAK
+        CASE 54 RETURN "HC_Gunman" BREAK
+        CASE 55 RETURN "Eddie_Toh" BREAK
+    ENDSWITCH
+    RETURN ""
+ENDFUNC
+
+FUNC STRING STORY_CHAR_SCENE_HANDLE_2_PAGE_1(INT charId)
+    SWITCH charId
+        CASE 0 RETURN "HC_Hacker" BREAK
+        CASE 1 RETURN "CSB_Paige" BREAK
+        CASE 2 RETURN "Talina" BREAK
+        CASE 3 RETURN "CSB_Chef2" BREAK
+        CASE 4 RETURN "Norm" BREAK
+        CASE 5 RETURN "CSB_Hugh" BREAK
+        CASE 6 RETURN "FinGuru" BREAK
+        CASE 7 RETURN "Gustavo_Mota" BREAK
+        CASE 8 RETURN "Lifeinvader" BREAK
+        CASE 9 RETURN "MP_Agent14" BREAK
+        CASE 10 RETURN "Rashcosvki" BREAK
+        CASE 11 RETURN "CSB_Tonya" BREAK
+        CASE 12 RETURN "CSB_Hao" BREAK
+        CASE 13 RETURN "CS_Beverly" BREAK
+        CASE 14 RETURN "CS_Barry" BREAK
+        CASE 15 RETURN "CS_Dom" BREAK
+        CASE 16 RETURN "Mary_Ann" BREAK
+        CASE 17 RETURN "CSB_Maude" BREAK
+        CASE 18 RETURN "CSB_Cletus" BREAK
+        CASE 19 RETURN "CS_Omega" BREAK
+        CASE 20 RETURN "CS_Dreyfuss" BREAK
+        CASE 21 RETURN "CS_Josh" BREAK
+        CASE 22 RETURN "CS_Nigel" BREAK
+        CASE 23 RETURN "Thornhill" BREAK
+        CASE 24 RETURN "CSB_Abigail" BREAK
+        CASE 25 RETURN "Chris_Formage" BREAK
+        CASE 26 RETURN "JimmyBoston" BREAK
+        CASE 27 RETURN "CS_Marnie" BREAK
+        CASE 28 RETURN "Tom_Epsilon" BREAK
+        CASE 29 RETURN "Joe_Minuteman" BREAK
+        CASE 30 RETURN "CS_Josef" BREAK
+        CASE 31 RETURN "IG_Manuel" BREAK
+        CASE 32 RETURN "Sasquatch" BREAK
+        CASE 33 RETURN "CS_Hunter" BREAK
+        CASE 34 RETURN "CSB_Oscar" BREAK
+        CASE 35 RETURN "Hic" BREAK
+        CASE 36 RETURN "Hipster" BREAK
+        CASE 37 RETURN "Gang" BREAK
+        CASE 38 RETURN "Mex" BREAK
+        CASE 39 RETURN "Marine" BREAK
+        CASE 40 RETURN "JayNorris" BREAK
+        CASE 41 RETURN "Napoli" BREAK
+        CASE 42 RETURN "Kerry_McIntosh" BREAK
+        CASE 43 RETURN "Tyler_Dixon" BREAK
+        CASE 44 RETURN "Poppy_Mitchell" BREAK
+        CASE 45 RETURN "Miranda_Cowan" BREAK
+        CASE 46 RETURN "Bank_Manager" BREAK
+        CASE 47 RETURN "Jewel_Clerk" BREAK
+        CASE 48 RETURN "CSB_Janitor" BREAK
+        CASE 49 RETURN "FIB_Architect" BREAK
+        CASE 50 RETURN "CS_Janet" BREAK
+        CASE 51 RETURN "CS_Natalia" BREAK
+        CASE 52 RETURN "ClayPain" BREAK
+        CASE 53 RETURN "CS_Dale" BREAK
+        CASE 54 RETURN "CS_Zimbor" BREAK
+        CASE 55 RETURN "IG_Benny" BREAK
+    ENDSWITCH
+    RETURN ""
+ENDFUNC
+
+FUNC STRING STORY_CHAR_SCENE_HANDLE_2(INT charId)
+    IF charId < 56 RETURN STORY_CHAR_SCENE_HANDLE_2_PAGE_0(charId) ENDIF
+    RETURN STORY_CHAR_SCENE_HANDLE_2_PAGE_1(charId - 56)
+ENDFUNC
+
+// Returns 0 = Franklin (PLAYER_ZERO), 1 = Michael (PLAYER_ONE), 2 = Trevor (PLAYER_TWO).
+FUNC INT ACTIVE_STORY_PROTAGONIST_SLOT()
+    MODEL_NAMES liveModel = GET_ENTITY_MODEL(PLAYER_PED_ID())
+    IF liveModel = PLAYER_ZERO RETURN 0 ENDIF
+    IF liveModel = PLAYER_ONE RETURN 1 ENDIF
+    IF liveModel = PLAYER_TWO RETURN 2 ENDIF
+    IF g_character_slot < 0 RETURN 0 ENDIF
+    IF g_character_slot > 2 RETURN 2 ENDIF
+    RETURN g_character_slot
+ENDFUNC
+
+FUNC INT STORY_CHAR_VISIBLE_COUNT()
+    RETURN STORY_CHAR_COUNT - 1
+ENDFUNC
+
+FUNC INT STORY_CHAR_ID_FOR_VISIBLE_ROW(INT visRow)
+    INT activeSlot = ACTIVE_STORY_PROTAGONIST_SLOT()
+    IF visRow < 0 visRow = 0 ENDIF
+    IF visRow >= STORY_CHAR_COUNT - 1 visRow = STORY_CHAR_COUNT - 2 ENDIF
+    IF visRow < activeSlot
+        RETURN visRow
+    ENDIF
+    RETURN visRow + 1
+ENDFUNC
+
+FUNC MODEL_NAMES STORY_CHAR_SELECTED_MODEL(INT charId)
+    INT choiceVal = 0
+    IF charId < 0 OR charId >= STORY_CHAR_COUNT
+        RETURN PLAYER_ZERO
+    ENDIF
+    choiceVal = g_story_ped_choice[charId]
+    IF choiceVal > 0 AND choiceVal <= PED_CHOICE_COUNT()
+        RETURN PED_MODEL_FOR_CHOICE(choiceVal - 1)
+    ENDIF
+    IF choiceVal = -1
+        RETURN g_story_ped_custom_model[charId]
+    ENDIF
+    RETURN STORY_CHAR_DEFAULT_MODEL(charId)
+ENDFUNC
+
+FUNC STRING STORY_CHAR_SELECTED_MODEL_NAME(INT charId)
+    INT choiceVal = 0
+    INT catIdx = -1
+    IF charId < 0 OR charId >= STORY_CHAR_COUNT
+        RETURN "PLAYER_ZERO"
+    ENDIF
+    choiceVal = g_story_ped_choice[charId]
+    IF choiceVal > 0 AND choiceVal <= PED_CHOICE_COUNT()
+        RETURN PED_NAME_FOR_CHOICE(choiceVal - 1)
+    ENDIF
+    IF choiceVal = -1
+        catIdx = PED_CHOICE_FOR_MODEL(g_story_ped_custom_model[charId])
+        IF catIdx >= 0
+            RETURN PED_NAME_FOR_CHOICE(catIdx)
+        ENDIF
+        RETURN g_story_ped_custom_label
+    ENDIF
+    RETURN STORY_CHAR_DEFAULT_MODEL_NAME(charId)
+ENDFUNC
+
+FUNC BOOL STORY_CHAR_IS_CUSTOMIZED(INT charId)
+    IF charId < 0 OR charId >= STORY_CHAR_COUNT RETURN FALSE ENDIF
+    IF charId = ACTIVE_STORY_PROTAGONIST_SLOT() RETURN FALSE ENDIF
+    IF g_story_ped_choice[charId] = 0 RETURN FALSE ENDIF
+    RETURN STORY_CHAR_SELECTED_MODEL(charId) != STORY_CHAR_DEFAULT_MODEL(charId)
+ENDFUNC
+
+PROC REFRESH_STORY_PEDS_ACTIVE_FLAG()
+    INT idx = 0
+    g_story_peds_any_active = FALSE
+    WHILE idx < STORY_CHAR_COUNT
+        IF g_story_ped_choice[idx] != 0
+            g_story_peds_any_active = TRUE
+            EXIT
+        ENDIF
+        idx = idx + 1
+    ENDWHILE
+ENDPROC
+
+PROC SET_STORY_CHAR_CATALOG_CHOICE(INT charId, INT catalogChoice)
+    MODEL_NAMES pickedModel = PLAYER_ZERO
+    IF charId < 0 OR charId >= STORY_CHAR_COUNT EXIT ENDIF
+    IF catalogChoice < 0 OR catalogChoice >= PED_CHOICE_COUNT() EXIT ENDIF
+    pickedModel = PED_MODEL_FOR_CHOICE(catalogChoice)
+    IF pickedModel = STORY_CHAR_DEFAULT_MODEL(charId)
+        g_story_ped_choice[charId] = 0
+    ELSE
+        g_story_ped_choice[charId] = catalogChoice + 1
+    ENDIF
+    g_story_ped_custom_model[charId] = pickedModel
+    g_story_ped_search_not_found = FALSE
+    IF charId = 0 g_franklin_ped = pickedModel ENDIF
+    IF charId = 1 g_michael_ped = pickedModel ENDIF
+    IF charId = 2 g_trevor_ped = pickedModel ENDIF
+    REFRESH_STORY_PEDS_ACTIVE_FLAG()
+ENDPROC
+
+PROC SET_STORY_CHAR_CUSTOM_MODEL(INT charId, MODEL_NAMES customModel, STRING customLabel)
+    INT catIdx = -1
+    IF charId < 0 OR charId >= STORY_CHAR_COUNT EXIT ENDIF
+    catIdx = PED_CHOICE_FOR_MODEL(customModel)
+    IF catIdx >= 0
+        SET_STORY_CHAR_CATALOG_CHOICE(charId, catIdx)
+        EXIT
+    ENDIF
+    IF customModel = STORY_CHAR_DEFAULT_MODEL(charId)
+        g_story_ped_choice[charId] = 0
+    ELSE
+        g_story_ped_choice[charId] = -1
+    ENDIF
+    g_story_ped_custom_model[charId] = customModel
+    g_story_ped_custom_label = customLabel
+    g_story_ped_search_not_found = FALSE
+    IF charId = 0 g_franklin_ped = customModel ENDIF
+    IF charId = 1 g_michael_ped = customModel ENDIF
+    IF charId = 2 g_trevor_ped = customModel ENDIF
+    REFRESH_STORY_PEDS_ACTIVE_FLAG()
+ENDPROC
+
+PROC APPLY_RANDOM_STORY_CHAR_PED()
+    INT attempts = 0
+    INT choice = 0
+    WHILE attempts < 8
+        choice = GET_RANDOM_INT_IN_RANGE(0, PED_CHOICE_COUNT())
+        IF IS_MODEL_IN_CDIMAGE(PED_MODEL_FOR_CHOICE(choice)) AND IS_MODEL_VALID(PED_MODEL_FOR_CHOICE(choice))
+            SET_STORY_CHAR_CATALOG_CHOICE(g_story_ped_active_char, choice)
+            EXIT
+        ENDIF
+        attempts = attempts + 1
+    ENDWHILE
+ENDPROC
+
+PROC DRAW_CUSTOM_STORY_PEDS_PAGE()
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("CUSTOM STORY PEDS", "PEDS DE HISTORIA", "故事角色模型", "STORY-CHARAKTER-PEDS", "ストーリーPED変更", "МОДЕЛИ СЮЖЕТНЫХ PED", "PEDS DO MODO HISTÓRIA", "PEDS DU MODE HISTOIRE"))
+    DRAW_MENU_VERSION_TAG()
+    INT index = g_scroll
+    INT row = 0
+    INT visTotal = STORY_CHAR_VISIBLE_COUNT()
+    INT charId = 0
+    WHILE row < 8 AND index < visTotal
+        FLOAT y = 0.268 + (TO_FLOAT(row) * ROW_H)
+        charId = STORY_CHAR_ID_FOR_VISIBLE_ROW(index)
+        IF g_story_ped_choice[charId] != 0
+            DRAW_OPTION(y, STORY_CHAR_DISPLAY_NAME(charId), STORY_CHAR_SELECTED_MODEL_NAME(charId), g_item = index, 1)
+        ELSE
+            DRAW_OPTION(y, STORY_CHAR_DISPLAY_NAME(charId), STORY_CHAR_SELECTED_MODEL_NAME(charId), g_item = index, 2)
+        ENDIF
+        index = index + 1
+        row = row + 1
+    ENDWHILE
+ENDPROC
+
+PROC DRAW_STORY_PED_PICKER_PAGE()
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, STORY_CHAR_DISPLAY_NAME(g_story_ped_active_char))
+    DRAW_MENU_VERSION_TAG()
+    INT index = g_scroll
+    INT row = 0
+    WHILE row < 8 AND index < PED_CHOICE_COUNT() + 2
+        FLOAT y = 0.268 + (TO_FLOAT(row) * ROW_H)
+        IF index = 0
+            IF g_story_ped_search_not_found
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "NOT FOUND", g_item = index, 0)
+            ELSE
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), STORY_CHAR_SELECTED_MODEL_NAME(g_story_ped_active_char), g_item = index, 2)
+            ENDIF
+        ELIF index = 1
+            DRAW_OPTION(y, TR("Random PED", "PED aleatorio", "随机模型", "Zufälliges PED", "ランダムPED", "Случайный PED", "PED Aleatório", "PED aléatoire"), "APPLY", g_item = index, 2)
+        ELSE
+            DRAW_OPTION(y, TR("PED:", "PED:", "模型:", "PED:", "PED:", "PED:", "PED:", "PED :"), PED_NAME_FOR_CHOICE(index - 2), g_item = index, 2)
+        ENDIF
+        index = index + 1
+        row = row + 1
+    ENDWHILE
+ENDPROC
+
+PROC INIT_STORY_PEDS_DEFAULTS()
+    INT idx = 0
+    WHILE idx < STORY_CS_MAX
+        g_story_cs_char[idx] = -1
+        g_story_cs_ped[idx] = NULL
+        g_story_cs_model[idx] = DUMMY_MODEL_FOR_SCRIPT
+        g_story_cs_registered[idx] = FALSE
+        idx = idx + 1
+    ENDWHILE
+    idx = 0
+    WHILE idx < STORY_PROXY_MAX
+        g_story_proxy_char[idx] = -1
+        g_story_proxy_real[idx] = NULL
+        g_story_proxy_ped[idx] = NULL
+        g_story_proxy_model[idx] = DUMMY_MODEL_FOR_SCRIPT
+        g_story_proxy_task_ms[idx] = 0
+        idx = idx + 1
+    ENDWHILE
+    g_story_cs_was_active = FALSE
+    g_story_peds_any_active = FALSE
+ENDPROC
+
+PROC CLEANUP_STORY_CUTSCENE_SLOTS()
+    INT s = 0
+    WHILE s < STORY_CS_MAX
+        IF DOES_ENTITY_EXIST(g_story_cs_ped[s])
+            SET_ENTITY_AS_MISSION_ENTITY(g_story_cs_ped[s], TRUE, TRUE)
+            DELETE_PED(g_story_cs_ped[s])
+        ENDIF
+        g_story_cs_ped[s] = NULL
+        IF g_story_cs_model[s] != DUMMY_MODEL_FOR_SCRIPT
+            SET_MODEL_AS_NO_LONGER_NEEDED(g_story_cs_model[s])
+            g_story_cs_model[s] = DUMMY_MODEL_FOR_SCRIPT
+        ENDIF
+        g_story_cs_char[s] = -1
+        g_story_cs_registered[s] = FALSE
+        s = s + 1
+    ENDWHILE
+ENDPROC
+
+PROC CLEANUP_STORY_PROXY_SLOT(INT slot)
+    IF slot < 0 OR slot >= STORY_PROXY_MAX EXIT ENDIF
+    IF DOES_ENTITY_EXIST(g_story_proxy_real[slot])
+        RESET_ENTITY_ALPHA(g_story_proxy_real[slot])
+    ENDIF
+    g_story_proxy_real[slot] = NULL
+    IF DOES_ENTITY_EXIST(g_story_proxy_ped[slot])
+        IF IS_ENTITY_ATTACHED(g_story_proxy_ped[slot])
+            DETACH_ENTITY(g_story_proxy_ped[slot], FALSE, FALSE)
+        ENDIF
+        SET_ENTITY_AS_MISSION_ENTITY(g_story_proxy_ped[slot], TRUE, TRUE)
+        DELETE_PED(g_story_proxy_ped[slot])
+    ENDIF
+    g_story_proxy_ped[slot] = NULL
+    IF g_story_proxy_model[slot] != DUMMY_MODEL_FOR_SCRIPT
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_story_proxy_model[slot])
+        g_story_proxy_model[slot] = DUMMY_MODEL_FOR_SCRIPT
+    ENDIF
+    g_story_proxy_char[slot] = -1
+    g_story_proxy_task_ms[slot] = 0
+ENDPROC
+
+PROC CLEANUP_ALL_STORY_PROXIES()
+    INT s = 0
+    WHILE s < STORY_PROXY_MAX
+        IF g_story_proxy_char[s] >= 0 OR DOES_ENTITY_EXIST(g_story_proxy_ped[s])
+            CLEANUP_STORY_PROXY_SLOT(s)
+        ENDIF
+        s = s + 1
+    ENDWHILE
+ENDPROC
+
+FUNC BOOL IS_STORY_CHAR_IN_CS_SLOTS(INT charId)
+    INT s = 0
+    WHILE s < STORY_CS_MAX
+        IF g_story_cs_char[s] = charId RETURN TRUE ENDIF
+        s = s + 1
+    ENDWHILE
+    RETURN FALSE
+ENDFUNC
+
+FUNC STRING RESOLVE_ACTIVE_CUTSCENE_HANDLE(INT charId)
+    STRING h1 = STORY_CHAR_SCENE_HANDLE_1(charId)
+    STRING h2 = STORY_CHAR_SCENE_HANDLE_2(charId)
+    IF NOT IS_STRING_NULL_OR_EMPTY(h1)
+        IF DOES_CUTSCENE_HANDLE_EXIST(h1) = CHSR_HANDLE_EXISTS
+            RETURN h1
+        ENDIF
+    ENDIF
+    IF NOT IS_STRING_NULL_OR_EMPTY(h2)
+        IF DOES_CUTSCENE_HANDLE_EXIST(h2) = CHSR_HANDLE_EXISTS
+            RETURN h2
+        ENDIF
+    ENDIF
+    RETURN ""
+ENDFUNC
+
+PROC PROCESS_STORY_PEDS_CUTSCENE()
+    INT s = 0
+    INT charId = 0
+    STRING handle = ""
+    MODEL_NAMES targetModel = DUMMY_MODEL_FOR_SCRIPT
+    MODEL_NAMES defModel = DUMMY_MODEL_FOR_SCRIPT
+    MODEL_NAMES altModel = DUMMY_MODEL_FOR_SCRIPT
+    VECTOR basePos = <<0.0, 0.0, 0.0>>
+    VECTOR csCoords = <<0.0, 0.0, 0.0>>
+    VECTOR csRot = <<0.0, 0.0, 0.0>>
+    ENTITY_INDEX csEnt = NULL
+    ENTITY_INDEX regEnt = NULL
+    PED_INDEX csEntPed = NULL
+
+    // Clean up any gameplay proxies while a cutscene owns the scene so proxy
+    // peds cannot photobomb the cutscene camera.
+    CLEANUP_ALL_STORY_PROXIES()
+    g_story_cs_was_active = TRUE
+
+    // 1. Discover any customized story character whose cutscene handle exists.
+    charId = 0
+    WHILE charId < STORY_CHAR_COUNT
+        IF STORY_CHAR_IS_CUSTOMIZED(charId) AND NOT IS_STORY_CHAR_IN_CS_SLOTS(charId)
+            handle = RESOLVE_ACTIVE_CUTSCENE_HANDLE(charId)
+            IF NOT IS_STRING_NULL_OR_EMPTY(handle)
+                s = 0
+                WHILE s < STORY_CS_MAX
+                    IF g_story_cs_char[s] < 0
+                        targetModel = STORY_CHAR_SELECTED_MODEL(charId)
+                        IF IS_MODEL_IN_CDIMAGE(targetModel) AND IS_MODEL_VALID(targetModel)
+                            g_story_cs_char[s] = charId
+                            g_story_cs_model[s] = targetModel
+                            g_story_cs_registered[s] = FALSE
+                            REQUEST_MODEL(targetModel)
+                        ENDIF
+                        s = STORY_CS_MAX
+                    ELSE
+                        s = s + 1
+                    ENDIF
+                ENDWHILE
+            ENDIF
+        ENDIF
+        charId = charId + 1
+    ENDWHILE
+
+    // 2. Drive streaming flags, proxy registration, and fallback sync for active cutscene slots.
+    s = 0
+    WHILE s < STORY_CS_MAX
+        charId = g_story_cs_char[s]
+        IF charId >= 0
+            handle = RESOLVE_ACTIVE_CUTSCENE_HANDLE(charId)
+            targetModel = g_story_cs_model[s]
+            defModel = STORY_CHAR_DEFAULT_MODEL(charId)
+            altModel = STORY_CHAR_ALT_MODEL(charId)
+            IF NOT IS_STRING_NULL_OR_EMPTY(handle)
+                IF NOT HAS_MODEL_LOADED(targetModel)
+                    REQUEST_MODEL(targetModel)
+                ENDIF
+                IF CAN_REQUEST_ASSETS_FOR_CUTSCENE_ENTITY()
+                    SET_CUTSCENE_ENTITY_STREAMING_FLAGS(handle, DUMMY_MODEL_FOR_SCRIPT, CES_DONT_STREAM_AND_APPLY_VARIATIONS)
+                    SET_CUTSCENE_ENTITY_STREAMING_FLAGS(handle, defModel, CES_DONT_STREAM_AND_APPLY_VARIATIONS)
+                    IF altModel != defModel
+                        SET_CUTSCENE_ENTITY_STREAMING_FLAGS(handle, altModel, CES_DONT_STREAM_AND_APPLY_VARIATIONS)
+                    ENDIF
+                ENDIF
+                IF HAS_MODEL_LOADED(targetModel)
+                    IF NOT DOES_ENTITY_EXIST(g_story_cs_ped[s])
+                        basePos = GET_ENTITY_COORDS(PLAYER_PED_ID(), FALSE)
+                        basePos.z = basePos.z - 12.0
+                        g_story_cs_ped[s] = CREATE_PED(PEDTYPE_MISSION, targetModel, basePos, 0.0, FALSE, FALSE)
+                        IF DOES_ENTITY_EXIST(g_story_cs_ped[s])
+                            SET_PED_DEFAULT_COMPONENT_VARIATION(g_story_cs_ped[s])
+                            SET_ENTITY_INVINCIBLE(g_story_cs_ped[s], TRUE)
+                            SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(g_story_cs_ped[s], TRUE)
+                        ENDIF
+                    ENDIF
+                    IF DOES_ENTITY_EXIST(g_story_cs_ped[s])
+                        IF NOT g_story_cs_registered[s]
+                            REGISTER_ENTITY_FOR_CUTSCENE(g_story_cs_ped[s], handle, CU_ANIMATE_EXISTING_SCRIPT_ENTITY, DUMMY_MODEL_FOR_SCRIPT, CEO_IGNORE_MODEL_NAME)
+                            REGISTER_ENTITY_FOR_CUTSCENE(g_story_cs_ped[s], handle, CU_ANIMATE_EXISTING_SCRIPT_ENTITY, defModel, CEO_IGNORE_MODEL_NAME)
+                            IF altModel != defModel
+                                REGISTER_ENTITY_FOR_CUTSCENE(g_story_cs_ped[s], handle, CU_ANIMATE_EXISTING_SCRIPT_ENTITY, altModel, CEO_IGNORE_MODEL_NAME)
+                            ENDIF
+                            IF IS_CUTSCENE_PLAYING()
+                                g_story_cs_registered[s] = TRUE
+                            ENDIF
+                        ENDIF
+                        // Fallback if a seamless cutscene already created its own entity before targetModel finished loading:
+                        IF IS_CUTSCENE_PLAYING()
+                            regEnt = GET_ENTITY_INDEX_OF_REGISTERED_ENTITY(handle, DUMMY_MODEL_FOR_SCRIPT)
+                            csEnt = GET_ENTITY_INDEX_OF_CUTSCENE_ENTITY(handle, DUMMY_MODEL_FOR_SCRIPT)
+                            IF NOT DOES_ENTITY_EXIST(csEnt)
+                                csEnt = GET_ENTITY_INDEX_OF_CUTSCENE_ENTITY(handle, defModel)
+                            ENDIF
+                            IF NOT DOES_ENTITY_EXIST(csEnt) AND altModel != defModel
+                                csEnt = GET_ENTITY_INDEX_OF_CUTSCENE_ENTITY(handle, altModel)
+                            ENDIF
+                            IF DOES_ENTITY_EXIST(csEnt) AND IS_ENTITY_A_PED(csEnt)
+                                csEntPed = GET_PED_INDEX_FROM_ENTITY_INDEX(csEnt)
+                                IF csEntPed != g_story_cs_ped[s] AND csEntPed != PLAYER_PED_ID()
+                                    SET_ENTITY_ALPHA(csEnt, 0, FALSE)
+                                    IF NOT DOES_ENTITY_EXIST(regEnt)
+                                        csCoords = GET_ENTITY_COORDS(csEnt, FALSE)
+                                        csRot = GET_ENTITY_ROTATION(csEnt)
+                                        SET_ENTITY_COLLISION(g_story_cs_ped[s], FALSE, FALSE)
+                                        SET_ENTITY_COORDS_NO_OFFSET(g_story_cs_ped[s], csCoords, TRUE, TRUE, FALSE)
+                                        SET_ENTITY_ROTATION(g_story_cs_ped[s], csRot)
+                                    ENDIF
+                                ENDIF
+                            ENDIF
+                        ENDIF
+                    ENDIF
+                ENDIF
+            ENDIF
+        ENDIF
+        s = s + 1
+    ENDWHILE
+ENDPROC
+
+FUNC BOOL IS_MENU_MANAGED_PED(PED_INDEX ped)
+    INT idx = 0
+    IF ped = PLAYER_PED_ID() RETURN TRUE ENDIF
+    IF ped = g_chauffeur_driver RETURN TRUE ENDIF
+    idx = 0
+    WHILE idx < STORY_PROXY_MAX
+        IF ped = g_story_proxy_ped[idx] RETURN TRUE ENDIF
+        idx = idx + 1
+    ENDWHILE
+    idx = 0
+    WHILE idx < STORY_CS_MAX
+        IF ped = g_story_cs_ped[idx] RETURN TRUE ENDIF
+        idx = idx + 1
+    ENDWHILE
+    idx = 0
+    WHILE idx < g_bodyguard_count
+        IF ped = g_bodyguards[idx] RETURN TRUE ENDIF
+        idx = idx + 1
+    ENDWHILE
+    idx = 0
+    WHILE idx < g_menu_attacker_count
+        IF ped = g_menu_attackers[idx] RETURN TRUE ENDIF
+        idx = idx + 1
+    ENDWHILE
+    idx = 0
+    WHILE idx < g_stripper_count
+        IF ped = g_stripper_peds[idx] RETURN TRUE ENDIF
+        idx = idx + 1
+    ENDWHILE
+    RETURN FALSE
+ENDFUNC
+
+FUNC BOOL IS_PED_ALREADY_PROXIED(PED_INDEX realPed)
+    INT s = 0
+    WHILE s < STORY_PROXY_MAX
+        IF g_story_proxy_real[s] = realPed RETURN TRUE ENDIF
+        s = s + 1
+    ENDWHILE
+    RETURN FALSE
+ENDFUNC
+
+FUNC INT FIND_CUSTOMIZED_STORY_CHAR_FOR_MODEL(MODEL_NAMES pedModel)
+    INT charId = 0
+    WHILE charId < STORY_CHAR_COUNT
+        IF STORY_CHAR_IS_CUSTOMIZED(charId)
+            IF pedModel = STORY_CHAR_DEFAULT_MODEL(charId) OR pedModel = STORY_CHAR_ALT_MODEL(charId)
+                RETURN charId
+            ENDIF
+        ENDIF
+        charId = charId + 1
+    ENDWHILE
+    RETURN -1
+ENDFUNC
+
+PROC MAINTAIN_STORY_PROXY_SLOT(INT slot)
+    INT charId = g_story_proxy_char[slot]
+    PED_INDEX realPed = g_story_proxy_real[slot]
+    PED_INDEX proxyPed = g_story_proxy_ped[slot]
+    MODEL_NAMES wantedModel = DUMMY_MODEL_FOR_SCRIPT
+    VECTOR realPos = <<0.0, 0.0, 0.0>>
+    VECTOR proxyPos = <<0.0, 0.0, 0.0>>
+    VECTOR realVel = <<0.0, 0.0, 0.0>>
+    VECTOR targetGoal = <<0.0, 0.0, 0.0>>
+    FLOAT realHeading = 0.0
+    FLOAT realSpeed = 0.0
+    FLOAT dist = 0.0
+    FLOAT moveRatio = 1.0
+
+    IF charId < 0
+        EXIT
+    ENDIF
+    IF NOT STORY_CHAR_IS_CUSTOMIZED(charId) OR NOT DOES_ENTITY_EXIST(realPed) OR IS_ENTITY_DEAD(realPed) OR realPed = PLAYER_PED_ID()
+        CLEANUP_STORY_PROXY_SLOT(slot)
+        EXIT
+    ENDIF
+
+    wantedModel = STORY_CHAR_SELECTED_MODEL(charId)
+    IF wantedModel != g_story_proxy_model[slot]
+        CLEANUP_STORY_PROXY_SLOT(slot)
+        EXIT
+    ENDIF
+
+    IF NOT DOES_ENTITY_EXIST(proxyPed)
+        IF NOT IS_MODEL_IN_CDIMAGE(wantedModel) OR NOT IS_MODEL_VALID(wantedModel)
+            CLEANUP_STORY_PROXY_SLOT(slot)
+            EXIT
+        ENDIF
+        IF NOT HAS_MODEL_LOADED(wantedModel)
+            REQUEST_MODEL(wantedModel)
+            EXIT
+        ENDIF
+        realPos = GET_ENTITY_COORDS(realPed, FALSE)
+        realHeading = GET_ENTITY_HEADING(realPed)
+        proxyPed = CREATE_PED(PEDTYPE_MISSION, wantedModel, realPos, realHeading, FALSE, FALSE)
+        IF NOT DOES_ENTITY_EXIST(proxyPed)
+            EXIT
+        ENDIF
+        g_story_proxy_ped[slot] = proxyPed
+        SET_PED_DEFAULT_COMPONENT_VARIATION(proxyPed)
+        SET_ENTITY_INVINCIBLE(proxyPed, TRUE)
+        SET_ENTITY_PROOFS(proxyPed, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
+        SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(proxyPed, TRUE)
+        SET_PED_KEEP_TASK(proxyPed, TRUE)
+        SET_PED_CAN_RAGDOLL(proxyPed, FALSE)
+    ENDIF
+
+    // Keep the mission's realPed transparent while its skeleton, tasks, vehicle
+    // seat, dialogue, and mission blip continue to run normally.
+    SET_ENTITY_ALPHA(realPed, 0, FALSE)
+    SET_ENTITY_NO_COLLISION_ENTITY(proxyPed, realPed, FALSE)
+
+    IF IS_PED_IN_ANY_VEHICLE(realPed)
+        IF NOT IS_ENTITY_ATTACHED_TO_ENTITY(proxyPed, realPed)
+            CLEAR_PED_TASKS_IMMEDIATELY(proxyPed)
+            SET_ENTITY_COLLISION(proxyPed, FALSE, FALSE)
+            ATTACH_ENTITY_TO_ENTITY(proxyPed, realPed, 0, <<0.0, 0.0, -0.40>>, <<0.0, 0.0, 0.0>>, FALSE, FALSE, FALSE, TRUE)
+        ENDIF
+    ELSE
+        IF IS_ENTITY_ATTACHED(proxyPed)
+            DETACH_ENTITY(proxyPed, FALSE, FALSE)
+            SET_ENTITY_COLLISION(proxyPed, FALSE, FALSE)
+        ENDIF
+        realPos = GET_ENTITY_COORDS(realPed, FALSE)
+        proxyPos = GET_ENTITY_COORDS(proxyPed, FALSE)
+        realHeading = GET_ENTITY_HEADING(realPed)
+        realSpeed = GET_ENTITY_SPEED(realPed)
+        dist = GET_DISTANCE_BETWEEN_COORDS(realPos, proxyPos, TRUE)
+
+        IF dist > 1.35 OR realSpeed < 0.35
+            SET_ENTITY_COLLISION(proxyPed, FALSE, FALSE)
+            SET_ENTITY_COORDS_NO_OFFSET(proxyPed, realPos, TRUE, TRUE, FALSE)
+            SET_ENTITY_HEADING(proxyPed, realHeading)
+        ELSE
+            SET_ENTITY_HEADING(proxyPed, realHeading)
+            IF GET_GAME_TIMER() >= g_story_proxy_task_ms[slot]
+                g_story_proxy_task_ms[slot] = GET_GAME_TIMER() + 200
+                realVel = GET_ENTITY_VELOCITY(realPed)
+                targetGoal = <<realPos.x + (realVel.x * 0.65), realPos.y + (realVel.y * 0.65), realPos.z>>
+                IF realSpeed > 2.4
+                    moveRatio = 2.0
+                ELSE
+                    moveRatio = 1.0
+                ENDIF
+                TASK_GO_STRAIGHT_TO_COORD(proxyPed, targetGoal, moveRatio, 500, realHeading, 0.15)
+            ENDIF
+        ENDIF
+    ENDIF
+ENDPROC
+
+PROC SCAN_NEARBY_STORY_PEDS()
+    PED_INDEX nearbyPeds[24]
+    INT nearbyCount = 0
+    INT idx = 0
+    INT slot = 0
+    INT matchedChar = -1
+    PED_INDEX candPed = NULL
+    MODEL_NAMES candModel = DUMMY_MODEL_FOR_SCRIPT
+    MODEL_NAMES wantedModel = DUMMY_MODEL_FOR_SCRIPT
+
+    nearbyCount = GET_PED_NEARBY_PEDS(PLAYER_PED_ID(), nearbyPeds, PEDTYPE_INVALID)
+    IF nearbyCount > COUNT_OF(nearbyPeds)
+        nearbyCount = COUNT_OF(nearbyPeds)
+    ENDIF
+
+    idx = 0
+    WHILE idx < nearbyCount
+        candPed = nearbyPeds[idx]
+        IF DOES_ENTITY_EXIST(candPed) AND NOT IS_ENTITY_DEAD(candPed) AND NOT IS_PED_A_PLAYER(candPed)
+            IF NOT IS_MENU_MANAGED_PED(candPed) AND NOT IS_PED_ALREADY_PROXIED(candPed)
+                candModel = GET_ENTITY_MODEL(candPed)
+                matchedChar = FIND_CUSTOMIZED_STORY_CHAR_FOR_MODEL(candModel)
+                IF matchedChar >= 0
+                    wantedModel = STORY_CHAR_SELECTED_MODEL(matchedChar)
+                    IF IS_MODEL_IN_CDIMAGE(wantedModel) AND IS_MODEL_VALID(wantedModel)
+                        slot = 0
+                        WHILE slot < STORY_PROXY_MAX
+                            IF g_story_proxy_char[slot] < 0
+                                g_story_proxy_char[slot] = matchedChar
+                                g_story_proxy_real[slot] = candPed
+                                g_story_proxy_model[slot] = wantedModel
+                                g_story_proxy_task_ms[slot] = 0
+                                REQUEST_MODEL(wantedModel)
+                                slot = STORY_PROXY_MAX
+                            ELSE
+                                slot = slot + 1
+                            ENDIF
+                        ENDWHILE
+                    ENDIF
+                ENDIF
+            ENDIF
+        ENDIF
+        idx = idx + 1
+    ENDWHILE
+ENDPROC
+
+PROC PROCESS_CUSTOM_STORY_PEDS()
+    INT slot = 0
+
+    IF NOT g_story_peds_any_active
+        IF g_story_cs_was_active
+            CLEANUP_STORY_CUTSCENE_SLOTS()
+            g_story_cs_was_active = FALSE
+        ENDIF
+        CLEANUP_ALL_STORY_PROXIES()
+        EXIT
+    ENDIF
+
+    // Pause during "Casing the Jewel Store" (jewelry_setup1) so Vangelico's
+    // CREATE_TRACKED_POINT / IS_TRACKED_POINT_VISIBLE photo raycasts behind
+    // IG_JEWELASS and Lester's Sweatshop planning board cutscene are never obstructed.
+    IF GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(HASH("jewelry_setup1")) > 0
+        IF g_story_cs_was_active
+            CLEANUP_STORY_CUTSCENE_SLOTS()
+            g_story_cs_was_active = FALSE
+        ENDIF
+        CLEANUP_ALL_STORY_PROXIES()
+        EXIT
+    ENDIF
+
+    IF IS_CUTSCENE_ACTIVE()
+        PROCESS_STORY_PEDS_CUTSCENE()
+        EXIT
+    ENDIF
+
+    IF g_story_cs_was_active
+        CLEANUP_STORY_CUTSCENE_SLOTS()
+        g_story_cs_was_active = FALSE
+    ENDIF
+
+    // Update active gameplay proxy slots every frame so movement and alpha stay smooth.
+    slot = 0
+    WHILE slot < STORY_PROXY_MAX
+        IF g_story_proxy_char[slot] >= 0
+            MAINTAIN_STORY_PROXY_SLOT(slot)
+        ENDIF
+        slot = slot + 1
+    ENDWHILE
+
+    // Scan nearby peds at a bounded 350ms cadence to attach proxies to newly
+    // encountered story characters.
+    IF GET_GAME_TIMER() < g_story_next_scan_ms
+        EXIT
+    ENDIF
+    g_story_next_scan_ms = GET_GAME_TIMER() + 350
+
+    IF IS_ENTITY_DEAD(PLAYER_PED_ID())
+        EXIT
+    ENDIF
+
+    SCAN_NEARBY_STORY_PEDS()
+ENDPROC

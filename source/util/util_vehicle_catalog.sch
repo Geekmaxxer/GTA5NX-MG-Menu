@@ -1,9 +1,33 @@
+// ---------------------------------------------------------------------------
+// LS Customs mod-kit plumbing (v0.9.9).
+//
+// Every LSC write path used to force SET_VEHICLE_MOD_KIT(vehicle, 0).  Kit 0 is
+// the *stock* kit - the same normalisation the game's own scripts apply to a
+// stock car (FMMC_header.sch does exactly SET_VEHICLE_MOD_KIT(veh, 0) before
+// reading stock mods).  A car that carries an add-on kit (the lowrider/Bennys
+// kits that hold MOD_INTERIOR1-5, MOD_HYDRO, MOD_CHASSIS2-5, MOD_TRUNK,
+// MOD_ENGINEBAY1-3, MOD_DOOR_L/R) reports GET_NUM_VEHICLE_MODS == 0 for those
+// slots on kit 0, which is why the interior/hydraulics rows could never do
+// anything.  The fix is to read the car's own kit instead of asserting 0, and to
+// let the player pick a kit explicitly on the new "Mod Kit" row.
+//
+// GET_VEHICLE_MOD_KIT returns the active kit index; GET_NUM_MOD_KITS how many
+// the car has.  Both are clamped because a car with no mod data may report 0
+// kits (or a negative active index) and SET_VEHICLE_MOD_KIT must never be given
+// an out-of-range value.
+// ---------------------------------------------------------------------------
+
+// How many mod kits this vehicle has.  Returns 1 for a car that reports none,
+// so an explicit kit index of 0 always remains valid.
 FUNC INT LSC_KIT_COUNT(VEHICLE_INDEX vehicle)
     INT kits = GET_NUM_MOD_KITS(vehicle)
     IF kits <= 0 RETURN 1 ENDIF
     RETURN kits
 ENDFUNC
 
+// The kit index every LSC write should use for this vehicle: the player's
+// explicit choice when it is in range, otherwise the car's own active kit,
+// clamped to [0, kits-1].  g_lsc_kit_choice = -1 means "follow the car".
 FUNC INT LSC_ACTIVE_KIT(VEHICLE_INDEX vehicle)
     INT kits = LSC_KIT_COUNT(vehicle)
     INT choice = g_lsc_kit_choice
@@ -13,10 +37,25 @@ FUNC INT LSC_ACTIVE_KIT(VEHICLE_INDEX vehicle)
     RETURN choice
 ENDFUNC
 
+// One place that activates the LSC kit, so the literal 0 can never creep back in.
 PROC LSC_USE_KIT(VEHICLE_INDEX vehicle)
     SET_VEHICLE_MOD_KIT(vehicle, LSC_ACTIVE_KIT(vehicle))
 ENDPROC
 
+// The kit a *write* for this slot should land in.
+//
+// This is the second half of the interiors fix.  It starts from the player's kit
+// choice and, only when that kit has no variants for the requested slot and the
+// car actually has more than one kit, searches for the first kit that does.  So
+// the lowrider slots work on any car without the player having to hunt for the
+// right kit number, while a single-kit car keeps exactly the old behaviour.
+//
+// If no kit has the slot, the preferred kit is restored so the car is left
+// exactly as it was found, and the caller then sees GET_NUM_VEHICLE_MODS == 0
+// (its existing "NOT AVAILABLE" path).
+//
+// APPLY PATHS ONLY.  This calls SET_VEHICLE_MOD_KIT, so it must never be reached
+// from a draw proc - that would switch the car's kit every single frame.
 FUNC INT LSC_KIT_FOR_SLOT(VEHICLE_INDEX vehicle, INT slot)
     INT preferred = LSC_ACTIVE_KIT(vehicle)
     INT kits = LSC_KIT_COUNT(vehicle)
@@ -35,16 +74,24 @@ FUNC INT LSC_KIT_FOR_SLOT(VEHICLE_INDEX vehicle, INT slot)
     RETURN preferred
 ENDFUNC
 
+// Kit type label for the "Mod Kit" row (MOD_KIT_TYPE, commands_vehicle.sch).
 FUNC STRING LSC_KIT_TYPE_LABEL(VEHICLE_INDEX vehicle)
     MOD_KIT_TYPE kitType = GET_VEHICLE_MOD_KIT_TYPE(vehicle)
-    IF kitType = MKT_SPORT RETURN "Sport" ENDIF
+    IF kitType = MKT_SPORT RETURN TR("Sport", "Deportivo", "运动", "Sport", "スポーツ", "Спорт", "Esportivo", "Sport") ENDIF
     IF kitType = MKT_SUV RETURN "SUV" ENDIF
-    IF kitType = MKT_SPECIAL RETURN "Special" ENDIF
-    RETURN "Standard"
+    IF kitType = MKT_SPECIAL RETURN TR("Special", "Especial", "特殊", "Spezial", "スペシャル", "Особый", "Especial", "Spécial") ENDIF
+    RETURN TR("Standard", "Estándar", "标准", "Standard", "標準", "Стандарт", "Padrão", "Standard")
 ENDFUNC
 
+// "Mod Kit" row value: the active kit index only.
+//
+// This compiler cannot append to a STRING and cannot return a TEXT_LABEL_63
+// (only TEXT_LABEL_63 supports +=, and it does not convert to STRING on RETURN),
+// so every composed row value in this file is a literal table - the same approach
+// DIRT_LEVEL_VALUE_LABEL and DRAW_LSC_VARIANT_COUNT already use.  The kit *type*
+// and *count* get their own rows below so no information is lost.
 FUNC STRING LSC_KIT_INDEX_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT active = LSC_ACTIVE_KIT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) + 1
     IF active = 1 RETURN "< Kit 1 >" ENDIF
     IF active = 2 RETURN "< Kit 2 >" ENDIF
@@ -53,20 +100,69 @@ FUNC STRING LSC_KIT_INDEX_TEXT()
     RETURN "< Kit 5+ >"
 ENDFUNC
 
+// How many mod kits the car carries.  "Stock Kit Only" is the important case:
+// on such a car the lowrider slots genuinely do not exist, which is what the
+// interior page's "None on this car" rows then report.
 FUNC STRING LSC_KIT_COUNT_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT kits = LSC_KIT_COUNT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
-    IF kits <= 1 RETURN "< Stock Kit Only >" ENDIF
+    IF kits <= 1 RETURN TR("< Stock Kit Only >", "< Solo kit de serie >", "< 仅原厂套件 >", "< Nur Serien-Kit >", "< 純正キットのみ >", "< Только сток-кит >", "< Apenas Kit Original >", "< Kit d'origine seul >") ENDIF
     IF kits = 2 RETURN "< 2 Kits >" ENDIF
     IF kits = 3 RETURN "< 3 Kits >" ENDIF
     RETURN "< 4+ Kits >"
 ENDFUNC
 
 FUNC STRING LSC_KIT_TYPE_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     RETURN LSC_KIT_TYPE_LABEL(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
 ENDFUNC
 
+// ===========================================================================
+// Bennys / lowrider capability (v0.9.9)
+//
+// WHY THIS EXISTS
+//
+// The Hydraulics and Lowrider Interior pages could never work on the cars a
+// player naturally picks, and no row said why.  A car carries hydraulic mod data
+// only if it is a "supermod" build of a base car - what Rockstar sells at
+// Benny's.  On the plain car every hydraulics native is a silent no-op:
+// TOGGLE_VEHICLE_MOD(MOD_TOGGLE_HYDRAULICS) writes a flag the car has no mod
+// for, SET_CAN_USE_HYDRAULICS only sets a gate, and the stance rows write raise
+// factors to wheels that have no hydraulic suspension.  Fixing the *kit* (the
+// LSC_KIT_* work above) is necessary but not sufficient: a stock model has no
+// hydraulic data in ANY kit.
+//
+// WHERE THE DATA COMES FROM
+//
+// Not a wiki and not a guess.  These tables are Rockstar's own, read out of this
+// port's shipped dev tree (X:\gta5\script\dev_ng), so every identifier is
+// guaranteed to be declared in this build too:
+//
+//   shared\include\public\vehicle_public.sch
+//     GET_VEHICLE_SUPERMOD_MODEL()        stock  -> custom
+//     GET_SUPERMOOD_VEHICLE_BASE_MODEL()  custom -> stock
+//     IS_VEHICLE_A_SUPERMOD_MODEL(eModel, SUPERMOD_FLAG_HAS_HYDRAULICS)
+//
+// That last function is Rockstar's own answer to "which cars have hydraulics",
+// and it corrects three things a name-based guess gets wrong - which is exactly
+// why the names were read instead of assumed:
+//
+//   * VOODOO is the CUSTOM and VOODOO2 is the plain stock car.  The "2" suffix
+//     convention is inverted for this one model.
+//   * The custom Tornado is TORNADO5, not TORNADO2.
+//   * The custom Virgo's base car is VIRGO3 (Virgo Classic), not VIRGO.
+//
+// Rockstar gates several of these (SABREGT2, TORNADO5, VIRGO2, MINIVAN2,
+// SLAMVAN3, FACTION3) behind lowrider2 tunables, so whether this port ships them
+// is answered at runtime by IS_MODEL_IN_CDIMAGE - every Bennys row is
+// availability-checked rather than assumed.
+//
+// Nothing below claims a car HAS hydraulics.  HYDRO_SUPPORTED() asks the car
+// itself (MOD_HYDRO variant count), the same probe Rockstar's hydraulics code
+// uses.
+// ===========================================================================
+
+// The verified custom variants.  Index order is shared with BENNYS_STOCK_MODEL.
 FUNC MODEL_NAMES BENNYS_CUSTOM_MODEL(INT index)
     SWITCH index
         CASE 0 RETURN BUCCANEER2 BREAK
@@ -85,6 +181,9 @@ FUNC MODEL_NAMES BENNYS_CUSTOM_MODEL(INT index)
     RETURN ADDER
 ENDFUNC
 
+// Stock counterpart of each custom variant, same index.  Rockstar's
+// GET_SUPERMOOD_VEHICLE_BASE_MODEL() is the authority; FACTION2 and FACTION3
+// share FACTION because the Donk is a body variant of the same base car.
 FUNC MODEL_NAMES BENNYS_STOCK_MODEL(INT index)
     SWITCH index
         CASE 0 RETURN BUCCANEER BREAK
@@ -103,10 +202,15 @@ FUNC MODEL_NAMES BENNYS_STOCK_MODEL(INT index)
     RETURN ADDER
 ENDFUNC
 
+// Which custom variant does this *stock* car convert to?  -1 = no verified
+// conversion, so Convert To Custom refuses instead of inventing a pairing.
 FUNC INT BENNYS_PAIR_FOR_MODEL(MODEL_NAMES model)
     INT index = 0
     WHILE index < BENNYS_MENU_ROWS
         IF BENNYS_STOCK_MODEL(index) = model
+            // Index 3 is the Faction Custom Donk, a body variant of the same
+            // base car, so the plain conversion always lands on the standard
+            // Faction Custom (index 2).
             IF index = 3 RETURN 2 ENDIF
             RETURN index
         ENDIF
@@ -115,6 +219,8 @@ FUNC INT BENNYS_PAIR_FOR_MODEL(MODEL_NAMES model)
     RETURN -1
 ENDFUNC
 
+// Is this model already one of the custom variants?  Stops a car being
+// converted onto itself.
 FUNC INT BENNYS_CUSTOM_PAIR_FOR_MODEL(MODEL_NAMES model)
     INT index = 0
     WHILE index < BENNYS_MENU_ROWS
@@ -124,19 +230,28 @@ FUNC INT BENNYS_CUSTOM_PAIR_FOR_MODEL(MODEL_NAMES model)
     RETURN -1
 ENDFUNC
 
+// Model of the car the player is sitting in.  Callers check
+// IS_PED_IN_ANY_VEHICLE first; ADDER is only an unused fallback.
 FUNC MODEL_NAMES LSC_PLAYER_VEHICLE_MODEL()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN ADDER ENDIF
     RETURN GET_ENTITY_MODEL(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
 ENDFUNC
 
+// Live display name for any model, with an explicit answer rather than a row
+// that renders empty.  IS_MODEL_IN_CDIMAGE is the same check the ped search
+// already applies to typed-in model names.
 FUNC STRING VEHICLE_MODEL_NAME_TEXT(MODEL_NAMES model)
-    IF NOT IS_MODEL_IN_CDIMAGE(model) RETURN "< Not In This Build >" ENDIF
-    IF NOT IS_MODEL_VALID(model) RETURN "< Model Invalid >" ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(model) RETURN TR("< Not In This Build >", "< No en esta versión >", "< 此版本不包含 >", "< Nicht in diesem Build >", "< このビルドに無し >", "< Нет в этой сборке >", "< Ausente Nesta Build >", "< Absent de cette version >") ENDIF
+    IF NOT IS_MODEL_VALID(model) RETURN TR("< Model Invalid >", "< Modelo inválido >", "< 模型无效 >", "< Modell ungültig >", "< 無効なモデル >", "< Неверная модель >", "< Modelo Inválido >", "< Modèle invalide >") ENDIF
     STRING modelName = GET_DISPLAY_NAME_FROM_VEHICLE_MODEL(model)
-    IF IS_STRING_NULL_OR_EMPTY(modelName) RETURN "< Unnamed >" ENDIF
+    IF IS_STRING_NULL_OR_EMPTY(modelName) RETURN TR("< Unnamed >", "< Sin nombre >", "< 未命名 >", "< Unbenannt >", "< 名称なし >", "< Без имени >", "< Sem Nome >", "< Sans nom >") ENDIF
     RETURN modelName
 ENDFUNC
 
+// The definitive "can this car carry hydraulics" test, and the one Rockstar's
+// own hydraulics code uses: MOD_HYDRO has variants only on a car built for them.
+// A stock model reports 0 on every kit, which is exactly why the stance rows did
+// nothing on one.
 FUNC BOOL HYDRO_SUPPORTED(VEHICLE_INDEX vehicle)
     IF NOT DOES_ENTITY_EXIST(vehicle) RETURN FALSE ENDIF
     RETURN GET_NUM_VEHICLE_MODS(vehicle, MOD_HYDRO) > 0
@@ -147,47 +262,63 @@ FUNC BOOL PLAYER_CAR_HAS_HYDRO()
     RETURN HYDRO_SUPPORTED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
 ENDFUNC
 
+// One-line answer to "why can I not fit hydraulics here", used by the Support
+// Check page and by the Hydraulics page's own status row.
 FUNC STRING LOWRIDER_SUPPORT_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF PLAYER_CAR_HAS_HYDRO() RETURN "< Custom - Supported >" ENDIF
-    IF BENNYS_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN "< Stock - Convert First >" ENDIF
-    IF BENNYS_CUSTOM_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN "< Custom - No Hydro >" ENDIF
-    RETURN "< No Lowrider Kit >"
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF PLAYER_CAR_HAS_HYDRO() RETURN TR("< Custom - Supported >", "< Custom - Compatible >", "< 改装版 - 支持 >", "< Custom - Unterstützt >", "< カスタム - 対応 >", "< Кастом - Поддерживается >", "< Custom - Compatível >", "< Custom - Compatible >") ENDIF
+    IF BENNYS_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN TR("< Stock - Convert First >", "< De serie - Convertir antes >", "< 原厂 - 请先改装 >", "< Serie - Zuerst umbauen >", "< 純正 - 要カスタム変換 >", "< Сток - Сначала конверт. >", "< Original - Converter Antes >", "< Origine - Convertir d'abord >") ENDIF
+    IF BENNYS_CUSTOM_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN TR("< Custom - No Hydro >", "< Custom - Sin hidráulica >", "< 改装版 - 无液压 >", "< Custom - Keine Hydraulik >", "< カスタム - ハイドロ無し >", "< Кастом - Без гидравлики >", "< Custom - Sem Hidráulica >", "< Custom - Sans hydraulique >") ENDIF
+    RETURN TR("< No Lowrider Kit >", "< Sin kit lowrider >", "< 无低底盘套件 >", "< Kein Lowrider-Kit >", "< ローライダーキット無し >", "< Нет лоурайдер-кита >", "< Sem Kit Lowrider >", "< Aucun kit lowrider >")
 ENDFUNC
 
+// What the custom variant of the current car is, if it has one.
 FUNC STRING BENNYS_VARIANT_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     MODEL_NAMES current = LSC_PLAYER_VEHICLE_MODEL()
     INT pair = BENNYS_PAIR_FOR_MODEL(current)
     IF pair >= 0 RETURN VEHICLE_MODEL_NAME_TEXT(BENNYS_CUSTOM_MODEL(pair)) ENDIF
-    IF BENNYS_CUSTOM_PAIR_FOR_MODEL(current) >= 0 RETURN "< Already Custom >" ENDIF
-    RETURN "< None For This Car >"
+    IF BENNYS_CUSTOM_PAIR_FOR_MODEL(current) >= 0 RETURN TR("< Already Custom >", "< Ya es Custom >", "< 已是改装版 >", "< Bereits Custom >", "< カスタム済 >", "< Уже кастом >", "< Já é Custom >", "< Déjà Custom >") ENDIF
+    RETURN TR("< None For This Car >", "< Ninguno para este coche >", "< 此车无改装版 >", "< Keins für dieses Auto >", "< この車両には無し >", "< Нет для этого авто >", "< Nenhum Para Este Carro >", "< Aucun pour cette voiture >")
 ENDFUNC
 
+// The stock car a current custom variant was built from.
 FUNC STRING BENNYS_BASE_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT pair = BENNYS_CUSTOM_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL())
     IF pair >= 0 RETURN VEHICLE_MODEL_NAME_TEXT(BENNYS_STOCK_MODEL(pair)) ENDIF
-    RETURN "< Stock Car Already >"
+    RETURN TR("< Stock Car Already >", "< Ya es de serie >", "< 已是原厂车 >", "< Bereits Serienfahrzeug >", "< 既に純正車両 >", "< Уже стоковое авто >", "< Já é Carro Original >", "< Déjà d'origine >")
 ENDFUNC
 
+// Value of the "Convert To Custom" row.  A result outranks the preview for
+// CONVERT_FEEDBACK_MS so the reason a press did nothing is actually visible -
+// which is the whole point of this row existing next to the hydraulics rows.
 FUNC STRING CONVERT_STATUS_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF g_convert_pending RETURN "< Working... >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF g_convert_pending RETURN TR("< Working... >", "< Procesando... >", "< 处理中... >", "< Arbeitet... >", "< 処理中... >", "< Обработка... >", "< Processando... >", "< En cours... >") ENDIF
     IF g_convert_feedback != 0 AND GET_GAME_TIMER() < g_convert_feedback_until
-        IF g_convert_feedback = 1 RETURN "< Converted >" ENDIF
-        IF g_convert_feedback = 2 RETURN "< No Variant For This Car >" ENDIF
-        IF g_convert_feedback = 3 RETURN "< Not In This Build >" ENDIF
-        IF g_convert_feedback = 4 RETURN "< Conversion Failed >" ENDIF
-        IF g_convert_feedback = 5 RETURN "< Timed Out >" ENDIF
+        IF g_convert_feedback = 1 RETURN TR("< Converted >", "< Convertido >", "< 已转换 >", "< Umgebaut >", "< 変換完了 >", "< Конвертировано >", "< Convertido >", "< Converti >") ENDIF
+        IF g_convert_feedback = 2 RETURN TR("< No Variant For This Car >", "< Sin variante para este coche >", "< 此车无改装型 >", "< Keine Variante für dieses Auto >", "< 対応カスタム無し >", "< Нет варианта для авто >", "< Sem Variante Para Este Carro >", "< Aucune variante >") ENDIF
+        IF g_convert_feedback = 3 RETURN TR("< Not In This Build >", "< No en esta versión >", "< 此版本不包含 >", "< Nicht in diesem Build >", "< このビルドに無し >", "< Нет в этой сборке >", "< Ausente Nesta Build >", "< Absent de cette version >") ENDIF
+        IF g_convert_feedback = 4 RETURN TR("< Conversion Failed >", "< Falló la conversión >", "< 转换失败 >", "< Umbau fehlgeschlagen >", "< 変換失敗 >", "< Ошибка конвертации >", "< Falha na Conversão >", "< Échec de conversion >") ENDIF
+        IF g_convert_feedback = 5 RETURN TR("< Timed Out >", "< Tiempo agotado >", "< 超时 >", "< Zeitüberschreitung >", "< タイムアウト >", "< Тайм-аут >", "< Tempo Esgotado >", "< Délai dépassé >") ENDIF
     ENDIF
-    IF BENNYS_CUSTOM_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN "< Already Custom >" ENDIF
-    IF BENNYS_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN "< Ready >" ENDIF
-    RETURN "< No Variant >"
+    IF BENNYS_CUSTOM_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN TR("< Already Custom >", "< Ya es Custom >", "< 已是改装版 >", "< Bereits Custom >", "< カスタム済 >", "< Уже кастом >", "< Já é Custom >", "< Déjà Custom >") ENDIF
+    IF BENNYS_PAIR_FOR_MODEL(LSC_PLAYER_VEHICLE_MODEL()) >= 0 RETURN TR("< Ready >", "< Listo >", "< 就绪 >", "< Bereit >", "< 準備完了 >", "< Готово >", "< Pronto >", "< Prêt >") ENDIF
+    RETURN TR("< No Variant >", "< Sin variante >", "< 无改装型 >", "< Keine Variante >", "< バリアント無し >", "< Нет варианта >", "< Sem Variante >", "< Aucune variante >")
 ENDFUNC
 
-FUNC INT LSC_SLOT()
-    SWITCH g_lsc_slot_choice
+FUNC STRING LSC_RESOLVE_LABEL(STRING gxtLabel)
+    IF IS_STRING_NULL_OR_EMPTY(gxtLabel) RETURN "" ENDIF
+    STRING resolved = GET_FILENAME_FOR_AUDIO_CONVERSATION(gxtLabel)
+    IF IS_STRING_NULL_OR_EMPTY(resolved) OR ARE_STRINGS_EQUAL(resolved, "NULL")
+        RETURN gxtLabel
+    ENDIF
+    RETURN resolved
+ENDFUNC
+
+FUNC INT LSC_SLOT_FOR_CHOICE(INT choice)
+    SWITCH choice
         CASE 0 RETURN ENUM_TO_INT(MOD_SPOILER) BREAK
         CASE 1 RETURN ENUM_TO_INT(MOD_BUMPER_F) BREAK
         CASE 2 RETURN ENUM_TO_INT(MOD_BUMPER_R) BREAK
@@ -235,9 +366,51 @@ FUNC INT LSC_SLOT()
     RETURN ENUM_TO_INT(MOD_SPOILER)
 ENDFUNC
 
+FUNC INT LSC_SLOT()
+    RETURN LSC_SLOT_FOR_CHOICE(g_lsc_slot_choice)
+ENDFUNC
+
+FUNC BOOL LSC_SLOT_AVAILABLE(VEHICLE_INDEX vehicle, INT choice)
+    IF NOT DOES_ENTITY_EXIST(vehicle) RETURN FALSE ENDIF
+    INT slot = LSC_SLOT_FOR_CHOICE(choice)
+    LSC_KIT_FOR_SLOT(vehicle, slot)
+    IF GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, slot)) > 0 RETURN TRUE ENDIF
+    IF GET_VEHICLE_MOD(vehicle, INT_TO_ENUM(MOD_TYPE, slot)) >= 0 RETURN TRUE ENDIF
+    RETURN FALSE
+ENDFUNC
+
+FUNC BOOL LSC_HAS_ANY_CUSTOMIZABLE_SLOTS(VEHICLE_INDEX vehicle)
+    IF NOT DOES_ENTITY_EXIST(vehicle) RETURN FALSE ENDIF
+    INT i = 0
+    WHILE i < 43
+        IF LSC_SLOT_AVAILABLE(vehicle, i) RETURN TRUE ENDIF
+        i = i + 1
+    ENDWHILE
+    RETURN FALSE
+ENDFUNC
+
+FUNC INT LSC_NEXT_VALID_SLOT(VEHICLE_INDEX vehicle, INT currentChoice, INT direction)
+    IF NOT DOES_ENTITY_EXIST(vehicle) RETURN currentChoice ENDIF
+    IF NOT LSC_HAS_ANY_CUSTOMIZABLE_SLOTS(vehicle) RETURN currentChoice ENDIF
+    INT nextChoice = currentChoice
+    INT attempts = 0
+    WHILE attempts < 43
+        nextChoice = nextChoice + direction
+        IF nextChoice < 0 nextChoice = 42 ENDIF
+        IF nextChoice > 42 nextChoice = 0 ENDIF
+        IF LSC_SLOT_AVAILABLE(vehicle, nextChoice)
+            RETURN nextChoice
+        ENDIF
+        attempts = attempts + 1
+    ENDWHILE
+    RETURN currentChoice
+ENDFUNC
+
 PROC APPLY_LSC_MOD()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF NOT DOES_ENTITY_EXIST(vehicle) EXIT ENDIF
     INT slot = LSC_SLOT()
+    // Land the write in the kit that actually holds this slot.
     LSC_KIT_FOR_SLOT(vehicle, slot)
     INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
     IF available <= 0
@@ -254,12 +427,15 @@ ENDPROC
 
 PROC SYNC_LSC_SLOT()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
-    LSC_USE_KIT(vehicle)
-    g_lsc_mod_choice = GET_VEHICLE_MOD(vehicle, INT_TO_ENUM(MOD_TYPE, LSC_SLOT()))
+    IF NOT DOES_ENTITY_EXIST(vehicle) EXIT ENDIF
+    INT slot = LSC_SLOT()
+    LSC_KIT_FOR_SLOT(vehicle, slot)
+    g_lsc_mod_choice = GET_VEHICLE_MOD(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
 ENDPROC
 
 PROC ADJUST_LSC_MOD(INT direction)
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF NOT DOES_ENTITY_EXIST(vehicle) EXIT ENDIF
     INT slot = LSC_SLOT()
     LSC_KIT_FOR_SLOT(vehicle, slot)
     INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
@@ -351,8 +527,14 @@ PROC SYNC_LSC_VEHICLE_STATE()
     INT windowTint = 0
     INT trimColour = 0
     INT metalColour = 0
+    // Resolve and follow the car's own mod kit.  Asserting kit 0 here is what hid
+    // every lowrider slot: the interiors/hydraulics/chassis of a car with an
+    // add-on kit live in that kit, and on kit 0 GET_NUM_VEHICLE_MODS reports 0
+    // for them.  The "Mod Kit" row lets the player override this explicitly.
     g_lsc_kit_choice = LSC_ACTIVE_KIT(vehicle)
     LSC_USE_KIT(vehicle)
+    // Hold Stance belongs to one car: entering a different one must not carry the
+    // re-assert over to it.
     IF g_lsc_vehicle != vehicle g_hydro_hold = FALSE ENDIF
     GET_VEHICLE_COLOURS(vehicle, primary, secondary)
     GET_VEHICLE_EXTRA_COLOURS(vehicle, pearlescent, wheelColour)
@@ -361,6 +543,7 @@ PROC SYNC_LSC_VEHICLE_STATE()
     g_lsc_pearlescent_colour = LSC_CHOICE_FOR_COLOUR(pearlescent)
     g_lsc_wheel_colour = LSC_CHOICE_FOR_COLOUR(wheelColour)
     g_lsc_wheel_type = ENUM_TO_INT(GET_VEHICLE_WHEEL_TYPE(vehicle))
+    IF g_lsc_wheel_type < 0 OR g_lsc_wheel_type >= WHEEL_FAMILY_COUNT g_lsc_wheel_type = 0 ENDIF
     g_lsc_turbo = IS_TOGGLE_MOD_ON(vehicle, MOD_TOGGLE_TURBO)
     g_lsc_xenon = IS_TOGGLE_MOD_ON(vehicle, MOD_TOGGLE_XENON_LIGHTS)
     g_lsc_xenon_colour = GET_VEHICLE_XENON_LIGHT_COLOR_INDEX(vehicle)
@@ -383,21 +566,95 @@ PROC SYNC_LSC_VEHICLE_STATE()
     windowTint = GET_VEHICLE_WINDOW_TINT(vehicle)
     IF windowTint < 0 OR windowTint > 6 windowTint = 0 ENDIF
     g_lsc_window_tint = windowTint
+    SWITCH GET_VEHICLE_NUMBER_PLATE_TEXT_INDEX(vehicle)
+        CASE 3 g_lsc_plate_style = 0 BREAK
+        CASE 0 g_lsc_plate_style = 1 BREAK
+        CASE 4 g_lsc_plate_style = 2 BREAK
+        CASE 2 g_lsc_plate_style = 3 BREAK
+        CASE 1 g_lsc_plate_style = 4 BREAK
+        CASE 5 g_lsc_plate_style = 5 BREAK
+        CASE 6 g_lsc_plate_style = 6 BREAK
+        CASE 12 g_lsc_plate_style = 7 BREAK
+        CASE 7 g_lsc_plate_style = 8 BREAK
+        CASE 8 g_lsc_plate_style = 9 BREAK
+        CASE 9 g_lsc_plate_style = 10 BREAK
+        CASE 10 g_lsc_plate_style = 11 BREAK
+        CASE 11 g_lsc_plate_style = 12 BREAK
+        DEFAULT g_lsc_plate_style = 1 BREAK
+    ENDSWITCH
+    // Lowrider / extras state.  Read after the kit is resolved above because
+    // livery, trim (extra colour 5) and metal (extra colour 6) are per-kit
+    // values - the SDK's own param note for colour 5/6 says they "should be
+    // taken from the list in carcols.dat".
     g_lsc_livery = GET_VEHICLE_LIVERY(vehicle)
     IF g_lsc_livery < 0 OR g_lsc_livery >= GET_VEHICLE_LIVERY_COUNT(vehicle) g_lsc_livery = -1 ENDIF
     GET_VEHICLE_EXTRA_COLOUR_5(vehicle, trimColour)
     GET_VEHICLE_EXTRA_COLOUR_6(vehicle, metalColour)
-    IF trimColour < 0 trimColour = 0 ENDIF
-    IF metalColour < 0 metalColour = 0 ENDIF
-    g_lsc_trim_colour = trimColour
-    g_lsc_metal_colour = metalColour
+    g_lsc_trim_colour = LSC_CHOICE_FOR_COLOUR(trimColour)
+    g_lsc_metal_colour = LSC_CHOICE_FOR_COLOUR(metalColour)
+    // The extras probe result belongs to whatever car was there before; clear it
+    // so the toggle path cannot act on the previous vehicle's extra state.
     g_lsc_extra_exists = FALSE
     g_lsc_extra_on = FALSE
+    // Hydraulics: read what the car already has so the page opens on the
+    // vehicle's real state instead of the menu's last used values.
     g_hydro_enabled = IS_TOGGLE_MOD_ON(vehicle, MOD_TOGGLE_HYDRAULICS)
     g_hydro_level = GET_VEHICLE_MOD(vehicle, MOD_HYDRO)
     IF g_hydro_level < 0 OR g_hydro_level >= GET_NUM_VEHICLE_MODS(vehicle, MOD_HYDRO) g_hydro_level = -1 ENDIF
+    IF LSC_HAS_ANY_CUSTOMIZABLE_SLOTS(vehicle)
+        IF NOT LSC_SLOT_AVAILABLE(vehicle, g_lsc_slot_choice)
+            g_lsc_slot_choice = LSC_NEXT_VALID_SLOT(vehicle, g_lsc_slot_choice, 1)
+        ENDIF
+    ENDIF
     SYNC_LSC_SLOT()
     g_lsc_vehicle = vehicle
+ENDPROC
+
+FUNC INT LSC_PLATE_STYLE_TO_ENGINE_INDEX(INT choice)
+    SWITCH choice
+        CASE 0 RETURN 3 BREAK
+        CASE 1 RETURN 0 BREAK
+        CASE 2 RETURN 4 BREAK
+        CASE 3 RETURN 2 BREAK
+        CASE 4 RETURN 1 BREAK
+        CASE 5 RETURN 5 BREAK
+        CASE 6 RETURN 6 BREAK
+        CASE 7 RETURN 12 BREAK
+        CASE 8 RETURN 7 BREAK
+        CASE 9 RETURN 8 BREAK
+        CASE 10 RETURN 9 BREAK
+        CASE 11 RETURN 10 BREAK
+        CASE 12 RETURN 11 BREAK
+    ENDSWITCH
+    RETURN 0
+ENDFUNC
+
+PROC APPLY_LSC_PLATE_STYLE(VEHICLE_INDEX vehicle)
+    INT engineIdx = LSC_PLATE_STYLE_TO_ENGINE_INDEX(g_lsc_plate_style)
+    IF DOES_ENTITY_EXIST(vehicle)
+        IF engineIdx >= 0 AND engineIdx < GET_NUMBER_OF_VEHICLE_NUMBER_PLATES()
+            SET_VEHICLE_NUMBER_PLATE_TEXT_INDEX(vehicle, engineIdx)
+        ENDIF
+    ENDIF
+ENDPROC
+
+PROC DRAW_LSC_PLATE_STYLE_SELECTOR(FLOAT y, BOOL selected)
+    STRING lbl = TR("License Plate Style", "Estilo de matrícula", "车牌样式", "Kennzeichen-Stil", "ナンバープレート様式", "Стиль номерного знака", "Estilo de Placa", "Style de plaque")
+    SWITCH g_lsc_plate_style
+        CASE 0 DRAW_OPTION(y, lbl, TR("< Blue on White 1 >", "< Azul sobre blanco 1 >", "< 白底蓝字 1 >", "< Blau auf Weiß 1 >", "< 白地に青 1 >", "< Синий на белом 1 >", "< Azul no Branco 1 >", "< Bleu sur blanc 1 >"), selected, 3) BREAK
+        CASE 1 DRAW_OPTION(y, lbl, TR("< Blue on White 2 >", "< Azul sobre blanco 2 >", "< 白底蓝字 2 >", "< Blau auf Weiß 2 >", "< 白地に青 2 >", "< Синий на белом 2 >", "< Azul no Branco 2 >", "< Bleu sur blanc 2 >"), selected, 3) BREAK
+        CASE 2 DRAW_OPTION(y, lbl, TR("< Blue on White 3 >", "< Azul sobre blanco 3 >", "< 白底蓝字 3 >", "< Blau auf Weiß 3 >", "< 白地に青 3 >", "< Синий на белом 3 >", "< Azul no Branco 3 >", "< Bleu sur blanc 3 >"), selected, 3) BREAK
+        CASE 3 DRAW_OPTION(y, lbl, TR("< Yellow on Blue >", "< Amarillo sobre azul >", "< 蓝底黄字 >", "< Gelb auf Blau >", "< 青地に黄 >", "< Жёлтый на синем >", "< Amarelo no Azul >", "< Jaune sur bleu >"), selected, 3) BREAK
+        CASE 4 DRAW_OPTION(y, lbl, TR("< Yellow on Black >", "< Amarillo sobre negro >", "< 黑底黄字 >", "< Gelb auf Schwarz >", "< 黒地に黄 >", "< Жёлтый на чёрном >", "< Amarelo no Preto >", "< Jaune sur noir >"), selected, 3) BREAK
+        CASE 5 DRAW_OPTION(y, lbl, "< North Yankton >", selected, 3) BREAK
+        CASE 6 DRAW_OPTION(y, lbl, "< eCola >", selected, 3) BREAK
+        CASE 7 DRAW_OPTION(y, lbl, "< Sprunk >", selected, 3) BREAK
+        CASE 8 DRAW_OPTION(y, lbl, "< Las Venturas >", selected, 3) BREAK
+        CASE 9 DRAW_OPTION(y, lbl, "< Liberty City >", selected, 3) BREAK
+        CASE 10 DRAW_OPTION(y, lbl, "< LS Car Meet >", selected, 3) BREAK
+        CASE 11 DRAW_OPTION(y, lbl, "< LS Panic >", selected, 3) BREAK
+        CASE 12 DRAW_OPTION(y, lbl, "< LS Pounders >", selected, 3) BREAK
+    ENDSWITCH
 ENDPROC
 
 PROC APPLY_LSC_PAINT()
@@ -408,110 +665,148 @@ ENDPROC
 
 PROC DRAW_LSC_COLOUR_SELECTOR(FLOAT y, STRING label, INT choice, BOOL selected)
     SWITCH choice
-        CASE 0 DRAW_OPTION(y, label, "< Black >", selected, 3) BREAK
-        CASE 1 DRAW_OPTION(y, label, "< Graphite >", selected, 3) BREAK
-        CASE 2 DRAW_OPTION(y, label, "< Silver >", selected, 3) BREAK
-        CASE 3 DRAW_OPTION(y, label, "< Blue Silver >", selected, 3) BREAK
-        CASE 4 DRAW_OPTION(y, label, "< Navy Blue >", selected, 3) BREAK
-        CASE 5 DRAW_OPTION(y, label, "< Red >", selected, 3) BREAK
-        CASE 6 DRAW_OPTION(y, label, "< Torino Red >", selected, 3) BREAK
-        CASE 7 DRAW_OPTION(y, label, "< Orange >", selected, 3) BREAK
-        CASE 8 DRAW_OPTION(y, label, "< Yellow >", selected, 3) BREAK
-        CASE 9 DRAW_OPTION(y, label, "< Dark Green >", selected, 3) BREAK
-        CASE 10 DRAW_OPTION(y, label, "< Green >", selected, 3) BREAK
-        CASE 11 DRAW_OPTION(y, label, "< Dark Blue >", selected, 3) BREAK
-        CASE 12 DRAW_OPTION(y, label, "< Light Blue >", selected, 3) BREAK
-        CASE 13 DRAW_OPTION(y, label, "< Purple >", selected, 3) BREAK
-        CASE 14 DRAW_OPTION(y, label, "< Gold >", selected, 3) BREAK
-        CASE 15 DRAW_OPTION(y, label, "< Brown >", selected, 3) BREAK
-        CASE 16 DRAW_OPTION(y, label, "< Cream >", selected, 3) BREAK
-        CASE 17 DRAW_OPTION(y, label, "< White >", selected, 3) BREAK
-        CASE 18 DRAW_OPTION(y, label, "< Chrome >", selected, 3) BREAK
-        CASE 19 DRAW_OPTION(y, label, "< Pink >", selected, 3) BREAK
-        CASE 20 DRAW_OPTION(y, label, "< Salmon >", selected, 3) BREAK
-        CASE 21 DRAW_OPTION(y, label, "< Matte Black >", selected, 3) BREAK
-        CASE 22 DRAW_OPTION(y, label, "< Matte Grey >", selected, 3) BREAK
-        CASE 23 DRAW_OPTION(y, label, "< Matte Red >", selected, 3) BREAK
-        CASE 24 DRAW_OPTION(y, label, "< Matte Green >", selected, 3) BREAK
-        CASE 25 DRAW_OPTION(y, label, "< Matte Blue >", selected, 3) BREAK
-        CASE 26 DRAW_OPTION(y, label, "< Matte Yellow >", selected, 3) BREAK
+        CASE 0 DRAW_OPTION(y, label, TR("< Black >", "< Negro >", "< 黑色 >", "< Schwarz >", "< ブラック >", "< Чёрный >", "< Preto >", "< Noir >"), selected, 3) BREAK
+        CASE 1 DRAW_OPTION(y, label, TR("< Graphite >", "< Grafito >", "< 石墨黑 >", "< Graphit >", "< グラファイト >", "< Графит >", "< Grafite >", "< Graphite >"), selected, 3) BREAK
+        CASE 2 DRAW_OPTION(y, label, TR("< Silver >", "< Plata >", "< 银色 >", "< Silber >", "< シルバー >", "< Серебристый >", "< Prata >", "< Argent >"), selected, 3) BREAK
+        CASE 3 DRAW_OPTION(y, label, TR("< Blue Silver >", "< Plata azulado >", "< 蓝银色 >", "< Blausilber >", "< ブルーシルバー >", "< Сине-серебристый >", "< Prata Azulado >", "< Argent bleuté >"), selected, 3) BREAK
+        CASE 4 DRAW_OPTION(y, label, TR("< Navy Blue >", "< Azul marino >", "< 海军蓝 >", "< Marineblau >", "< ネイビーブルー >", "< Тёмно-синий >", "< Azul-marinho >", "< Bleu marine >"), selected, 3) BREAK
+        CASE 5 DRAW_OPTION(y, label, TR("< Red >", "< Rojo >", "< 红色 >", "< Rot >", "< レッド >", "< Красный >", "< Vermelho >", "< Rouge >"), selected, 3) BREAK
+        CASE 6 DRAW_OPTION(y, label, TR("< Torino Red >", "< Rojo Torino >", "< 都灵红 >", "< Torinorot >", "< トリノレッド >", "< Туринский красный >", "< Vermelho Torino >", "< Rouge Torino >"), selected, 3) BREAK
+        CASE 7 DRAW_OPTION(y, label, TR("< Orange >", "< Naranja >", "< 橙色 >", "< Orange >", "< オレンジ >", "< Оранжевый >", "< Laranja >", "< Orange >"), selected, 3) BREAK
+        CASE 8 DRAW_OPTION(y, label, TR("< Yellow >", "< Amarillo >", "< 黄色 >", "< Gelb >", "< イエロー >", "< Жёлтый >", "< Amarelo >", "< Jaune >"), selected, 3) BREAK
+        CASE 9 DRAW_OPTION(y, label, TR("< Dark Green >", "< Verde oscuro >", "< 深绿色 >", "< Dunkelgrün >", "< ダークグリーン >", "< Тёмно-зелёный >", "< Verde Escuro >", "< Vert foncé >"), selected, 3) BREAK
+        CASE 10 DRAW_OPTION(y, label, TR("< Green >", "< Verde >", "< 绿色 >", "< Grün >", "< グリーン >", "< Зелёный >", "< Verde >", "< Vert >"), selected, 3) BREAK
+        CASE 11 DRAW_OPTION(y, label, TR("< Dark Blue >", "< Azul oscuro >", "< 深蓝色 >", "< Dunkelblau >", "< ダークブルー >", "< Тёмно-синий >", "< Azul Escuro >", "< Bleu foncé >"), selected, 3) BREAK
+        CASE 12 DRAW_OPTION(y, label, TR("< Light Blue >", "< Azul claro >", "< 浅蓝色 >", "< Hellblau >", "< ライトブルー >", "< Голубой >", "< Azul Claro >", "< Bleu clair >"), selected, 3) BREAK
+        CASE 13 DRAW_OPTION(y, label, TR("< Purple >", "< Morado >", "< 紫色 >", "< Lila >", "< パープル >", "< Фиолетовый >", "< Roxo >", "< Violet >"), selected, 3) BREAK
+        CASE 14 DRAW_OPTION(y, label, TR("< Gold >", "< Oro >", "< 金色 >", "< Gold >", "< ゴールド >", "< Золотой >", "< Ouro >", "< Or >"), selected, 3) BREAK
+        CASE 15 DRAW_OPTION(y, label, TR("< Brown >", "< Marrón >", "< 棕色 >", "< Braun >", "< ブラウン >", "< Коричневый >", "< Marrom >", "< Marron >"), selected, 3) BREAK
+        CASE 16 DRAW_OPTION(y, label, TR("< Cream >", "< Crema >", "< 奶油色 >", "< Creme >", "< クリーム >", "< Кремовый >", "< Creme >", "< Crème >"), selected, 3) BREAK
+        CASE 17 DRAW_OPTION(y, label, TR("< White >", "< Blanco >", "< 白色 >", "< Weiß >", "< ホワイト >", "< Белый >", "< Branco >", "< Blanc >"), selected, 3) BREAK
+        CASE 18 DRAW_OPTION(y, label, TR("< Chrome >", "< Cromado >", "< 铬合金 >", "< Chrom >", "< クローム >", "< Хром >", "< Cromado >", "< Chrome >"), selected, 3) BREAK
+        CASE 19 DRAW_OPTION(y, label, TR("< Pink >", "< Rosa >", "< 粉色 >", "< Pink >", "< ピンク >", "< Розовый >", "< Rosa >", "< Rose >"), selected, 3) BREAK
+        CASE 20 DRAW_OPTION(y, label, TR("< Salmon >", "< Salmón >", "< 鲑鱼粉 >", "< Lachs >", "< サーモン >", "< Лососёвый >", "< Salmão >", "< Saumon >"), selected, 3) BREAK
+        CASE 21 DRAW_OPTION(y, label, TR("< Matte Black >", "< Negro mate >", "< 哑光黑 >", "< Mattschwarz >", "< マットブラック >", "< Матовый чёрный >", "< Preto Fosco >", "< Noir mat >"), selected, 3) BREAK
+        CASE 22 DRAW_OPTION(y, label, TR("< Matte Grey >", "< Gris mate >", "< 哑光灰 >", "< Mattgrau >", "< マットグレー >", "< Матовый серый >", "< Cinza Fosco >", "< Gris mat >"), selected, 3) BREAK
+        CASE 23 DRAW_OPTION(y, label, TR("< Matte Red >", "< Rojo mate >", "< 哑光红 >", "< Mattrot >", "< マットレッド >", "< Матовый красный >", "< Vermelho Fosco >", "< Rouge mat >"), selected, 3) BREAK
+        CASE 24 DRAW_OPTION(y, label, TR("< Matte Green >", "< Verde mate >", "< 哑光绿 >", "< Mattgrün >", "< マットグリーン >", "< Матовый зелёный >", "< Verde Fosco >", "< Vert mat >"), selected, 3) BREAK
+        CASE 25 DRAW_OPTION(y, label, TR("< Matte Blue >", "< Azul mate >", "< 哑光蓝 >", "< Mattblau >", "< マットブルー >", "< Матовый синий >", "< Azul Fosco >", "< Bleu mat >"), selected, 3) BREAK
+        CASE 26 DRAW_OPTION(y, label, TR("< Matte Yellow >", "< Amarillo mate >", "< 哑光黄 >", "< Mattgelb >", "< マットイエロー >", "< Матовый жёлтый >", "< Amarelo Fosco >", "< Jaune mat >"), selected, 3) BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_LSC_WINDOW_TINT_SELECTOR(FLOAT y, BOOL selected)
+    STRING lbl = TR("Window Tint", "Tinte de ventanillas", "车窗色调", "Scheibentönung", "ウィンドウスモーク", "Тонировка стёкол", "Película dos Vidros", "Teinte des vitres")
     SWITCH g_lsc_window_tint
-        CASE 0 DRAW_OPTION(y, "Window Tint", "< Stock >", selected, 3) BREAK
-        CASE 1 DRAW_OPTION(y, "Window Tint", "< Limo >", selected, 3) BREAK
-        CASE 2 DRAW_OPTION(y, "Window Tint", "< Light Smoke >", selected, 3) BREAK
-        CASE 3 DRAW_OPTION(y, "Window Tint", "< Dark Smoke >", selected, 3) BREAK
-        CASE 4 DRAW_OPTION(y, "Window Tint", "< Pure Black >", selected, 3) BREAK
-        CASE 5 DRAW_OPTION(y, "Window Tint", "< Green >", selected, 3) BREAK
-        CASE 6 DRAW_OPTION(y, "Window Tint", "< Light Green >", selected, 3) BREAK
+        CASE 0 DRAW_OPTION(y, lbl, "< Stock >", selected, 3) BREAK
+        CASE 1 DRAW_OPTION(y, lbl, TR("< Limo >", "< Limusina >", "< 豪华黑 >", "< Limousine >", "< リムジン >", "< Лимузин >", "< Limousine >", "< Limousine >"), selected, 3) BREAK
+        CASE 2 DRAW_OPTION(y, lbl, TR("< Light Smoke >", "< Ahumado claro >", "< 浅色烟熏 >", "< Hell getönt >", "< ライトスモーク >", "< Слабое затемнение >", "< Fumê Claro >", "< Fumé clair >"), selected, 3) BREAK
+        CASE 3 DRAW_OPTION(y, lbl, TR("< Dark Smoke >", "< Ahumado oscuro >", "< 深色烟熏 >", "< Dunkel getönt >", "< ダークスモーク >", "< Сильное затемнение >", "< Fumê Escuro >", "< Fumé foncé >"), selected, 3) BREAK
+        CASE 4 DRAW_OPTION(y, lbl, TR("< Pure Black >", "< Negro puro >", "< 纯黑 >", "< Tiefschwarz >", "< ピュアブラック >", "< Чисто чёрный >", "< Preto Puro >", "< Noir pur >"), selected, 3) BREAK
+        CASE 5 DRAW_OPTION(y, lbl, TR("< Green >", "< Verde >", "< 绿色 >", "< Grün >", "< グリーン >", "< Зелёный >", "< Verde >", "< Vert >"), selected, 3) BREAK
+        CASE 6 DRAW_OPTION(y, lbl, TR("< Light Green >", "< Verde claro >", "< 浅绿色 >", "< Hellgrün >", "< ライトグリーン >", "< Светло-зелёный >", "< Verde Claro >", "< Vert clair >"), selected, 3) BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_LSC_PLATE_ROW(FLOAT y, BOOL selected)
+    STRING lbl = TR("Plate Text", "Texto de matrícula", "车牌文字", "Kennzeichentext", "ナンバー文字列", "Текст номера", "Texto da Placa", "Texte de plaque")
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        DRAW_OPTION(y, "Plate Text", "NO VEHICLE", selected, 0)
+        DRAW_OPTION(y, lbl, "NO VEHICLE", selected, 0)
         EXIT
     ENDIF
     IF IS_STRING_NULL_OR_EMPTY(g_plate_value)
-        DRAW_OPTION(y, "Plate Text", GET_VEHICLE_NUMBER_PLATE_TEXT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())), selected, 3)
+        DRAW_OPTION(y, lbl, GET_VEHICLE_NUMBER_PLATE_TEXT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())), selected, 3)
     ELSE
-        DRAW_OPTION(y, "Plate Text", g_plate_value, selected, 3)
+        DRAW_OPTION(y, lbl, g_plate_value, selected, 3)
     ENDIF
 ENDPROC
 
 PROC DRAW_LSC_MOD_SELECTOR(FLOAT y, BOOL selected)
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
-    INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, LSC_SLOT()))
+    IF NOT DOES_ENTITY_EXIST(vehicle)
+        DRAW_OPTION(y, TR("Selected Variant", "Variante seleccionada", "所选款式", "Gewählte Variante", "選択中のバリエーション", "Выбранный вариант", "Variante Selecionada", "Variante choisie"), TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >"), selected, 0)
+        EXIT
+    ENDIF
+    INT slot = LSC_SLOT()
+    LSC_KIT_FOR_SLOT(vehicle, slot)
+    INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
+    STRING lbl = TR("Selected Variant", "Variante seleccionada", "所选款式", "Gewählte Variante", "選択中のバリエーション", "Выбранный вариант", "Variante Selecionada", "Variante choisie")
     IF available <= 0
-        DRAW_OPTION(y, "Selected Variant", "NOT AVAILABLE", selected, 0)
+        DRAW_OPTION(y, lbl, TR("NOT AVAILABLE", "NO DISPONIBLE", "不可用", "NICHT VERFÜGBAR", "利用不可", "НЕДОСТУПНО", "INDISPONÍVEL", "INDISPONIBLE"), selected, 0)
     ELIF g_lsc_mod_choice < 0
-        DRAW_OPTION(y, "Selected Variant", "< Stock >", selected, 3)
+        TEXT_LABEL_63 valStock = "< "
+        valStock += TR("Stock", "De serie", "原厂", "Serie", "純正", "Сток", "Original", "Origine")
+        valStock += " (0/"
+        valStock += available
+        valStock += ") >"
+        DRAW_OPTION(y, lbl, valStock, selected, 3)
     ELSE
-        DRAW_NUMBER_OPTION(y, "Selected Variant", g_lsc_mod_choice + 1, selected)
+        STRING modName = ""
+        STRING gxtMod = GET_MOD_TEXT_LABEL(vehicle, INT_TO_ENUM(MOD_TYPE, slot), g_lsc_mod_choice)
+        IF NOT IS_STRING_NULL_OR_EMPTY(gxtMod) AND NOT ARE_STRINGS_EQUAL(gxtMod, "NULL")
+            modName = LSC_RESOLVE_LABEL(gxtMod)
+        ENDIF
+        TEXT_LABEL_63 valMod = "< "
+        IF NOT IS_STRING_NULL_OR_EMPTY(modName) AND NOT ARE_STRINGS_EQUAL(modName, "NULL")
+            valMod += modName
+        ELSE
+            IF g_lsc_slot_choice >= 9 AND g_lsc_slot_choice <= 14
+                valMod += TR("Level ", "Nivel ", "等级 ", "Stufe ", "レベル ", "Уровень ", "Nível ", "Niveau ")
+            ELSE
+                valMod += TR("Part ", "Pieza ", "零件 ", "Teil ", "パーツ ", "Деталь ", "Peça ", "Partie ")
+            ENDIF
+            INT partNum = g_lsc_mod_choice + 1
+            valMod += partNum
+        ENDIF
+        valMod += " ("
+        INT curIdx = g_lsc_mod_choice + 1
+        valMod += curIdx
+        valMod += "/"
+        valMod += available
+        valMod += ") >"
+        DRAW_OPTION(y, lbl, valMod, selected, 3)
     ENDIF
 ENDPROC
 
 PROC DRAW_LSC_VARIANT_COUNT(FLOAT y, BOOL selected)
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
-    INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, LSC_SLOT()))
-    IF available <= 0 DRAW_OPTION(y, "Available Variants", "< None >", selected, 0)
-    ELIF available = 1 DRAW_OPTION(y, "Available Variants", "< 1 >", selected, 3)
-    ELIF available = 2 DRAW_OPTION(y, "Available Variants", "< 2 >", selected, 3)
-    ELIF available = 3 DRAW_OPTION(y, "Available Variants", "< 3 >", selected, 3)
-    ELIF available = 4 DRAW_OPTION(y, "Available Variants", "< 4 >", selected, 3)
-    ELIF available = 5 DRAW_OPTION(y, "Available Variants", "< 5 >", selected, 3)
-    ELIF available = 6 DRAW_OPTION(y, "Available Variants", "< 6 >", selected, 3)
-    ELIF available = 7 DRAW_OPTION(y, "Available Variants", "< 7 >", selected, 3)
-    ELIF available = 8 DRAW_OPTION(y, "Available Variants", "< 8 >", selected, 3)
-    ELIF available = 9 DRAW_OPTION(y, "Available Variants", "< 9 >", selected, 3)
-    ELIF available = 10 DRAW_OPTION(y, "Available Variants", "< 10 >", selected, 3)
-    ELIF available = 11 DRAW_OPTION(y, "Available Variants", "< 11 >", selected, 3)
-    ELIF available = 12 DRAW_OPTION(y, "Available Variants", "< 12 >", selected, 3)
-    ELIF available = 13 DRAW_OPTION(y, "Available Variants", "< 13 >", selected, 3)
-    ELIF available = 14 DRAW_OPTION(y, "Available Variants", "< 14 >", selected, 3)
-    ELIF available = 15 DRAW_OPTION(y, "Available Variants", "< 15 >", selected, 3)
-    ELSE DRAW_OPTION(y, "Available Variants", "< 16+ >", selected, 3)
+    IF NOT DOES_ENTITY_EXIST(vehicle)
+        DRAW_OPTION(y, TR("Available Variants", "Variantes disponibles", "可用款式数", "Verfügbare Varianten", "利用可能バリエーション", "Доступные варианты", "Variantes Disponíveis", "Variantes disponibles"), "< None >", selected, 0)
+        EXIT
+    ENDIF
+    INT slot = LSC_SLOT()
+    LSC_KIT_FOR_SLOT(vehicle, slot)
+    INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
+    STRING lbl = TR("Available Variants", "Variantes disponibles", "可用款式数", "Verfügbare Varianten", "利用可能バリエーション", "Доступные варианты", "Variantes Disponíveis", "Variantes disponibles")
+    IF available <= 0
+        DRAW_OPTION(y, lbl, "< None >", selected, 0)
+    ELIF available = 1
+        DRAW_OPTION(y, lbl, TR("< 1 Variant >", "< 1 variante >", "< 1 款 >", "< 1 Variante >", "< 1バリエーション >", "< 1 вариант >", "< 1 Variante >", "< 1 variante >"), selected, 3)
+    ELSE
+        TEXT_LABEL_63 countText = "< "
+        countText += available
+        countText += " "
+        countText += TR("Variants", "Variantes", "款", "Varianten", "バリエーション", "вариантов", "Variantes", "variantes")
+        countText += " >"
+        DRAW_OPTION(y, lbl, countText, selected, 3)
     ENDIF
 ENDPROC
 
 PROC DRAW_LSC_LIGHT_SELECTOR(FLOAT y, STRING label, INT choice, BOOL selected)
     SWITCH choice
-        CASE 0 DRAW_OPTION(y, label, "< White >", selected, 3) BREAK
-        CASE 1 DRAW_OPTION(y, label, "< Blue >", selected, 3) BREAK
-        CASE 2 DRAW_OPTION(y, label, "< Electric Blue >", selected, 3) BREAK
-        CASE 3 DRAW_OPTION(y, label, "< Mint Green >", selected, 3) BREAK
-        CASE 4 DRAW_OPTION(y, label, "< Lime Green >", selected, 3) BREAK
-        CASE 5 DRAW_OPTION(y, label, "< Yellow >", selected, 3) BREAK
-        CASE 6 DRAW_OPTION(y, label, "< Gold >", selected, 3) BREAK
-        CASE 7 DRAW_OPTION(y, label, "< Orange >", selected, 3) BREAK
-        CASE 8 DRAW_OPTION(y, label, "< Red >", selected, 3) BREAK
-        CASE 9 DRAW_OPTION(y, label, "< Pink >", selected, 3) BREAK
-        CASE 10 DRAW_OPTION(y, label, "< Hot Pink >", selected, 3) BREAK
-        CASE 11 DRAW_OPTION(y, label, "< Purple >", selected, 3) BREAK
-        CASE 12 DRAW_OPTION(y, label, "< Blacklight >", selected, 3) BREAK
+        CASE 0 DRAW_OPTION(y, label, TR("< White >", "< Blanco >", "< 白色 >", "< Weiß >", "< ホワイト >", "< Белый >", "< Branco >", "< Blanc >"), selected, 3) BREAK
+        CASE 1 DRAW_OPTION(y, label, TR("< Blue >", "< Azul >", "< 蓝色 >", "< Blau >", "< ブルー >", "< Синий >", "< Azul >", "< Bleu >"), selected, 3) BREAK
+        CASE 2 DRAW_OPTION(y, label, TR("< Electric Blue >", "< Azul eléctrico >", "< 电光蓝 >", "< Elektrischblau >", "< エレクトリックブルー >", "< Электрик >", "< Azul Elétrico >", "< Bleu électrique >"), selected, 3) BREAK
+        CASE 3 DRAW_OPTION(y, label, TR("< Mint Green >", "< Verde menta >", "< 薄荷绿 >", "< Mintgrün >", "< ミントグリーン >", "< Мятно-зелёный >", "< Verde Menta >", "< Vert menthe >"), selected, 3) BREAK
+        CASE 4 DRAW_OPTION(y, label, TR("< Lime Green >", "< Verde lima >", "< 酸橙绿 >", "< Limettengrün >", "< ライムグリーン >", "< Лаймовый >", "< Verde Limão >", "< Vert citron >"), selected, 3) BREAK
+        CASE 5 DRAW_OPTION(y, label, TR("< Yellow >", "< Amarillo >", "< 黄色 >", "< Gelb >", "< イエロー >", "< Жёлтый >", "< Amarelo >", "< Jaune >"), selected, 3) BREAK
+        CASE 6 DRAW_OPTION(y, label, TR("< Gold >", "< Oro >", "< 金色 >", "< Gold >", "< ゴールド >", "< Золотой >", "< Ouro >", "< Or >"), selected, 3) BREAK
+        CASE 7 DRAW_OPTION(y, label, TR("< Orange >", "< Naranja >", "< 橙色 >", "< Orange >", "< オレンジ >", "< Оранжевый >", "< Laranja >", "< Orange >"), selected, 3) BREAK
+        CASE 8 DRAW_OPTION(y, label, TR("< Red >", "< Rojo >", "< 红色 >", "< Rot >", "< レッド >", "< Красный >", "< Vermelho >", "< Rouge >"), selected, 3) BREAK
+        CASE 9 DRAW_OPTION(y, label, TR("< Pink >", "< Rosa >", "< 粉色 >", "< Pink >", "< ピンク >", "< Розовый >", "< Rosa >", "< Rose >"), selected, 3) BREAK
+        CASE 10 DRAW_OPTION(y, label, TR("< Hot Pink >", "< Rosa intenso >", "< 艳粉 >", "< Knallpink >", "< ホットピンク >", "< Ярко-розовый >", "< Rosa Choque >", "< Rose vif >"), selected, 3) BREAK
+        CASE 11 DRAW_OPTION(y, label, TR("< Purple >", "< Morado >", "< 紫色 >", "< Lila >", "< パープル >", "< Фиолетовый >", "< Roxo >", "< Violet >"), selected, 3) BREAK
+        CASE 12 DRAW_OPTION(y, label, TR("< Blacklight >", "< Luz negra >", "< 紫光灯 >", "< Schwarzlicht >", "< ブラックライト >", "< Ультрафиолет >", "< Luz Negra >", "< Lumière noire >"), selected, 3) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -547,15 +842,22 @@ PROC MAINTAIN_VEHICLE_GOD_STATE(VEHICLE_INDEX vehicle)
 ENDPROC
 
 PROC APPLY_LSC_MAX_TO_VEHICLE(VEHICLE_INDEX vehicle)
-    INT slot = 0
-    LSC_USE_KIT(vehicle)
-    WHILE slot <= ENUM_TO_INT(MOD_LIVERY)
-        IF slot < ENUM_TO_INT(MOD_TOGGLE_NITROUS) OR slot > ENUM_TO_INT(MOD_TOGGLE_XENON_LIGHTS)
-            INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
-            IF available > 0 SET_VEHICLE_MOD(vehicle, INT_TO_ENUM(MOD_TYPE, slot), available - 1) ENDIF
-        ENDIF
-        slot = slot + 1
+    IF NOT DOES_ENTITY_EXIST(vehicle) EXIT ENDIF
+    INT kits = LSC_KIT_COUNT(vehicle)
+    INT k = 0
+    WHILE k < kits
+        SET_VEHICLE_MOD_KIT(vehicle, k)
+        INT slot = 0
+        WHILE slot <= ENUM_TO_INT(MOD_DOOR_R)
+            IF slot < ENUM_TO_INT(MOD_TOGGLE_NITROUS) OR slot > ENUM_TO_INT(MOD_TOGGLE_XENON_LIGHTS)
+                INT available = GET_NUM_VEHICLE_MODS(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
+                IF available > 0 SET_VEHICLE_MOD(vehicle, INT_TO_ENUM(MOD_TYPE, slot), available - 1) ENDIF
+            ENDIF
+            slot = slot + 1
+        ENDWHILE
+        k = k + 1
     ENDWHILE
+    LSC_USE_KIT(vehicle)
     TOGGLE_VEHICLE_MOD(vehicle, MOD_TOGGLE_TURBO, TRUE)
     TOGGLE_VEHICLE_MOD(vehicle, MOD_TOGGLE_XENON_LIGHTS, TRUE)
     SET_VEHICLE_WINDOW_TINT(vehicle, 1)
@@ -563,6 +865,7 @@ PROC APPLY_LSC_MAX_TO_VEHICLE(VEHICLE_INDEX vehicle)
     SET_VEHICLE_NEON_ENABLED(vehicle, NEON_BACK, TRUE)
     SET_VEHICLE_NEON_ENABLED(vehicle, NEON_LEFT, TRUE)
     SET_VEHICLE_NEON_ENABLED(vehicle, NEON_RIGHT, TRUE)
+    SYNC_LSC_SLOT()
 ENDPROC
 
 PROC APPLY_LSC_MAX()
@@ -571,14 +874,21 @@ PROC APPLY_LSC_MAX()
 ENDPROC
 
 PROC APPLY_LSC_STOCK_TO_VEHICLE(VEHICLE_INDEX vehicle)
-    INT slot = 0
-    LSC_USE_KIT(vehicle)
-    WHILE slot <= ENUM_TO_INT(MOD_LIVERY)
-        IF slot < ENUM_TO_INT(MOD_TOGGLE_NITROUS) OR slot > ENUM_TO_INT(MOD_TOGGLE_XENON_LIGHTS)
-            REMOVE_VEHICLE_MOD(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
-        ENDIF
-        slot = slot + 1
+    IF NOT DOES_ENTITY_EXIST(vehicle) EXIT ENDIF
+    INT kits = LSC_KIT_COUNT(vehicle)
+    INT k = 0
+    WHILE k < kits
+        SET_VEHICLE_MOD_KIT(vehicle, k)
+        INT slot = 0
+        WHILE slot <= ENUM_TO_INT(MOD_DOOR_R)
+            IF slot < ENUM_TO_INT(MOD_TOGGLE_NITROUS) OR slot > ENUM_TO_INT(MOD_TOGGLE_XENON_LIGHTS)
+                REMOVE_VEHICLE_MOD(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
+            ENDIF
+            slot = slot + 1
+        ENDWHILE
+        k = k + 1
     ENDWHILE
+    LSC_USE_KIT(vehicle)
     TOGGLE_VEHICLE_MOD(vehicle, MOD_TOGGLE_TURBO, FALSE)
     TOGGLE_VEHICLE_MOD(vehicle, MOD_TOGGLE_XENON_LIGHTS, FALSE)
     SET_VEHICLE_COLOURS(vehicle, 0, 0)
@@ -590,6 +900,7 @@ PROC APPLY_LSC_STOCK_TO_VEHICLE(VEHICLE_INDEX vehicle)
     SET_VEHICLE_NEON_ENABLED(vehicle, NEON_BACK, FALSE)
     SET_VEHICLE_NEON_ENABLED(vehicle, NEON_LEFT, FALSE)
     SET_VEHICLE_NEON_ENABLED(vehicle, NEON_RIGHT, FALSE)
+    SYNC_LSC_SLOT()
 ENDPROC
 
 PROC APPLY_LSC_STOCK()
@@ -597,71 +908,104 @@ PROC APPLY_LSC_STOCK()
     SYNC_LSC_VEHICLE_STATE()
 ENDPROC
 
-PROC DRAW_LSC_SLOT_SELECTOR(FLOAT y, BOOL selected)
-    SWITCH g_lsc_slot_choice
-        CASE 0 DRAW_OPTION(y, "Mod Slot:", "< Spoiler >", selected, 3) BREAK
-        CASE 1 DRAW_OPTION(y, "Mod Slot:", "< Front bumper >", selected, 3) BREAK
-        CASE 2 DRAW_OPTION(y, "Mod Slot:", "< Rear bumper >", selected, 3) BREAK
-        CASE 3 DRAW_OPTION(y, "Mod Slot:", "< Side skirts >", selected, 3) BREAK
-        CASE 4 DRAW_OPTION(y, "Mod Slot:", "< Exhaust >", selected, 3) BREAK
-        CASE 5 DRAW_OPTION(y, "Mod Slot:", "< Chassis >", selected, 3) BREAK
-        CASE 6 DRAW_OPTION(y, "Mod Slot:", "< Grille >", selected, 3) BREAK
-        CASE 7 DRAW_OPTION(y, "Mod Slot:", "< Hood >", selected, 3) BREAK
-        CASE 8 DRAW_OPTION(y, "Mod Slot:", "< Roof >", selected, 3) BREAK
-        CASE 9 DRAW_OPTION(y, "Mod Slot:", "< Engine >", selected, 3) BREAK
-        CASE 10 DRAW_OPTION(y, "Mod Slot:", "< Brakes >", selected, 3) BREAK
-        CASE 11 DRAW_OPTION(y, "Mod Slot:", "< Transmission >", selected, 3) BREAK
-        CASE 12 DRAW_OPTION(y, "Mod Slot:", "< Horn >", selected, 3) BREAK
-        CASE 13 DRAW_OPTION(y, "Mod Slot:", "< Suspension >", selected, 3) BREAK
-        CASE 14 DRAW_OPTION(y, "Mod Slot:", "< Armor >", selected, 3) BREAK
-        CASE 15 DRAW_OPTION(y, "Mod Slot:", "< Wheels >", selected, 3) BREAK
-        CASE 16 DRAW_OPTION(y, "Mod Slot:", "< Plate Holder >", selected, 3) BREAK
-        CASE 17 DRAW_OPTION(y, "Mod Slot:", "< Vanity Plate >", selected, 3) BREAK
-        CASE 18 DRAW_OPTION(y, "Mod Slot:", "< Interior 1 >", selected, 3) BREAK
-        CASE 19 DRAW_OPTION(y, "Mod Slot:", "< Interior 2 >", selected, 3) BREAK
-        CASE 20 DRAW_OPTION(y, "Mod Slot:", "< Interior 3 >", selected, 3) BREAK
-        CASE 21 DRAW_OPTION(y, "Mod Slot:", "< Interior 4 >", selected, 3) BREAK
-        CASE 22 DRAW_OPTION(y, "Mod Slot:", "< Interior 5 >", selected, 3) BREAK
-        CASE 23 DRAW_OPTION(y, "Mod Slot:", "< Seats >", selected, 3) BREAK
-        CASE 24 DRAW_OPTION(y, "Mod Slot:", "< Steering Wheel >", selected, 3) BREAK
-        CASE 25 DRAW_OPTION(y, "Mod Slot:", "< Livery >", selected, 3) BREAK
-        CASE 26 DRAW_OPTION(y, "Mod Slot:", "< Left Wing >", selected, 3) BREAK
-        CASE 27 DRAW_OPTION(y, "Mod Slot:", "< Right Wing >", selected, 3) BREAK
-        CASE 28 DRAW_OPTION(y, "Mod Slot:", "< Rear Wheels >", selected, 3) BREAK
-        CASE 29 DRAW_OPTION(y, "Mod Slot:", "< Interior Knob >", selected, 3) BREAK
-        CASE 30 DRAW_OPTION(y, "Mod Slot:", "< Interior Plaque >", selected, 3) BREAK
-        CASE 31 DRAW_OPTION(y, "Mod Slot:", "< Ice / Speakers >", selected, 3) BREAK
-        CASE 32 DRAW_OPTION(y, "Mod Slot:", "< Trunk >", selected, 3) BREAK
-        CASE 33 DRAW_OPTION(y, "Mod Slot:", "< Hydraulics >", selected, 3) BREAK
-        CASE 34 DRAW_OPTION(y, "Mod Slot:", "< Engine Bay 1 >", selected, 3) BREAK
-        CASE 35 DRAW_OPTION(y, "Mod Slot:", "< Engine Bay 2 >", selected, 3) BREAK
-        CASE 36 DRAW_OPTION(y, "Mod Slot:", "< Engine Bay 3 >", selected, 3) BREAK
-        CASE 37 DRAW_OPTION(y, "Mod Slot:", "< Chassis 2 >", selected, 3) BREAK
-        CASE 38 DRAW_OPTION(y, "Mod Slot:", "< Chassis 3 >", selected, 3) BREAK
-        CASE 39 DRAW_OPTION(y, "Mod Slot:", "< Chassis 4 >", selected, 3) BREAK
-        CASE 40 DRAW_OPTION(y, "Mod Slot:", "< Chassis 5 >", selected, 3) BREAK
-        CASE 41 DRAW_OPTION(y, "Mod Slot:", "< Left Door >", selected, 3) BREAK
-        CASE 42 DRAW_OPTION(y, "Mod Slot:", "< Right Door >", selected, 3) BREAK
+FUNC STRING LSC_DEFAULT_SLOT_NAME(INT choice)
+    SWITCH choice
+        CASE 0 RETURN TR("Spoiler", "Alerón", "尾翼", "Spoiler", "スポイラー", "Спойлер", "Aerofólio", "Aileron") BREAK
+        CASE 1 RETURN TR("Front bumper", "Parachoques del.", "前保险杠", "Frontstoßstange", "フロントバンパー", "Передний бампер", "Para-choque Diant.", "Pare-chocs avant") BREAK
+        CASE 2 RETURN TR("Rear bumper", "Parachoques tras.", "后保险杠", "Heckstoßstange", "リアバンパー", "Задний бампер", "Para-choque Tras.", "Pare-chocs arrière") BREAK
+        CASE 3 RETURN TR("Side skirts", "Faldones", "侧裙", "Seitenschweller", "サイドスカート", "Боковые юбки", "Saias Laterais", "Bas de caisse") BREAK
+        CASE 4 RETURN TR("Exhaust", "Escape", "排气管", "Auspuff", "マフラー", "Выхлоп", "Escapamento", "Échappement") BREAK
+        CASE 5 RETURN TR("Chassis", "Chasis", "底盘/防滚架", "Fahrgestell", "シャーシ", "Каркас", "Chassi", "Châssis") BREAK
+        CASE 6 RETURN TR("Grille", "Parrilla", "格栅", "Kühlergrill", "グリル", "Решётка радиатора", "Grade", "Calandre") BREAK
+        CASE 7 RETURN TR("Hood", "Capó", "引擎盖", "Motorhaube", "ボンネット", "Капот", "Capô", "Capot") BREAK
+        CASE 8 RETURN TR("Roof", "Techo", "车顶", "Dach", "ルーフ", "Крыша", "Teto", "Toit") BREAK
+        CASE 9 RETURN TR("Engine", "Motor", "引擎", "Motor", "エンジン", "Двигатель", "Motor", "Moteur") BREAK
+        CASE 10 RETURN TR("Brakes", "Frenos", "刹车", "Bremsen", "ブレーキ", "Тормоза", "Freios", "Freins") BREAK
+        CASE 11 RETURN TR("Transmission", "Transmisión", "变速箱", "Getriebe", "トランスミッション", "Трансмиссия", "Transmissão", "Transmission") BREAK
+        CASE 12 RETURN TR("Horn", "Bocina", "喇叭", "Hupe", "クラクション", "Клаксон", "Buzina", "Klaxon") BREAK
+        CASE 13 RETURN TR("Suspension", "Suspensión", "悬挂", "Federung", "サスペンション", "Подвеска", "Suspensão", "Suspension") BREAK
+        CASE 14 RETURN TR("Armor", "Blindaje", "装甲", "Panzerung", "アーマー", "Броня", "Blindagem", "Blindage") BREAK
+        CASE 15 RETURN TR("Wheels", "Ruedas", "车轮", "Räder", "ホイール", "Колёса", "Rodas", "Roues") BREAK
+        CASE 16 RETURN TR("Plate Holder", "Portamatrículas", "车牌架", "Kennzeichenhalter", "プレートホルダー", "Рамка номера", "Suporte de Placa", "Support de plaque") BREAK
+        CASE 17 RETURN TR("Vanity Plate", "Matrícula decorativa", "装饰车牌", "Zierkennzeichen", "バニティプレート", "Декор. номер", "Placa Decorativa", "Plaque décorative") BREAK
+        CASE 18 RETURN TR("Interior 1", "Interior 1", "内饰 1", "Innenraum 1", "内装 1", "Салон 1", "Interior 1", "Intérieur 1") BREAK
+        CASE 19 RETURN TR("Interior 2", "Interior 2", "内饰 2", "Innenraum 2", "内装 2", "Салон 2", "Interior 2", "Intérieur 2") BREAK
+        CASE 20 RETURN TR("Interior 3", "Interior 3", "内饰 3", "Innenraum 3", "内装 3", "Салон 3", "Interior 3", "Intérieur 3") BREAK
+        CASE 21 RETURN TR("Interior 4", "Interior 4", "内饰 4", "Innenraum 4", "内装 4", "Салон 4", "Interior 4", "Intérieur 4") BREAK
+        CASE 22 RETURN TR("Interior 5", "Interior 5", "内饰 5", "Innenraum 5", "内装 5", "Салон 5", "Interior 5", "Intérieur 5") BREAK
+        CASE 23 RETURN TR("Seats", "Asientos", "座椅", "Sitze", "シート", "Сиденья", "Bancos", "Sièges") BREAK
+        CASE 24 RETURN TR("Steering Wheel", "Volante", "方向盘", "Lenkrad", "ステアリング", "Руль", "Volante", "Volant") BREAK
+        CASE 25 RETURN TR("Livery", "Cubierta", "涂装", "Design", "ペイントジョブ", "Раскраска", "Estampa", "Motif") BREAK
+        CASE 26 RETURN TR("Left Wing", "Guardabarros izq.", "左翼子板", "Linker Kotflügel", "左フェンダー", "Левое крыло", "Para-lama Esq.", "Aile gauche") BREAK
+        CASE 27 RETURN TR("Right Wing", "Guardabarros der.", "右翼子板", "Rechter Kotflügel", "右フェンダー", "Правое крыло", "Para-lama Dir.", "Aile droite") BREAK
+        CASE 28 RETURN TR("Rear Wheels", "Ruedas traseras", "后轮", "Hinterräder", "リアホイール", "Задние колёса", "Rodas Traseiras", "Roues arrière") BREAK
+        CASE 29 RETURN TR("Interior Knob", "Pomo de cambios", "排挡头", "Schaltknauf", "シフトノブ", "Ручка КПП", "Manopla de Câmbio", "Pommeau de levier") BREAK
+        CASE 30 RETURN TR("Interior Plaque", "Placa interior", "车内铭牌", "Innenplakette", "プラーク", "Табличка в салоне", "Placa Interna", "Plaque intérieure") BREAK
+        CASE 31 RETURN TR("Ice / Speakers", "Altavoces", "音响喇叭", "Lautsprecher", "スピーカー", "Аудиосистема", "Alto-falantes", "Haut-parleurs") BREAK
+        CASE 32 RETURN TR("Trunk", "Maletero", "后备箱", "Kofferraum", "トランク", "Багажник", "Porta-malas", "Coffre") BREAK
+        CASE 33 RETURN TR("Hydraulics", "Hidráulica", "液压系统", "Hydraulik", "ハイドロ", "Гидравлика", "Hidráulica", "Hydraulique") BREAK
+        CASE 34 RETURN TR("Engine Bay 1", "Vano motor 1", "引擎舱 1", "Motorraum 1", "エンジンルーム 1", "Моторный отсек 1", "Cofre do Motor 1", "Compartiment moteur 1") BREAK
+        CASE 35 RETURN TR("Engine Bay 2", "Vano motor 2", "引擎舱 2", "Motorraum 2", "エンジンルーム 2", "Моторный отсек 2", "Cofre do Motor 2", "Compartiment moteur 2") BREAK
+        CASE 36 RETURN TR("Engine Bay 3", "Vano motor 3", "引擎舱 3", "Motorraum 3", "エンジンルーム 3", "Моторный отсек 3", "Cofre do Motor 3", "Compartiment moteur 3") BREAK
+        CASE 37 RETURN TR("Chassis 2", "Chasis 2", "底盘 2", "Fahrgestell 2", "シャーシ 2", "Шасси 2", "Chassi 2", "Châssis 2") BREAK
+        CASE 38 RETURN TR("Chassis 3", "Chasis 3", "底盘 3", "Fahrgestell 3", "シャーシ 3", "Шасси 3", "Chassi 3", "Châssis 3") BREAK
+        CASE 39 RETURN TR("Chassis 4", "Chasis 4", "底盘 4", "Fahrgestell 4", "シャーシ 4", "Шасси 4", "Chassi 4", "Châssis 4") BREAK
+        CASE 40 RETURN TR("Chassis 5", "Chasis 5", "底盘 5", "Fahrgestell 5", "シャーシ 5", "Шасси 5", "Chassi 5", "Châssis 5") BREAK
+        CASE 41 RETURN TR("Left Door", "Puerta izquierda", "左车门", "Linke Tür", "左ドア", "Левая дверь", "Porta Esquerda", "Porte gauche") BREAK
+        CASE 42 RETURN TR("Right Door", "Puerta derecha", "右车门", "Rechte Tür", "右ドア", "Правая дверь", "Porta Direita", "Porte droite") BREAK
     ENDSWITCH
+    RETURN TR("Mod Slot", "Ranura de mod", "改装槽位", "Mod-Slot", "改造スロット", "Слот модификации", "Slot de Mod", "Emplacement mod")
+ENDFUNC
+
+PROC DRAW_LSC_SLOT_SELECTOR(FLOAT y, BOOL selected)
+    STRING lbl = TR("Mod Slot:", "Ranura de mod:", "改装槽位:", "Mod-Slot:", "改造スロット:", "Слот модификации:", "Slot de Mod:", "Emplacement mod:")
+    VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF NOT DOES_ENTITY_EXIST(vehicle)
+        DRAW_OPTION(y, lbl, TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >"), selected, 0)
+        EXIT
+    ENDIF
+    IF NOT LSC_HAS_ANY_CUSTOMIZABLE_SLOTS(vehicle)
+        DRAW_OPTION(y, lbl, TR("< None >", "< Ninguno >", "< 无 >", "< Keine >", "< なし >", "< Нет >", "< Nenhum >", "< Aucun >"), selected, 0)
+        EXIT
+    ENDIF
+    INT slot = LSC_SLOT()
+    LSC_KIT_FOR_SLOT(vehicle, slot)
+    STRING slotName = ""
+    STRING gxtSlot = GET_MOD_SLOT_NAME(vehicle, INT_TO_ENUM(MOD_TYPE, slot))
+    IF NOT IS_STRING_NULL_OR_EMPTY(gxtSlot) AND NOT ARE_STRINGS_EQUAL(gxtSlot, "NULL")
+        slotName = LSC_RESOLVE_LABEL(gxtSlot)
+    ENDIF
+    IF IS_STRING_NULL_OR_EMPTY(slotName) OR ARE_STRINGS_EQUAL(slotName, "NULL")
+        slotName = LSC_DEFAULT_SLOT_NAME(g_lsc_slot_choice)
+    ENDIF
+    TEXT_LABEL_63 slotDisplay = "< "
+    slotDisplay += slotName
+    slotDisplay += " >"
+    DRAW_OPTION(y, lbl, slotDisplay, selected, 3)
 ENDPROC
 
+// Wheel family label, shared by the main LS Customs "Wheel Type" row and the
+// Wheels & Tyres page's "Wheel Family" row.  It is declared up here, above the
+// LS Customs page draw code, because this compiler requires every name to be
+// declared before it is used and the LS Customs row comes first in this file.
+// 0-12 is the full MOD_WHEEL_TYPE range.
 FUNC STRING WHEEL_FAMILY_LABEL(INT family)
     SWITCH family
-        CASE 0 RETURN "< Sport >" BREAK
-        CASE 1 RETURN "< Muscle >" BREAK
-        CASE 2 RETURN "< Lowrider >" BREAK
+        CASE 0 RETURN TR("< Sport >", "< Deportivo >", "< 运动跑车 >", "< Sport >", "< スポーツ >", "< Спорт >", "< Esportivo >", "< Sport >") BREAK
+        CASE 1 RETURN TR("< Muscle >", "< Muscle >", "< 肌肉车 >", "< Muscle >", "< マッスル >", "< Маслкар >", "< Muscle >", "< Muscle >") BREAK
+        CASE 2 RETURN TR("< Lowrider >", "< Lowrider >", "< 低底盘车 >", "< Lowrider >", "< ローライダー >", "< Лоурайдер >", "< Lowrider >", "< Lowrider >") BREAK
         CASE 3 RETURN "< SUV >" BREAK
-        CASE 4 RETURN "< Offroad >" BREAK
-        CASE 5 RETURN "< Tuner >" BREAK
-        CASE 6 RETURN "< Bike >" BREAK
-        CASE 7 RETURN "< Hi-End >" BREAK
+        CASE 4 RETURN TR("< Offroad >", "< Todoterreno >", "< 越野车 >", "< Offroad >", "< オフロード >", "< Внедорожник >", "< Off-road >", "< Tout-terrain >") BREAK
+        CASE 5 RETURN TR("< Tuner >", "< Tuner >", "< 改装车 >", "< Tuner >", "< チューナー >", "< Тюнер >", "< Tuner >", "< Tuning >") BREAK
+        CASE 6 RETURN TR("< Bike >", "< Moto >", "< 摩托车 >", "< Motorrad >", "< バイク >", "< Мотоцикл >", "< Moto >", "< Moto >") BREAK
+        CASE 7 RETURN TR("< Hi-End >", "< Alta gama >", "< 高端豪华 >", "< Luxus >", "< ハイエンド >", "< Люкс >", "< Luxo >", "< Haut de gamme >") BREAK
         CASE 8 RETURN "< Supermod 1 >" BREAK
         CASE 9 RETURN "< Supermod 2 >" BREAK
         CASE 10 RETURN "< Supermod 3 >" BREAK
         CASE 11 RETURN "< Supermod 4 >" BREAK
         CASE 12 RETURN "< Supermod 5 >" BREAK
     ENDSWITCH
-    RETURN "< Sport >"
+    RETURN TR("< Sport >", "< Deportivo >", "< 运动跑车 >", "< Sport >", "< スポーツ >", "< Спорт >", "< Esportivo >", "< Sport >")
 ENDFUNC
 
 PROC DRAW_LSC_SCROLL_ROWS()
@@ -670,35 +1014,38 @@ PROC DRAW_LSC_SCROLL_ROWS()
     WHILE row < 8 AND index < LSC_MENU_ROWS
         FLOAT y = 0.268 + (TO_FLOAT(row) * ROW_H)
         SWITCH index
-            CASE 0 DRAW_OPTION(y, "Max All Available Mods", "APPLY", g_item = index, 2) BREAK
-            CASE 1 DRAW_OPTION(y, "Return To Stock", "APPLY", g_item = index, 2) BREAK
+            CASE 0 DRAW_OPTION(y, TR("Max All Available Mods", "Mejorar todo al máximo", "全满改装", "Alle verfügbaren Mods max.", "全改造を最大化", "Макс. все модификации", "Maximizar Todas as Mods", "Toutes les mods au max"), "APPLY", g_item = index, 2) BREAK
+            CASE 1 DRAW_OPTION(y, TR("Return To Stock", "Volver a serie", "恢复原厂", "Auf Serie zurücksetzen", "純正に戻す", "Вернуть сток", "Voltar ao Original", "Remettre d'origine"), "APPLY", g_item = index, 2) BREAK
             CASE 2 DRAW_LSC_SLOT_SELECTOR(y, g_item = index) BREAK
             CASE 3 DRAW_LSC_MOD_SELECTOR(y, g_item = index) BREAK
             CASE 4 DRAW_LSC_VARIANT_COUNT(y, g_item = index) BREAK
-            CASE 5 DRAW_LSC_COLOUR_SELECTOR(y, "Primary Paint", g_lsc_primary_colour, g_item = index) BREAK
-            CASE 6 DRAW_LSC_COLOUR_SELECTOR(y, "Secondary Paint", g_lsc_secondary_colour, g_item = index) BREAK
-            CASE 7 DRAW_LSC_COLOUR_SELECTOR(y, "Pearlescent Paint", g_lsc_pearlescent_colour, g_item = index) BREAK
-            CASE 8 DRAW_LSC_COLOUR_SELECTOR(y, "Wheel Colour", g_lsc_wheel_colour, g_item = index) BREAK
-            CASE 9 DRAW_OPTION(y, "Wheel Type", WHEEL_FAMILY_LABEL(g_lsc_wheel_type), g_item = index, 3) BREAK
-            CASE 10 IF g_lsc_turbo DRAW_OPTION(y, "Turbo", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Turbo", "OFF", g_item = index, 0) ENDIF BREAK
-            CASE 11 IF g_lsc_xenon DRAW_OPTION(y, "Xenon Lights", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Xenon Lights", "OFF", g_item = index, 0) ENDIF BREAK
-            CASE 12 DRAW_LSC_LIGHT_SELECTOR(y, "Xenon Colour", g_lsc_xenon_colour, g_item = index) BREAK
-            CASE 13 IF g_lsc_neon DRAW_OPTION(y, "Neon Kit", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Neon Kit", "OFF", g_item = index, 0) ENDIF BREAK
-            CASE 14 DRAW_LSC_LIGHT_SELECTOR(y, "Neon Colour", g_lsc_neon_colour, g_item = index) BREAK
+            CASE 5 DRAW_LSC_COLOUR_SELECTOR(y, TR("Primary Paint", "Pintura principal", "主色调", "Primärfarbe", "メインカラー", "Основной цвет", "Pintura Primária", "Couleur principale"), g_lsc_primary_colour, g_item = index) BREAK
+            CASE 6 DRAW_LSC_COLOUR_SELECTOR(y, TR("Secondary Paint", "Pintura secundaria", "副色调", "Sekundärfarbe", "サブカラー", "Дополнительный цвет", "Pintura Secundária", "Couleur secondaire"), g_lsc_secondary_colour, g_item = index) BREAK
+            CASE 7 DRAW_LSC_COLOUR_SELECTOR(y, TR("Pearlescent Paint", "Pintura nacarada", "珠光色", "Perleffekt", "パールセント", "Перламутр", "Pintura Perolada", "Nacré"), g_lsc_pearlescent_colour, g_item = index) BREAK
+            CASE 8 DRAW_LSC_COLOUR_SELECTOR(y, TR("Wheel Colour", "Color de ruedas", "轮毂颜色", "Felgenfarbe", "ホイールカラー", "Цвет дисков", "Cor das Rodas", "Couleur des jantes"), g_lsc_wheel_colour, g_item = index) BREAK
+            CASE 9 DRAW_OPTION(y, TR("Wheel Type", "Tipo de rueda", "车轮类型", "Radtyp", "ホイールタイプ", "Тип колёс", "Tipo de Roda", "Type de roues"), WHEEL_FAMILY_LABEL(g_lsc_wheel_type), g_item = index, 3) BREAK
+            CASE 10 IF g_lsc_turbo DRAW_OPTION(y, TR("Turbo", "Turbo", "涡轮增压", "Turbo", "ターボ", "Турбонаддув", "Turbo", "Turbo"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Turbo", "Turbo", "涡轮增压", "Turbo", "ターボ", "Турбонаддув", "Turbo", "Turbo"), "OFF", g_item = index, 0) ENDIF BREAK
+            CASE 11 IF g_lsc_xenon DRAW_OPTION(y, TR("Xenon Lights", "Luces de xenón", "氙气大灯", "Xenon-Scheinwerfer", "キセノンライト", "Ксеноновые фары", "Faróis de Xenon", "Phares au xénon"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Xenon Lights", "Luces de xenón", "氙气大灯", "Xenon-Scheinwerfer", "キセノンライト", "Ксеноновые фары", "Faróis de Xenon", "Phares au xénon"), "OFF", g_item = index, 0) ENDIF BREAK
+            CASE 12 DRAW_LSC_LIGHT_SELECTOR(y, TR("Xenon Colour", "Color de xenón", "氙气灯颜色", "Xenon-Farbe", "キセノンカラー", "Цвет ксенона", "Cor do Xenon", "Couleur du xénon"), g_lsc_xenon_colour, g_item = index) BREAK
+            CASE 13 IF g_lsc_neon DRAW_OPTION(y, TR("Neon Kit", "Kit de neón", "霓虹灯套件", "Neon-Kit", "ネオンキット", "Неоновая подсветка", "Kit de Neon", "Kit néon"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Neon Kit", "Kit de neón", "霓虹灯套件", "Neon-Kit", "ネオンキット", "Неоновая подсветка", "Kit de Neon", "Kit néon"), "OFF", g_item = index, 0) ENDIF BREAK
+            CASE 14 DRAW_LSC_LIGHT_SELECTOR(y, TR("Neon Colour", "Color de neón", "霓虹灯颜色", "Neon-Farbe", "ネオンカラー", "Цвет неона", "Cor do Neon", "Couleur du néon"), g_lsc_neon_colour, g_item = index) BREAK
             CASE 15 DRAW_LSC_WINDOW_TINT_SELECTOR(y, g_item = index) BREAK
-            CASE 16 DRAW_LSC_PLATE_ROW(y, g_item = index) BREAK
-            CASE 17 DRAW_OPTION(y, "Apply Plate Text", "APPLY", g_item = index, 2) BREAK
-            CASE 18 DRAW_OPTION(y, "Clear Selected Slot", "APPLY", g_item = index, 2) BREAK
-            CASE 19 DRAW_OPTION(y, "Mod Kit", LSC_KIT_INDEX_TEXT(), g_item = index, 3) BREAK
-            CASE 20 DRAW_OPTION(y, "Mod Kit Type", LSC_KIT_TYPE_TEXT(), g_item = index, 2) BREAK
-            CASE 21 DRAW_OPTION(y, "Mod Kit Count", LSC_KIT_COUNT_TEXT(), g_item = index, 2) BREAK
-            CASE 22 DRAW_OPTION(y, "Hydraulics & Bounce", "OPEN", g_item = index, 2) BREAK
-            CASE 23 DRAW_OPTION(y, "Lowrider Interior", "OPEN", g_item = index, 2) BREAK
-            CASE 24 DRAW_OPTION(y, "Wheels & Tyres", "OPEN", g_item = index, 2) BREAK
-            CASE 25 DRAW_OPTION(y, "Extras & Livery", "OPEN", g_item = index, 2) BREAK
-            CASE 26 DRAW_OPTION(y, "Bennys & Lowriders", "OPEN", g_item = index, 2) BREAK
-            CASE 27 DRAW_OPTION(y, "Convert To Custom", CONVERT_STATUS_TEXT(), g_item = index, 2) BREAK
-            CASE 28 IF PLAYER_CAR_HAS_HYDRO() DRAW_OPTION(y, "Vehicle Support Check", LOWRIDER_SUPPORT_TEXT(), g_item = index, 1) ELSE DRAW_OPTION(y, "Vehicle Support Check", LOWRIDER_SUPPORT_TEXT(), g_item = index, 0) ENDIF BREAK
+            CASE 16 DRAW_LSC_PLATE_STYLE_SELECTOR(y, g_item = index) BREAK
+            CASE 17 DRAW_LSC_PLATE_ROW(y, g_item = index) BREAK
+            CASE 18 DRAW_OPTION(y, TR("Apply Plate Text", "Aplicar texto de matrícula", "应用车牌文字", "Kennzeichentext anwenden", "ナンバー文字列を適用", "Применить текст номера", "Aplicar Texto da Placa", "Appliquer texte de plaque"), "APPLY", g_item = index, 2) BREAK
+            CASE 19 DRAW_OPTION(y, TR("Clear Selected Slot", "Limpiar ranura seleccionada", "清除所选槽位", "Gewählten Slot leeren", "選択スロットを解除", "Очистить выбранный слот", "Limpar Slot Selecionado", "Vider l'emplacement"), "APPLY", g_item = index, 2) BREAK
+            // ---- v0.9.9 depth (rows 20-26, shifted by 1 when License Plate Style was added at row 16).
+            CASE 20 DRAW_OPTION(y, TR("Mod Kit", "Kit de mod", "改装套件", "Mod-Kit", "改造キット", "Мод-кит", "Kit de Mod", "Kit de mod"), LSC_KIT_INDEX_TEXT(), g_item = index, 3) BREAK
+            CASE 21 DRAW_OPTION(y, TR("Mod Kit Type", "Tipo de kit de mod", "套件类型", "Mod-Kit-Typ", "キットタイプ", "Тип мод-кита", "Tipo de Kit", "Type de kit"), LSC_KIT_TYPE_TEXT(), g_item = index, 2) BREAK
+            CASE 22 DRAW_OPTION(y, TR("Mod Kit Count", "Cantidad de kits", "套件数量", "Mod-Kit-Anzahl", "キット数", "Кол-во мод-китов", "Total de Kits", "Nombre de kits"), LSC_KIT_COUNT_TEXT(), g_item = index, 2) BREAK
+            CASE 23 DRAW_OPTION(y, TR("Hydraulics & Bounce", "Hidráulica y rebote", "液压与弹跳", "Hydraulik & Hüpfen", "ハイドロ＆バウンス", "Гидравлика и прыжки", "Hidráulica e Salto", "Hydraulique et rebond"), "OPEN", g_item = index, 2) BREAK
+            CASE 24 DRAW_OPTION(y, TR("Lowrider Interior", "Interior lowrider", "低底盘车内饰", "Lowrider-Innenraum", "ローライダー内装", "Салон лоурайдера", "Interior Lowrider", "Intérieur lowrider"), "OPEN", g_item = index, 2) BREAK
+            CASE 25 DRAW_OPTION(y, TR("Wheels & Tyres", "Ruedas y neumáticos", "车轮与轮胎", "Räder & Reifen", "ホイール＆タイヤ", "Колёса и шины", "Rodas e Pneus", "Roues et pneus"), "OPEN", g_item = index, 2) BREAK
+            CASE 26 DRAW_OPTION(y, TR("Extras & Livery", "Extras y cubierta", "配件与涂装", "Extras & Design", "エクストラ＆ペイント", "Экстры и раскраска", "Extras e Estampa", "Extras et motif"), "OPEN", g_item = index, 2) BREAK
+            // ---- v0.9.9 lowrider capability rows (27-29) ----
+            CASE 27 DRAW_OPTION(y, TR("Bennys & Lowriders", "Benny's y Lowriders", "班尼车坊与低底盘车", "Benny's & Lowrider", "ベニーズ＆ローライダー", "Benny's и лоурайдеры", "Benny's e Lowriders", "Benny's et Lowriders"), "OPEN", g_item = index, 2) BREAK
+            CASE 28 DRAW_OPTION(y, TR("Convert To Custom", "Convertir a Custom", "升级为改装版", "Zu Custom umbauen", "カスタム仕様に変換", "Конвертировать в Custom", "Converter para Custom", "Convertir en Custom"), CONVERT_STATUS_TEXT(), g_item = index, 2) BREAK
+            CASE 29 IF PLAYER_CAR_HAS_HYDRO() DRAW_OPTION(y, TR("Vehicle Support Check", "Comprobar compatibilidad", "载具支持检查", "Fahrzeug-Kompatibilität", "車両対応チェック", "Проверка совместимости", "Verificar Compatibilidade", "Vérif. compatibilité"), LOWRIDER_SUPPORT_TEXT(), g_item = index, 1) ELSE DRAW_OPTION(y, TR("Vehicle Support Check", "Comprobar compatibilidad", "载具支持检查", "Fahrzeug-Kompatibilität", "車両対応チェック", "Проверка совместимости", "Verificar Compatibilidade", "Vérif. compatibilité"), LOWRIDER_SUPPORT_TEXT(), g_item = index, 0) ENDIF BREAK
         ENDSWITCH
         index = index + 1
         row = row + 1
@@ -709,7 +1056,7 @@ PROC DRAW_LSC_PAGE()
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "LS CUSTOMS")
     DRAW_MENU_VERSION_TAG()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        DRAW_OPTION(0.268, "Vehicle Upgrades", "NO VEHICLE", g_item = 0, 0)
+        DRAW_OPTION(0.268, TR("Vehicle Upgrades", "Mejoras del vehículo", "载具升级", "Fahrzeug-Upgrades", "車両アップグレード", "Улучшения транспорта", "Melhorias do Veículo", "Améliorations véhicule"), "NO VEHICLE", g_item = 0, 0)
     ELSE
         DRAW_LSC_SCROLL_ROWS()
     ENDIF
@@ -925,11 +1272,19 @@ FUNC MODEL_NAMES CURRENT_SPAWNER_MODEL()
 ENDFUNC
 
 PROC CLEANUP_VEHICLE_PREVIEW()
+    IF g_vehicle_preview_vehicle = NULL AND g_vehicle_preview_model = DUMMY_MODEL_FOR_SCRIPT AND g_vehicle_preview_request_time = 0
+        EXIT
+    ENDIF
     IF DOES_ENTITY_EXIST(g_vehicle_preview_vehicle)
         SET_ENTITY_AS_MISSION_ENTITY(g_vehicle_preview_vehicle, TRUE, TRUE)
         DELETE_VEHICLE(g_vehicle_preview_vehicle)
     ENDIF
     g_vehicle_preview_vehicle = NULL
+    IF g_vehicle_preview_model != DUMMY_MODEL_FOR_SCRIPT
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_vehicle_preview_model)
+        g_vehicle_preview_model = DUMMY_MODEL_FOR_SCRIPT
+    ENDIF
+    g_vehicle_preview_request_time = 0
 ENDPROC
 
 PROC SYNC_VEHICLE_PREVIEW_MODEL()
@@ -943,12 +1298,11 @@ ENDPROC
 PROC PROCESS_VEHICLE_PREVIEW()
     VECTOR previewPosition = <<0.0, 0.0, 0.0>>
     FLOAT previewHeading = 0.0
-    IF NOT g_vehicle_preview_enabled EXIT ENDIF
-    IF NOT g_spawner_open
+    IF NOT g_vehicle_preview_enabled OR NOT g_open OR g_home OR NOT g_spawner_open
         CLEANUP_VEHICLE_PREVIEW()
         EXIT
     ENDIF
-    IF g_vehicle_spawn_pending EXIT ENDIF
+    IF g_vehicle_spawn_pending OR g_convert_pending EXIT ENDIF
     IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
         CLEANUP_VEHICLE_PREVIEW()
         EXIT
@@ -957,14 +1311,20 @@ PROC PROCESS_VEHICLE_PREVIEW()
     IF NOT IS_MODEL_IN_CDIMAGE(g_vehicle_preview_model) OR NOT IS_MODEL_VALID(g_vehicle_preview_model) EXIT ENDIF
     IF NOT DOES_ENTITY_EXIST(g_vehicle_preview_vehicle)
         IF NOT HAS_MODEL_LOADED(g_vehicle_preview_model)
-            REQUEST_MODEL(g_vehicle_preview_model)
-            g_vehicle_preview_request_time = GET_GAME_TIMER()
+            IF g_vehicle_preview_request_time = 0
+                REQUEST_MODEL(g_vehicle_preview_model)
+                g_vehicle_preview_request_time = GET_GAME_TIMER()
+            ELIF GET_GAME_TIMER() > g_vehicle_preview_request_time + 8000
+                SET_MODEL_AS_NO_LONGER_NEEDED(g_vehicle_preview_model)
+                g_vehicle_preview_request_time = 0
+            ENDIF
             EXIT
         ENDIF
         previewPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER_PED_ID(), <<0.0, 8.0, 0.5>>)
         previewHeading = GET_ENTITY_HEADING(PLAYER_PED_ID()) + 90.0
         g_vehicle_preview_vehicle = CREATE_VEHICLE(g_vehicle_preview_model, previewPosition, previewHeading, FALSE)
         IF DOES_ENTITY_EXIST(g_vehicle_preview_vehicle)
+            SET_ENTITY_AS_MISSION_ENTITY(g_vehicle_preview_vehicle, TRUE, TRUE)
             FREEZE_ENTITY_POSITION(g_vehicle_preview_vehicle, TRUE)
             SET_ENTITY_COLLISION(g_vehicle_preview_vehicle, FALSE, FALSE)
             SET_ENTITY_CAN_BE_DAMAGED(g_vehicle_preview_vehicle, FALSE)
@@ -973,10 +1333,8 @@ PROC PROCESS_VEHICLE_PREVIEW()
             SET_VEHICLE_DOORS_LOCKED(g_vehicle_preview_vehicle, VEHICLELOCK_LOCKED)
         ENDIF
         SET_MODEL_AS_NO_LONGER_NEEDED(g_vehicle_preview_model)
+        g_vehicle_preview_request_time = 0
         EXIT
-    ENDIF
-    IF GET_GAME_TIMER() > g_vehicle_preview_request_time + 8000
-        SET_MODEL_AS_NO_LONGER_NEEDED(g_vehicle_preview_model)
     ENDIF
     previewPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER_PED_ID(), <<0.0, 8.0, 0.5>>)
     previewHeading = GET_ENTITY_HEADING(PLAYER_PED_ID()) + 90.0
@@ -985,7 +1343,7 @@ PROC PROCESS_VEHICLE_PREVIEW()
 ENDPROC
 
 PROC START_VEHICLE_MODEL_SPAWN(MODEL_NAMES model)
-    IF g_vehicle_spawn_pending EXIT ENDIF
+    IF g_vehicle_spawn_pending OR g_convert_pending EXIT ENDIF
     IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) EXIT ENDIF
     CLEANUP_VEHICLE_PREVIEW()
     g_pending_vehicle_model = model
@@ -998,14 +1356,6 @@ PROC START_VEHICLE_MODEL_SPAWN(MODEL_NAMES model)
     REQUEST_MODEL(g_pending_vehicle_model)
     g_vehicle_spawn_pending = TRUE
     g_vehicle_spawn_request_time = GET_GAME_TIMER()
-ENDPROC
-
-PROC PROCESS_QUICK_VEHICLE_ENTRY_EXIT_FROM_MENU(PED_INDEX playerPed)
-    IF NOCLIP_VEHICLE_ENTRY_BLOCKED() EXIT ENDIF
-    VEHICLE_INDEX menuNearbyVehicle = GET_CLOSEST_VEHICLE(GET_ENTITY_COORDS(playerPed), 7.5, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES | VEHICLE_SEARCH_FLAG_RETURN_LAW_ENFORCER_VEHICLES | VEHICLE_SEARCH_FLAG_RETURN_MISSION_VEHICLES)
-    IF DOES_ENTITY_EXIST(menuNearbyVehicle)
-        SET_PED_INTO_VEHICLE(playerPed, menuNearbyVehicle, VS_DRIVER)
-    ENDIF
 ENDPROC
 
 PROC OPEN_MENU_KEYBOARD(INT target)
@@ -1026,6 +1376,9 @@ PROC OPEN_MENU_KEYBOARD(INT target)
     ELIF target = 13
         g_chauffeur_ped_search_not_found = FALSE
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "PED MODEL", "TYPE MODEL NAME", "", "", "", "", 64)
+    ELIF target = 16
+        g_story_ped_search_not_found = FALSE
+        DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "PED MODEL", "TYPE MODEL NAME", "", "", "", "", 64)
     ELIF target = 4
         g_vehicle_search_not_found = FALSE
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "VEHICLE MODEL", "TYPE MODEL NAME", "", "", "", "", 64)
@@ -1037,6 +1390,8 @@ PROC OPEN_MENU_KEYBOARD(INT target)
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "PROP MODEL", "TYPE MODEL NAME OR HASH", "", "", "", "", 64)
     ELIF target = 15
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "CUSTOM NSC", "TYPE .NSC FILE NAME", "", "", "", "", 64)
+    ELIF target = 17
+        DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "TP DISTANCE", "DISTANCE IN METERS (10-500)", "", "", "", "", 16)
     ELSE
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "ENTER VALUE", "NUMBERS ONLY", "", "", "", "", 16)
     ENDIF
@@ -1094,7 +1449,7 @@ PROC PROCESS_MENU_KEYBOARD()
                 g_ped_search_is_custom = FALSE
                 g_ped_search_value = result
                 g_ped_choice = foundChoice
-                g_item = foundChoice + 3
+                g_item = foundChoice + 4
                 SAVE_ACTIVE_CHARACTER_PED()
                 REQUEST_PED_CHANGE(PED_MODEL_FOR_CHOICE(foundChoice))
                 IF NOT g_ped_change_pending
@@ -1131,6 +1486,10 @@ PROC PROCESS_MENU_KEYBOARD()
                 g_guard_ped_search_is_custom = FALSE
                 g_guard_ped_search_not_found = FALSE
             ELSE
+                // Same addon-name path the player changer uses (target 3): a
+                // typed model that is absent from the catalog still resolves by
+                // hash, so a bodyguard can be any ped in the game rather than
+                // only the 683 browsable ones.
                 MODEL_NAMES customGuardModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
                 IF IS_MODEL_IN_CDIMAGE(customGuardModel) AND IS_MODEL_VALID(customGuardModel)
                     g_guard_ped_name = result
@@ -1167,6 +1526,10 @@ PROC PROCESS_MENU_KEYBOARD()
                 g_chauffeur_ped_search_is_custom = FALSE
                 g_chauffeur_ped_search_not_found = FALSE
             ELSE
+                // Same addon-name path the player changer (target 3) and the
+                // guard search (target 10) use: a typed model that is absent
+                // from the catalog still resolves by hash, so any ped in the
+                // game can drive.
                 MODEL_NAMES customChauffeurModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
                 IF IS_MODEL_IN_CDIMAGE(customChauffeurModel) AND IS_MODEL_VALID(customChauffeurModel)
                     g_chauffeur_ped_name = result
@@ -1176,6 +1539,21 @@ PROC PROCESS_MENU_KEYBOARD()
                 ELSE
                     g_chauffeur_ped_search_is_custom = FALSE
                     g_chauffeur_ped_search_not_found = TRUE
+                ENDIF
+            ENDIF
+        ELIF g_keyboard_target = 16
+            foundChoice = FIND_PED_CHOICE_BY_NAME(result)
+            IF foundChoice >= 0
+                SET_STORY_CHAR_CATALOG_CHOICE(g_story_ped_active_char, foundChoice)
+                g_story_ped_search_not_found = FALSE
+                g_item = foundChoice + 2
+            ELSE
+                MODEL_NAMES customStoryModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
+                IF IS_MODEL_IN_CDIMAGE(customStoryModel) AND IS_MODEL_VALID(customStoryModel)
+                    SET_STORY_CHAR_CUSTOM_MODEL(g_story_ped_active_char, customStoryModel, result)
+                    g_story_ped_search_not_found = FALSE
+                ELSE
+                    g_story_ped_search_not_found = TRUE
                 ENDIF
             ENDIF
         ELIF g_keyboard_target = 4
@@ -1199,6 +1577,11 @@ PROC PROCESS_MENU_KEYBOARD()
             IF STRING_TO_INT(result, parsed)
                 spoonerModel = INT_TO_ENUM(MODEL_NAMES, parsed)
             ENDIF
+            IF IS_MODEL_IN_CDIMAGE(spoonerModel) AND IS_MODEL_VALID(spoonerModel)
+                g_spooner_custom_preview_model = spoonerModel
+                g_spooner_use_custom_preview = TRUE
+                SYNC_SPOONER_PREVIEW_MODEL()
+            ENDIF
             QUEUE_SPOONER_OBJECT_SPAWN(spoonerModel)
         ELIF g_keyboard_target = 15
             PROBE_CUSTOM_NSC_FROM_KEYBOARD(result)
@@ -1209,11 +1592,19 @@ PROC PROCESS_MENU_KEYBOARD()
                 IF g_keyboard_target = 7 g_teleport_z = parsedCoordinate ENDIF
             ENDIF
         ELIF g_keyboard_target = 12
+            // Auto Save Interval, in minutes. Same clamp as the Left/Right steps.
             IF STRING_TO_INT(result, parsed)
                 IF parsed < 0 parsed = 0 ENDIF
                 IF parsed > 120 parsed = 120 ENDIF
                 g_auto_save_interval = parsed
                 IF g_auto_save g_next_auto_save_time = GET_GAME_TIMER() + (g_auto_save_interval * 60000) ENDIF
+            ENDIF
+        ELIF g_keyboard_target = 17
+            // Bodyguard TP Distance threshold (meters).
+            IF STRING_TO_INT(result, parsed)
+                IF parsed < 10 parsed = 10 ENDIF
+                IF parsed > 500 parsed = 500 ENDIF
+                g_bodyguard_tp_distance = parsed
             ENDIF
         ELIF STRING_TO_INT(result, parsed)
             IF parsed < 0 parsed = 0 ENDIF
@@ -1231,6 +1622,13 @@ PROC PROCESS_MENU_KEYBOARD()
     ENDIF
 ENDPROC
 
+// Misc "Clear Vehicles" deletes every vehicle in the radius, and
+// CLEAR_AREA_OF_VEHICLES has no flag to spare script vehicles (only
+// KeepScriptTrains exists), so the spawner's tracked cars can lose their entities
+// behind the menu's back.  Keeps the entries that still resolve - a car spawned
+// outside the radius is still tracked and still deletable - and drops only the
+// dead ones, so DELETE_ALL_CUSTOM_CARS and DELETE_PREVIOUS_CUSTOM_CAR cannot
+// later act on an index the engine has recycled into a different vehicle.
 PROC PRUNE_SPAWNED_VEHICLE_TRACKING()
     INT readIndex = 0
     INT writeIndex = 0
@@ -1272,6 +1670,8 @@ ENDPROC
 
 PROC DELETE_PREVIOUS_CUSTOM_CAR()
     IF DOES_ENTITY_EXIST(g_last_spawned_vehicle)
+        // Remove the handle before deletion. Entity handles can be reused;
+        // keeping it in the tracked array could later delete an unrelated car.
         FORGET_CUSTOM_CAR(g_last_spawned_vehicle)
         SET_ENTITY_AS_MISSION_ENTITY(g_last_spawned_vehicle, TRUE, TRUE)
         DELETE_VEHICLE(g_last_spawned_vehicle)
@@ -1279,6 +1679,40 @@ PROC DELETE_PREVIOUS_CUSTOM_CAR()
     g_last_spawned_vehicle = NULL
 ENDPROC
 
+// ===========================================================================
+// Convert To Custom (v0.9.9)
+//
+// The Benny's conversion, done from the menu instead of at a shop: replace the car
+// the player is sitting in with its verified custom variant, carrying the paint
+// and wheels across.
+//
+// Pairings come only from BENNYS_PAIR_FOR_MODEL (Rockstar's own tables).  A car
+// with no verified conversion is refused before anything is created - nothing is
+// inferred from a model name.
+//
+// Safety shape, because this is the one feature here that destroys an entity:
+//
+//   1. Refuse first: no variant, or a target this port does not ship
+//      (IS_MODEL_IN_CDIMAGE / IS_MODEL_VALID), and no entity is ever created.
+//   2. The request is asynchronous and timeout-bounded
+//      (CONVERT_REQUEST_TIMEOUT_MS), the same staged shape the spawner uses.
+//      There is no tight model-wait loop.
+//   3. The replaced car is deleted only AFTER the player is confirmed to be in
+//      the new one.  If creation fails, or the player got out while the model
+//      streamed, the source car is left exactly as it was and the row says so.
+//   4. The source handle is removed from the spawned-vehicle tracking before
+//      deletion, exactly like DELETE_PREVIOUS_CUSTOM_CAR, so a recycled handle
+//      can never delete an unrelated car later.
+//
+// It cannot run while the spawner is mid-request and the spawner cannot start
+// while it is: both use g_pending_vehicle_model, and each checks the other's
+// pending flag before taking it.
+// ===========================================================================
+
+// Carries paint and wheel family from one car to another, using the same
+// reads/writes the paint rows use, so a converted car keeps the player's choices.
+// The parameters are not named from/to: both are reserved words in this compiler
+// ("parse error, expecting `&'" on the declaration line).
 PROC COPY_LSC_APPEARANCE(VEHICLE_INDEX sourceVehicle, VEHICLE_INDEX targetVehicle)
     INT primary = 0
     INT secondary = 0
@@ -1296,6 +1730,8 @@ PROC SET_CONVERT_FEEDBACK(INT result)
     g_convert_feedback_until = GET_GAME_TIMER() + CONVERT_FEEDBACK_MS
 ENDPROC
 
+// One exit for every failure path, so none of them can leave the pending flag
+// latched with a model still held.
 PROC CANCEL_VEHICLE_CONVERSION(INT result)
     SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_vehicle_model)
     g_convert_pending = FALSE
@@ -1304,6 +1740,8 @@ PROC CANCEL_VEHICLE_CONVERSION(INT result)
     SET_CONVERT_FEEDBACK(result)
 ENDPROC
 
+// Step 1: resolve the pairing and start the model request.  Every rejection
+// happens here, before any entity exists.
 PROC START_VEHICLE_CONVERSION()
     IF g_convert_pending EXIT ENDIF
     IF g_vehicle_spawn_pending EXIT ENDIF
@@ -1312,6 +1750,7 @@ PROC START_VEHICLE_CONVERSION()
     IF NOT DOES_ENTITY_EXIST(source) EXIT ENDIF
     INT pair = BENNYS_PAIR_FOR_MODEL(GET_ENTITY_MODEL(source))
     IF pair < 0
+        // Either this car has no Benny's variant at all, or it is already one.
         SET_CONVERT_FEEDBACK(2)
         EXIT
     ENDIF
@@ -1328,6 +1767,8 @@ PROC START_VEHICLE_CONVERSION()
     g_convert_pending = TRUE
 ENDPROC
 
+// Step 2: the target model has streamed.  Build it, move the player across, and
+// only then dispose of the car that was replaced.
 PROC FINISH_VEHICLE_CONVERSION()
     IF NOT g_convert_pending EXIT ENDIF
     IF g_convert_pair < 0
@@ -1335,37 +1776,80 @@ PROC FINISH_VEHICLE_CONVERSION()
         EXIT
     ENDIF
     VEHICLE_INDEX source = g_convert_source_vehicle
+    // The player may have stepped out (or the car may be gone) while the model
+    // streamed.  Abandon rather than converting a car nobody is sitting in - the
+    // source is untouched.
     IF NOT DOES_ENTITY_EXIST(source) OR GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()) != source
         CANCEL_VEHICLE_CONVERSION(4)
         EXIT
     ENDIF
+
+    // Offset by 2.5m, exactly like the spawner's single-vehicle case: creating
+    // the replacement on top of the original would leave two solid bodies
+    // intersecting for a frame, and that interpenetration is what launches cars
+    // into the air.
     VECTOR spawnPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(source, <<0.0, 2.50, 1.0>>)
     FLOAT spawnHeading = GET_ENTITY_HEADING(source)
     VEHICLE_INDEX converted = CREATE_VEHICLE(BENNYS_CUSTOM_MODEL(g_convert_pair), spawnPosition, spawnHeading, FALSE)
     IF NOT DOES_ENTITY_EXIST(converted)
+        // Failed to create: the player's car is still there, untouched.
         CANCEL_VEHICLE_CONVERSION(4)
         EXIT
     ENDIF
+
     COPY_LSC_APPEARANCE(source, converted)
     SET_VEHICLE_ON_GROUND_PROPERLY(converted)
+    // Track it the way the spawner does so "Delete All Custom Cars" still cleans
+    // it up, and so a later spawn's auto-delete can find it.
     IF g_spawned_custom_vehicle_count < 500
         g_spawned_custom_vehicles[g_spawned_custom_vehicle_count] = converted
         g_spawned_custom_vehicle_count = g_spawned_custom_vehicle_count + 1
     ENDIF
     g_last_spawned_vehicle = converted
+
     SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), converted, VS_DRIVER)
     SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_vehicle_model)
     g_convert_pending = FALSE
     g_convert_pair = -1
     g_convert_source_vehicle = NULL
+
+    // Verified: the player is in the replacement, so the old car is disposable.
+    // Untrack it first - entity handles get recycled, and a stale entry here
+    // could later delete an unrelated car.
     FORGET_CUSTOM_CAR(source)
     IF DOES_ENTITY_EXIST(source)
         SET_ENTITY_AS_MISSION_ENTITY(source, TRUE, TRUE)
         DELETE_VEHICLE(source)
     ENDIF
+
+    // The car under the LSC pages just changed, so re-read it: this refreshes the
+    // kit, the hydraulic support predicate and every row on the page, which is
+    // what makes the hydraulics rows usable immediately after converting.
     SYNC_LSC_VEHICLE_STATE()
     SET_CONVERT_FEEDBACK(1)
 ENDPROC
+// ===========================================================================
+// LS Customs depth - Hydraulics page (v0.9.9)
+//
+// Natives used, all verified present in this Switch header set
+// (X:\gta5\script\dev_ng\core\common\native\commands_vehicle.sch):
+//   SET_CAN_USE_HYDRAULICS(veh, BOOL)                                    4697
+//   SET_HYDRAULIC_VEHICLE_STATE(veh, WHEEL_HYDRAULIC_SCRIPT_STATE)       4713
+//   SET_HYDRAULIC_WHEEL_STATE(veh, SC_WHEEL_LIST, state, FLOAT, FLOAT)   4718
+//   SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(veh, SC_WHEEL_LIST, FLOAT)     4687
+//   SET_HYDRAULICS_CONTROL(veh, BOOL)                                    4637
+//   SET_REDUCED_SUSPENSION_FORCE(veh, BOOL)                              5479
+//   TOGGLE_VEHICLE_MOD(veh, MOD_TOGGLE_HYDRAULICS, BOOL)                 3777
+//
+// The game's own scripts use exactly this shape for the front-up / rear-up
+// hydraulics cheats (net_process_events.sch sets per-wheel raise factors), so
+// the presets below are shipping behaviour, not an invention.
+//
+// Safety rules kept throughout: every ON toggle has an OFF path that restores
+// stock, raise factors are bounded to 0.0-1.0 (above 1.0 is undocumented in the
+// SDK and untested on this port, so it is never sent), and the only repeating
+// work - Hold Stance - is cadence-limited to HYDRO_HOLD_TICK_MS.
+// ===========================================================================
 
 FUNC FLOAT HYDRO_HEIGHT_VALUE(INT level)
     IF level < 0 level = 0 ENDIF
@@ -1383,6 +1867,8 @@ PROC HYDRO_SET_ALL(FLOAT factor)
     SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(vehicle, SC_WHEEL_CAR_REAR_RIGHT, factor)
 ENDPROC
 
+// frontFactor goes to both front wheels; rearFactor to the mid and rear pairs.
+// A four-wheel car has no mid wheels, so the two extra calls are harmless.
 PROC HYDRO_SET_AXLE(FLOAT frontFactor, FLOAT rearFactor)
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(vehicle, SC_WHEEL_CAR_FRONT_LEFT, frontFactor)
@@ -1393,6 +1879,7 @@ PROC HYDRO_SET_AXLE(FLOAT frontFactor, FLOAT rearFactor)
     SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(vehicle, SC_WHEEL_CAR_REAR_RIGHT, rearFactor)
 ENDPROC
 
+// Left/right pair across every left or right wheel, for the lean presets.
 PROC HYDRO_SET_SIDE(FLOAT leftFactor, FLOAT rightFactor)
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(vehicle, SC_WHEEL_CAR_FRONT_LEFT, leftFactor)
@@ -1403,6 +1890,9 @@ PROC HYDRO_SET_SIDE(FLOAT leftFactor, FLOAT rightFactor)
     SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(vehicle, SC_WHEEL_CAR_REAR_RIGHT, rightFactor)
 ENDPROC
 
+// The four page sliders.  Each row owns its own wheels with no overlap: Front =
+// both front wheels, Rear = both rear wheels, Mid Left / Mid Right = the middle
+// pair (which only exists on a six-wheel car, hence the "Mid" label).
 PROC APPLY_HYDRO_HEIGHTS()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     FLOAT front = HYDRO_HEIGHT_VALUE(g_hydro_front_height)
@@ -1416,7 +1906,6 @@ PROC APPLY_HYDRO_HEIGHTS()
     SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(vehicle, SC_WHEEL_CAR_MID_LEFT, midLeft)
     SET_HYDRAULIC_SUSPENSION_RAISE_FACTOR(vehicle, SC_WHEEL_CAR_MID_RIGHT, midRight)
 ENDPROC
-
 PROC APPLY_HYDRO_PRESET()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     LSC_USE_KIT(vehicle)
@@ -1446,26 +1935,37 @@ PROC APPLY_HYDRO_PRESET()
         CASE 7 HYDRO_SET_SIDE(1.0, 0.0) BREAK
         CASE 8 HYDRO_SET_SIDE(0.0, 1.0) BREAK
     ENDSWITCH
+    // Remember what the hold tick has to re-assert, so moving the preset row on
+    // without pressing A cannot silently change an active hold.
     g_hydro_hold_preset = g_hydro_preset
 ENDPROC
 
 FUNC STRING HYDRO_PRESET_LABEL(INT preset)
     SWITCH preset
-        CASE 0 RETURN "< Stock Height >" BREAK
-        CASE 1 RETURN "< Slammed >" BREAK
-        CASE 2 RETURN "< Max High >" BREAK
-        CASE 3 RETURN "< Bouncy >" BREAK
-        CASE 4 RETURN "< Free >" BREAK
-        CASE 5 RETURN "< Front Up >" BREAK
-        CASE 6 RETURN "< Rear Up >" BREAK
-        CASE 7 RETURN "< Lean Left >" BREAK
-        CASE 8 RETURN "< Lean Right >" BREAK
+        CASE 0 RETURN TR("< Stock Height >", "< Altura de serie >", "< 原厂高度 >", "< Serienhöhe >", "< 純正車高 >", "< Стоковая высота >", "< Altura Original >", "< Hauteur d'origine >") BREAK
+        CASE 1 RETURN TR("< Slammed >", "< Al suelo >", "< 贴地低趴 >", "< Tiefergelegt >", "< ベタ下げ >", "< Заниженная >", "< Rebaixado >", "< Surbaissé >") BREAK
+        CASE 2 RETURN TR("< Max High >", "< Altura máx. >", "< 最高抬升 >", "< Max. Hoch >", "< 最高車高 >", "< Макс. подъём >", "< Altura Máx. >", "< Hauteur max >") BREAK
+        CASE 3 RETURN TR("< Bouncy >", "< Rebote >", "< 弹跳模式 >", "< Hüpfend >", "< バウンス >", "< Прыгучая >", "< Saltitante >", "< Rebondissant >") BREAK
+        CASE 4 RETURN TR("< Free >", "< Libre >", "< 自由悬挂 >", "< Frei >", "< フリー >", "< Свободная >", "< Livre >", "< Libre >") BREAK
+        CASE 5 RETURN TR("< Front Up >", "< Frente arriba >", "< 车头抬起 >", "< Vorne hoch >", "< フロント上げ >", "< Перед поднят >", "< Frente Erguida >", "< Avant levé >") BREAK
+        CASE 6 RETURN TR("< Rear Up >", "< Trasera arriba >", "< 车尾抬起 >", "< Hinten hoch >", "< リア上げ >", "< Зад поднят >", "< Traseira Erguida >", "< Arrière levé >") BREAK
+        CASE 7 RETURN TR("< Lean Left >", "< Inclinar izq. >", "< 向左倾斜 >", "< Links neigen >", "< 左傾き >", "< Крен влево >", "< Inclinar à Esq. >", "< Pencher à gauche >") BREAK
+        CASE 8 RETURN TR("< Lean Right >", "< Inclinar der. >", "< 向右倾斜 >", "< Rechts neigen >", "< 右傾き >", "< Крен вправо >", "< Inclinar à Dir. >", "< Pencher à droite >") BREAK
     ENDSWITCH
-    RETURN "< Stock Height >"
+    RETURN TR("< Stock Height >", "< Altura de serie >", "< 原厂高度 >", "< Serienhöhe >", "< 純正車高 >", "< Стоковая высота >", "< Altura Original >", "< Hauteur d'origine >")
 ENDFUNC
 
+// Hydraulics Kit ON/OFF.  MOD_TOGGLE_HYDRAULICS is the kit itself;
+// SET_CAN_USE_HYDRAULICS is the "may this car use them" gate.  Both are driven
+// from the same flag so the OFF path cannot leave a car still allowed to use
+// hydraulics it no longer has.
 PROC APPLY_HYDRO_KIT_STATE()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    // A car with no hydraulic mod data cannot take the kit.  TOGGLE_VEHICLE_MOD
+    // would write a flag the car has no mod for, and the row would then sit on ON
+    // until the next sync flipped it back - which reads as a broken row rather
+    // than an unsupported car.  Refuse and leave the row reporting OFF; the
+    // Lowrider Support row carries the reason.
     IF NOT HYDRO_SUPPORTED(vehicle)
         g_hydro_enabled = FALSE
         EXIT
@@ -1475,6 +1975,8 @@ PROC APPLY_HYDRO_KIT_STATE()
     SET_CAN_USE_HYDRAULICS(vehicle, g_hydro_enabled)
 ENDPROC
 
+// Hydraulic Level = the MOD_HYDRO variant (the pump/valve level).  -1 writes
+// stock back with REMOVE_VEHICLE_MOD, the same convention as the main LSC page.
 PROC APPLY_HYDRO_LEVEL()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     INT slot = ENUM_TO_INT(MOD_HYDRO)
@@ -1498,9 +2000,13 @@ ENDPROC
 
 PROC APPLY_HYDRO_SOFTNESS()
     SET_REDUCED_SUSPENSION_FORCE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_hydro_soft)
+    // Same game flag as the Wheels & Tyres "Soft Suspension" row, so mirror it -
+    // the two rows are one setting and must never disagree.
     g_wheeltyre_soft_suspension = g_hydro_soft
 ENDPROC
 
+// Single-wheel control.  raiseAmount is the 0.0-1.0 height for that wheel and
+// raiseSpeed how fast it travels - the header's own parameter names.
 PROC APPLY_HYDRO_WHEEL()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     FLOAT amount = HYDRO_HEIGHT_VALUE(g_hydro_wheel_height)
@@ -1510,6 +2016,8 @@ PROC APPLY_HYDRO_WHEEL()
     SET_HYDRAULIC_WHEEL_STATE(vehicle, INT_TO_ENUM(SC_WHEEL_LIST, g_hydro_wheel), INT_TO_ENUM(WHEEL_HYDRAULIC_SCRIPT_STATE, g_hydro_wheel_state), amount, speed)
 ENDPROC
 
+// Full restore: every factor back to 1.0, state Free, and the car no longer
+// allowed to use hydraulics.  Mirrors the game's own reset shape.
 PROC RESET_HYDRAULICS()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     HYDRO_SET_ALL(1.0)
@@ -1517,8 +2025,12 @@ PROC RESET_HYDRAULICS()
     SET_HYDRAULICS_CONTROL(vehicle, FALSE)
     SET_REDUCED_SUSPENSION_FORCE(vehicle, FALSE)
     SET_CAN_USE_HYDRAULICS(vehicle, FALSE)
+    // Also un-fit the kit itself, so the "Hydraulics Kit" ON/OFF row reports the
+    // truth after a reset instead of still claiming the kit is fitted.
     LSC_USE_KIT(vehicle)
     TOGGLE_VEHICLE_MOD(vehicle, MOD_TOGGLE_HYDRAULICS, FALSE)
+    // Also clear the pump/valve variant (MOD_HYDRO).  Un-fitting the kit left the
+    // chosen level behind, so re-fitting the kit came back already pumped.
     LSC_KIT_FOR_SLOT(vehicle, ENUM_TO_INT(MOD_HYDRO))
     IF GET_NUM_VEHICLE_MODS(vehicle, MOD_HYDRO) > 0 REMOVE_VEHICLE_MOD(vehicle, MOD_HYDRO) ENDIF
     g_hydro_enabled = FALSE
@@ -1527,18 +2039,23 @@ PROC RESET_HYDRAULICS()
     g_hydro_hold_preset = 0
     g_hydro_control = FALSE
     g_hydro_level = -1
+    // The single-wheel controls are hydraulic state too, so they are reset with
+    // everything else instead of staying on the last wheel the player picked.
     g_hydro_wheel = 0
     g_hydro_wheel_height = HYDRO_HEIGHT_LEVELS - 1
     g_hydro_wheel_state = 0
     g_hydro_raise_speed = 4
     g_hydro_soft = FALSE
+    // Keep the Wheels & Tyres "Soft Suspension" row in agreement - same flag.
     g_wheeltyre_soft_suspension = FALSE
     g_hydro_front_height = HYDRO_HEIGHT_LEVELS - 1
     g_hydro_rear_height = HYDRO_HEIGHT_LEVELS - 1
     g_hydro_left_height = HYDRO_HEIGHT_LEVELS - 1
     g_hydro_right_height = HYDRO_HEIGHT_LEVELS - 1
 ENDPROC
-
+// Hold Stance: re-assert the chosen preset on a bounded cadence.  Called from the
+// main loop, and exits immediately when it is off or the player is on foot.
+// Leaving the vehicle stops it, so it can never keep running with nothing to hold.
 PROC MAINTAIN_HYDRO_HOLD()
     IF NOT g_hydro_hold EXIT ENDIF
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
@@ -1579,26 +2096,33 @@ PROC MAINTAIN_HYDRO_HOLD()
 ENDPROC
 
 FUNC STRING HYDRO_WHEEL_STATE_LABEL(INT state)
-    IF state = 1 RETURN "< Locked >" ENDIF
-    IF state = 2 RETURN "< Bounce >" ENDIF
-    RETURN "< Free >"
+    IF state = 1 RETURN TR("< Locked >", "< Bloqueada >", "< 锁定 >", "< Gesperrt >", "< ロック >", "< Заблокировано >", "< Travada >", "< Verrouillé >") ENDIF
+    IF state = 2 RETURN TR("< Bounce >", "< Rebote >", "< 弹跳 >", "< Hüpfen >", "< バウンス >", "< Прыжок >", "< Salto >", "< Rebond >") ENDIF
+    RETURN TR("< Free >", "< Libre >", "< 自由 >", "< Frei >", "< フリー >", "< Свободно >", "< Livre >", "< Libre >")
 ENDFUNC
 
 FUNC STRING HYDRO_WHEEL_LABEL(INT wheel)
     SWITCH wheel
-        CASE 1 RETURN "< Front Right >" BREAK
-        CASE 2 RETURN "< Mid Left >" BREAK
-        CASE 3 RETURN "< Mid Right >" BREAK
-        CASE 4 RETURN "< Rear Left >" BREAK
-        CASE 5 RETURN "< Rear Right >" BREAK
+        CASE 1 RETURN TR("< Front Right >", "< Delantera der. >", "< 右前轮 >", "< Vorne rechts >", "< 右前輪 >", "< Переднее правое >", "< Dianteira Dir. >", "< Avant droite >") BREAK
+        CASE 2 RETURN TR("< Mid Left >", "< Central izq. >", "< 左中轮 >", "< Mitte links >", "< 左中輪 >", "< Среднее левое >", "< Central Esq. >", "< Milieu gauche >") BREAK
+        CASE 3 RETURN TR("< Mid Right >", "< Central der. >", "< 右中轮 >", "< Mitte rechts >", "< 右中輪 >", "< Среднее правое >", "< Central Dir. >", "< Milieu droite >") BREAK
+        CASE 4 RETURN TR("< Rear Left >", "< Trasera izq. >", "< 左后轮 >", "< Hinten links >", "< 左後輪 >", "< Заднее левое >", "< Traseira Esq. >", "< Arrière gauche >") BREAK
+        CASE 5 RETURN TR("< Rear Right >", "< Trasera der. >", "< 右后轮 >", "< Hinten rechts >", "< 右後輪 >", "< Заднее правое >", "< Traseira Dir. >", "< Arrière droite >") BREAK
     ENDSWITCH
-    RETURN "< Front Left >"
+    RETURN TR("< Front Left >", "< Delantera izq. >", "< 左前轮 >", "< Vorne links >", "< 左前輪 >", "< Переднее левое >", "< Dianteira Esq. >", "< Avant gauche >")
 ENDFUNC
 
+// Hydraulic level row value.  "None on this car" when the car has no MOD_HYDRO
+// variants at all - that is a real, reportable state, not a silent no-op.
+//
+// Read-only: it does NOT activate a kit.  Draw paths never call
+// SET_VEHICLE_MOD_KIT (that would write the car's kit every frame); the kit is
+// activated by SYNC_LSC_VEHICLE_STATE on a vehicle/slot/kit change instead, so
+// the counts read here already reflect the active kit.
 FUNC STRING HYDRO_LEVEL_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF GET_NUM_VEHICLE_MODS(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), MOD_HYDRO) <= 0 RETURN "< None on this car >" ENDIF
-    IF g_hydro_level < 0 RETURN "< Stock >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF GET_NUM_VEHICLE_MODS(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), MOD_HYDRO) <= 0 RETURN TR("< None on this car >", "< Ninguno en este coche >", "< 此车无此项 >", "< Keins bei diesem Auto >", "< この車両には無し >", "< Нет на этом авто >", "< Nenhum neste carro >", "< Aucun sur cette voiture >") ENDIF
+    IF g_hydro_level < 0 RETURN TR("< Stock >", "< De serie >", "< 原厂 >", "< Serie >", "< 純正 >", "< Сток >", "< Original >", "< Origine >") ENDIF
     IF g_hydro_level = 0 RETURN "< Level 1 >" ENDIF
     IF g_hydro_level = 1 RETURN "< Level 2 >" ENDIF
     IF g_hydro_level = 2 RETURN "< Level 3 >" ENDIF
@@ -1608,6 +2132,8 @@ FUNC STRING HYDRO_LEVEL_TEXT()
     RETURN "< Level 7+ >"
 ENDFUNC
 
+// 0-100% in 5% steps.  One literal per level: see the note on LSC_KIT_INDEX_TEXT
+// for why a composed value is impossible in this compiler.
 FUNC STRING HYDRO_HEIGHT_TEXT(INT level)
     IF level < 0 level = 0 ENDIF
     IF level >= HYDRO_HEIGHT_LEVELS level = HYDRO_HEIGHT_LEVELS - 1 ENDIF
@@ -1634,6 +2160,7 @@ FUNC STRING HYDRO_HEIGHT_TEXT(INT level)
     RETURN "< 100% >"
 ENDFUNC
 
+// 0.1x to 2.0x in 0.1 steps, one literal per level.
 FUNC STRING HYDRO_SPEED_TEXT(INT level)
     IF level < 0 level = 0 ENDIF
     IF level > 19 level = 19 ENDIF
@@ -1663,39 +2190,44 @@ PROC DRAW_HYDRO_ROW(INT index, FLOAT y)
     SWITCH index
         CASE 0
             IF NOT PLAYER_CAR_HAS_HYDRO()
-                DRAW_OPTION(y, "Hydraulics Kit", "< Not Supported >", g_item = index, 0)
+                // Say why rather than showing a toggle that cannot take: an OFF
+                // row here used to look like a row that was merely switched off.
+                DRAW_OPTION(y, TR("Hydraulics Kit", "Kit hidráulico", "液压套件", "Hydraulik-Kit", "ハイドロキット", "Гидрокомплект", "Kit Hidráulico", "Kit hydraulique"), TR("< Not Supported >", "< No compatible >", "< 不支持 >", "< Nicht unterstützt >", "< 非対応 >", "< Не поддерживается >", "< Não Compatível >", "< Non compatible >"), g_item = index, 0)
             ELIF g_hydro_enabled
-                DRAW_OPTION(y, "Hydraulics Kit", "ON", g_item = index, 1)
+                DRAW_OPTION(y, TR("Hydraulics Kit", "Kit hidráulico", "液压套件", "Hydraulik-Kit", "ハイドロキット", "Гидрокомплект", "Kit Hidráulico", "Kit hydraulique"), "ON", g_item = index, 1)
             ELSE
-                DRAW_OPTION(y, "Hydraulics Kit", "OFF", g_item = index, 0)
+                DRAW_OPTION(y, TR("Hydraulics Kit", "Kit hidráulico", "液压套件", "Hydraulik-Kit", "ハイドロキット", "Гидрокомплект", "Kit Hidráulico", "Kit hydraulique"), "OFF", g_item = index, 0)
             ENDIF
         BREAK
-        CASE 1 DRAW_OPTION(y, "Hydraulic Level", HYDRO_LEVEL_TEXT(), g_item = index, 3) BREAK
-        CASE 2 IF g_hydro_control DRAW_OPTION(y, "Player Control", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Player Control", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 3 DRAW_OPTION(y, "Stance Preset", HYDRO_PRESET_LABEL(g_hydro_preset), g_item = index, 3) BREAK
-        CASE 4 DRAW_OPTION(y, "Apply Stance Preset", "APPLY", g_item = index, 2) BREAK
-        CASE 5 DRAW_OPTION(y, "Front Axle Height", HYDRO_HEIGHT_TEXT(g_hydro_front_height), g_item = index, 3) BREAK
-        CASE 6 DRAW_OPTION(y, "Rear Axle Height", HYDRO_HEIGHT_TEXT(g_hydro_rear_height), g_item = index, 3) BREAK
-        CASE 7 DRAW_OPTION(y, "Mid Left Height", HYDRO_HEIGHT_TEXT(g_hydro_left_height), g_item = index, 3) BREAK
-        CASE 8 DRAW_OPTION(y, "Mid Right Height", HYDRO_HEIGHT_TEXT(g_hydro_right_height), g_item = index, 3) BREAK
-        CASE 9 DRAW_OPTION(y, "Apply All Heights", "APPLY", g_item = index, 2) BREAK
-        CASE 10 DRAW_OPTION(y, "Single Wheel", HYDRO_WHEEL_LABEL(g_hydro_wheel), g_item = index, 3) BREAK
-        CASE 11 DRAW_OPTION(y, "Wheel Height", HYDRO_HEIGHT_TEXT(g_hydro_wheel_height), g_item = index, 3) BREAK
-        CASE 12 DRAW_OPTION(y, "Wheel State", HYDRO_WHEEL_STATE_LABEL(g_hydro_wheel_state), g_item = index, 3) BREAK
-        CASE 13 DRAW_OPTION(y, "Wheel Raise Speed", HYDRO_SPEED_TEXT(g_hydro_raise_speed), g_item = index, 3) BREAK
-        CASE 14 DRAW_OPTION(y, "Apply To Wheel", "APPLY", g_item = index, 2) BREAK
-        CASE 15 IF g_hydro_hold DRAW_OPTION(y, "Hold Stance", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Hold Stance", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 16 IF g_hydro_soft DRAW_OPTION(y, "Stance Softness", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Stance Softness", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 17 DRAW_OPTION(y, "Reset Hydraulics", "APPLY", g_item = index, 2) BREAK
-        CASE 18 IF PLAYER_CAR_HAS_HYDRO() DRAW_OPTION(y, "Lowrider Support", LOWRIDER_SUPPORT_TEXT(), g_item = index, 1) ELSE DRAW_OPTION(y, "Lowrider Support", LOWRIDER_SUPPORT_TEXT(), g_item = index, 0) ENDIF BREAK
+        CASE 1 DRAW_OPTION(y, TR("Hydraulic Level", "Nivel hidráulico", "液压等级", "Hydraulik-Stufe", "ハイドロレベル", "Уровень гидравлики", "Nível Hidráulico", "Niveau hydraulique"), HYDRO_LEVEL_TEXT(), g_item = index, 3) BREAK
+        CASE 2 IF g_hydro_control DRAW_OPTION(y, TR("Player Control", "Control del jugador", "玩家控制", "Spielersteuerung", "プレイヤー操作", "Управление игрока", "Controle do Jogador", "Contrôle joueur"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Player Control", "Control del jugador", "玩家控制", "Spielersteuerung", "プレイヤー操作", "Управление игрока", "Controle do Jogador", "Contrôle joueur"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 3 DRAW_OPTION(y, TR("Stance Preset", "Preajuste de postura", "姿态预设", "Haltungs-Preset", "スタンスプリセット", "Пресет посадки", "Predefinição de Postura", "Préréglage posture"), HYDRO_PRESET_LABEL(g_hydro_preset), g_item = index, 3) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Apply Stance Preset", "Aplicar postura", "应用姿态预设", "Preset anwenden", "プリセットを適用", "Применить пресет", "Aplicar Postura", "Appliquer posture"), "APPLY", g_item = index, 2) BREAK
+        CASE 5 DRAW_OPTION(y, TR("Front Axle Height", "Altura eje delantero", "前轴高度", "Vorderachshöhe", "フロント軸車高", "Высота передней оси", "Altura do Eixo Diant.", "Hauteur essieu avant"), HYDRO_HEIGHT_TEXT(g_hydro_front_height), g_item = index, 3) BREAK
+        CASE 6 DRAW_OPTION(y, TR("Rear Axle Height", "Altura eje trasero", "后轴高度", "Hinterachshöhe", "リア軸車高", "Высота задней оси", "Altura do Eixo Tras.", "Hauteur essieu arrière"), HYDRO_HEIGHT_TEXT(g_hydro_rear_height), g_item = index, 3) BREAK
+        CASE 7 DRAW_OPTION(y, TR("Mid Left Height", "Altura central izq.", "左中高度", "Höhe Mitte links", "左中央車高", "Высота левого борта", "Altura Central Esq.", "Hauteur milieu gauche"), HYDRO_HEIGHT_TEXT(g_hydro_left_height), g_item = index, 3) BREAK
+        CASE 8 DRAW_OPTION(y, TR("Mid Right Height", "Altura central der.", "右中高度", "Höhe Mitte rechts", "右中央車高", "Высота правого борта", "Altura Central Dir.", "Hauteur milieu droite"), HYDRO_HEIGHT_TEXT(g_hydro_right_height), g_item = index, 3) BREAK
+        CASE 9 DRAW_OPTION(y, TR("Apply All Heights", "Aplicar todas las alturas", "应用全部高度", "Alle Höhen anwenden", "全車高を適用", "Применить все высоты", "Aplicar Todas as Alturas", "Appliquer les hauteurs"), "APPLY", g_item = index, 2) BREAK
+        CASE 10 DRAW_OPTION(y, TR("Single Wheel", "Rueda individual", "单轮选择", "Einzelrad", "個別ホイール", "Отдельное колесо", "Roda Individual", "Roue individuelle"), HYDRO_WHEEL_LABEL(g_hydro_wheel), g_item = index, 3) BREAK
+        CASE 11 DRAW_OPTION(y, TR("Wheel Height", "Altura de rueda", "车轮高度", "Radhöhe", "ホイール車高", "Высота колеса", "Altura da Roda", "Hauteur de roue"), HYDRO_HEIGHT_TEXT(g_hydro_wheel_height), g_item = index, 3) BREAK
+        CASE 12 DRAW_OPTION(y, TR("Wheel State", "Estado de rueda", "车轮状态", "Radstatus", "ホイール状態", "Состояние колеса", "Estado da Roda", "État de la roue"), HYDRO_WHEEL_STATE_LABEL(g_hydro_wheel_state), g_item = index, 3) BREAK
+        CASE 13 DRAW_OPTION(y, TR("Wheel Raise Speed", "Velocidad de elevación", "抬升速度", "Hebegeschwindigkeit", "昇降速度", "Скорость подъёма", "Velocidade de Elevação", "Vitesse de levage"), HYDRO_SPEED_TEXT(g_hydro_raise_speed), g_item = index, 3) BREAK
+        CASE 14 DRAW_OPTION(y, TR("Apply To Wheel", "Aplicar a la rueda", "应用至该车轮", "Auf Rad anwenden", "ホイールに適用", "Применить к колесу", "Aplicar à Roda", "Appliquer à la roue"), "APPLY", g_item = index, 2) BREAK
+        CASE 15 IF g_hydro_hold DRAW_OPTION(y, TR("Hold Stance", "Mantener postura", "保持姿态", "Haltung halten", "スタンス維持", "Удерживать посадку", "Manter Postura", "Maintenir la posture"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Hold Stance", "Mantener postura", "保持姿态", "Haltung halten", "スタンス維持", "Удерживать посадку", "Manter Postura", "Maintenir la posture"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 16 IF g_hydro_soft DRAW_OPTION(y, TR("Stance Softness", "Suavidad de postura", "软悬挂姿态", "Weiche Haltung", "ソフトスタンス", "Мягкость посадки", "Maciez da Postura", "Souplesse de posture"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Stance Softness", "Suavidad de postura", "软悬挂姿态", "Weiche Haltung", "ソフトスタンス", "Мягкость посадки", "Maciez da Postura", "Souplesse de posture"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 17 DRAW_OPTION(y, TR("Reset Hydraulics", "Restablecer hidráulica", "重置液压系统", "Hydraulik zurücksetzen", "ハイドロをリセット", "Сбросить гидравлику", "Redefinir Hidráulica", "Réinitialiser hydraulique"), "APPLY", g_item = index, 2) BREAK
+        // Appended row (v0.9.9), so every index above keeps its meaning.  This is
+        // the row that turns "the hydraulics rows do nothing" into "this car
+        // cannot take a lowrider kit, here is the car that can".
+        CASE 18 IF PLAYER_CAR_HAS_HYDRO() DRAW_OPTION(y, TR("Lowrider Support", "Soporte Lowrider", "低底盘车支持", "Lowrider-Unterstützung", "ローライダー対応", "Поддержка лоурайдера", "Suporte Lowrider", "Support lowrider"), LOWRIDER_SUPPORT_TEXT(), g_item = index, 1) ELSE DRAW_OPTION(y, TR("Lowrider Support", "Soporte Lowrider", "低底盘车支持", "Lowrider-Unterstützung", "ローライダー対応", "Поддержка лоурайдера", "Suporte Lowrider", "Support lowrider"), LOWRIDER_SUPPORT_TEXT(), g_item = index, 0) ENDIF BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_HYDRO_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "HYDRAULICS")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("HYDRAULICS", "HIDRÁULICA", "液压系统", "HYDRAULIK", "ハイドロ", "ГИДРАВЛИКА", "HIDRÁULICA", "HYDRAULIQUE"))
     DRAW_MENU_VERSION_TAG()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        DRAW_OPTION(0.268, "Hydraulics", "NO VEHICLE", g_item = 0, 0)
+        DRAW_OPTION(0.268, TR("Hydraulics", "Hidráulica", "液压系统", "Hydraulik", "ハイドロ", "Гидравлика", "Hidráulica", "Hydraulique"), "NO VEHICLE", g_item = 0, 0)
         EXIT
     ENDIF
     INT index = g_hydro_scroll
@@ -1706,6 +2238,19 @@ PROC DRAW_HYDRO_PAGE()
         row = row + 1
     ENDWHILE
 ENDPROC
+// ===========================================================================
+// LS Customs depth - Lowrider Interior page (v0.9.9)
+//
+// These are the slots that only exist on a car carrying the lowrider add-on mod
+// kit, which is exactly why they never worked before: the menu forced kit 0 and
+// then read GET_NUM_VEHICLE_MODS == 0 for every one of them.  Each apply path
+// below goes through LSC_KIT_FOR_SLOT, so the write lands in the kit that
+// actually holds the slot.
+//
+// Live names come from the game, not from a table: GET_MOD_SLOT_NAME and
+// GET_MOD_TEXT_LABEL replace the old, meaningless "Selected Variant 3" row, so
+// the page tells the player what it is actually changing.
+// ===========================================================================
 
 FUNC INT INTERIOR_SLOT_FOR_INDEX(INT index)
     SWITCH index
@@ -1740,36 +2285,41 @@ ENDFUNC
 
 FUNC STRING INTERIOR_SLOT_LABEL(INT index)
     SWITCH index
-        CASE 1 RETURN "< Interior 2 >" BREAK
-        CASE 2 RETURN "< Interior 3 >" BREAK
-        CASE 3 RETURN "< Interior 4 >" BREAK
-        CASE 4 RETURN "< Interior 5 >" BREAK
-        CASE 5 RETURN "< Seats >" BREAK
-        CASE 6 RETURN "< Steering Wheel >" BREAK
-        CASE 7 RETURN "< Knob >" BREAK
-        CASE 8 RETURN "< Plaque >" BREAK
-        CASE 9 RETURN "< ICE / Speakers >" BREAK
-        CASE 10 RETURN "< Trunk >" BREAK
-        CASE 11 RETURN "< Engine Bay 1 >" BREAK
-        CASE 12 RETURN "< Engine Bay 2 >" BREAK
-        CASE 13 RETURN "< Engine Bay 3 >" BREAK
-        CASE 14 RETURN "< Chassis 2 >" BREAK
-        CASE 15 RETURN "< Chassis 3 >" BREAK
-        CASE 16 RETURN "< Chassis 4 >" BREAK
-        CASE 17 RETURN "< Chassis 5 >" BREAK
-        CASE 18 RETURN "< Left Door >" BREAK
-        CASE 19 RETURN "< Right Door >" BREAK
-        CASE 20 RETURN "< Plate Holder >" BREAK
-        CASE 21 RETURN "< Vanity Plate >" BREAK
+        CASE 1 RETURN TR("< Interior 2 >", "< Interior 2 >", "< 内饰 2 >", "< Innenraum 2 >", "< 内装 2 >", "< Салон 2 >", "< Interior 2 >", "< Intérieur 2 >") BREAK
+        CASE 2 RETURN TR("< Interior 3 >", "< Interior 3 >", "< 内饰 3 >", "< Innenraum 3 >", "< 内装 3 >", "< Салон 3 >", "< Interior 3 >", "< Intérieur 3 >") BREAK
+        CASE 3 RETURN TR("< Interior 4 >", "< Interior 4 >", "< 内饰 4 >", "< Innenraum 4 >", "< 内装 4 >", "< Салон 4 >", "< Interior 4 >", "< Intérieur 4 >") BREAK
+        CASE 4 RETURN TR("< Interior 5 >", "< Interior 5 >", "< 内饰 5 >", "< Innenraum 5 >", "< 内装 5 >", "< Салон 5 >", "< Interior 5 >", "< Intérieur 5 >") BREAK
+        CASE 5 RETURN TR("< Seats >", "< Asientos >", "< 座椅 >", "< Sitze >", "< シート >", "< Сиденья >", "< Bancos >", "< Sièges >") BREAK
+        CASE 6 RETURN TR("< Steering Wheel >", "< Volante >", "< 方向盘 >", "< Lenkrad >", "< ステアリング >", "< Руль >", "< Volante >", "< Volant >") BREAK
+        CASE 7 RETURN TR("< Knob >", "< Pomo >", "< 排挡头 >", "< Schaltknauf >", "< シフトノブ >", "< Ручка КПП >", "< Manopla >", "< Pommeau >") BREAK
+        CASE 8 RETURN TR("< Plaque >", "< Placa >", "< 铭牌 >", "< Plakette >", "< プラーク >", "< Табличка >", "< Placa >", "< Plaque >") BREAK
+        CASE 9 RETURN TR("< ICE / Speakers >", "< Altavoces >", "< 音响喇叭 >", "< Lautsprecher >", "< スピーカー >", "< Аудиосистема >", "< Alto-falantes >", "< Haut-parleurs >") BREAK
+        CASE 10 RETURN TR("< Trunk >", "< Maletero >", "< 后备箱 >", "< Kofferraum >", "< トランク >", "< Багажник >", "< Porta-malas >", "< Coffre >") BREAK
+        CASE 11 RETURN TR("< Engine Bay 1 >", "< Vano motor 1 >", "< 引擎舱 1 >", "< Motorraum 1 >", "< エンジンルーム 1 >", "< Моторный отсек 1 >", "< Cofre do Motor 1 >", "< Compartiment moteur 1 >") BREAK
+        CASE 12 RETURN TR("< Engine Bay 2 >", "< Vano motor 2 >", "< 引擎舱 2 >", "< Motorraum 2 >", "< エンジンルーム 2 >", "< Моторный отсек 2 >", "< Cofre do Motor 2 >", "< Compartiment moteur 2 >") BREAK
+        CASE 13 RETURN TR("< Engine Bay 3 >", "< Vano motor 3 >", "< 引擎舱 3 >", "< Motorraum 3 >", "< エンジンルーム 3 >", "< Моторный отсек 3 >", "< Cofre do Motor 3 >", "< Compartiment moteur 3 >") BREAK
+        CASE 14 RETURN TR("< Chassis 2 >", "< Chasis 2 >", "< 底盘 2 >", "< Fahrgestell 2 >", "< シャーシ 2 >", "< Шасси 2 >", "< Chassi 2 >", "< Châssis 2 >") BREAK
+        CASE 15 RETURN TR("< Chassis 3 >", "< Chasis 3 >", "< 底盘 3 >", "< Fahrgestell 3 >", "< シャーシ 3 >", "< Шасси 3 >", "< Chassi 3 >", "< Châssis 3 >") BREAK
+        CASE 16 RETURN TR("< Chassis 4 >", "< Chasis 4 >", "< 底盘 4 >", "< Fahrgestell 4 >", "< シャーシ 4 >", "< Шасси 4 >", "< Chassi 4 >", "< Châssis 4 >") BREAK
+        CASE 17 RETURN TR("< Chassis 5 >", "< Chasis 5 >", "< 底盘 5 >", "< Fahrgestell 5 >", "< シャーシ 5 >", "< Шасси 5 >", "< Chassi 5 >", "< Châssis 5 >") BREAK
+        CASE 18 RETURN TR("< Left Door >", "< Puerta izquierda >", "< 左车门 >", "< Linke Tür >", "< 左ドア >", "< Левая дверь >", "< Porta Esquerda >", "< Porte gauche >") BREAK
+        CASE 19 RETURN TR("< Right Door >", "< Puerta derecha >", "< 右车门 >", "< Rechte Tür >", "< 右ドア >", "< Правая дверь >", "< Porta Direita >", "< Porte droite >") BREAK
+        CASE 20 RETURN TR("< Plate Holder >", "< Portamatrículas >", "< 车牌架 >", "< Kennzeichenhalter >", "< プレートホルダー >", "< Рамка номера >", "< Suporte de Placa >", "< Support de plaque >") BREAK
+        CASE 21 RETURN TR("< Vanity Plate >", "< Matrícula decorativa >", "< 装饰车牌 >", "< Zierkennzeichen >", "< バニティプレート >", "< Декор. номер >", "< Placa Decorativa >", "< Plaque décorative >") BREAK
     ENDSWITCH
-    RETURN "< Interior 1 >"
+    RETURN TR("< Interior 1 >", "< Interior 1 >", "< 内饰 1 >", "< Innenraum 1 >", "< 内装 1 >", "< Салон 1 >", "< Interior 1 >", "< Intérieur 1 >")
 ENDFUNC
-
+// How many variants the selected lowrider slot offers ON THE ACTIVE KIT.  Zero
+// is the state that used to be reported for every one of these slots.
 FUNC INT INTERIOR_AVAILABLE()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 0 ENDIF
     RETURN GET_NUM_VEHICLE_MODS(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_TYPE, INTERIOR_SLOT()))
 ENDFUNC
 
+// How many of the lowrider slots this car can actually take, on whichever kit
+// holds them.  Walks the same slot list the Interior page walks, so the Support
+// Check count and the Interior page can never disagree.  A stock car returns 0 -
+// the number that explains why the Interior rows did nothing on one.
 FUNC INT LOWRIDER_SLOT_COUNT(VEHICLE_INDEX vehicle)
     IF NOT DOES_ENTITY_EXIST(vehicle) RETURN 0 ENDIF
     INT count = 0
@@ -1783,73 +2333,88 @@ FUNC INT LOWRIDER_SLOT_COUNT(VEHICLE_INDEX vehicle)
     RETURN count
 ENDFUNC
 
+// One literal per value: this compiler cannot compose a STRING (see the note on
+// LSC_KIT_INDEX_TEXT), so the panel is a table like every other composed row.
 FUNC STRING LOWRIDER_SLOT_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT slots = LOWRIDER_SLOT_COUNT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
-    IF slots <= 0 RETURN "< None On This Car >" ENDIF
-    IF slots = 1 RETURN "< 1 of 22 >" ENDIF
-    IF slots = 2 RETURN "< 2 of 22 >" ENDIF
-    IF slots = 3 RETURN "< 3 of 22 >" ENDIF
-    IF slots = 4 RETURN "< 4 of 22 >" ENDIF
-    IF slots = 5 RETURN "< 5 of 22 >" ENDIF
-    IF slots = 6 RETURN "< 6 of 22 >" ENDIF
-    IF slots = 7 RETURN "< 7 of 22 >" ENDIF
-    IF slots = 8 RETURN "< 8 of 22 >" ENDIF
-    IF slots = 9 RETURN "< 9 of 22 >" ENDIF
-    IF slots = 10 RETURN "< 10 of 22 >" ENDIF
-    IF slots = 11 RETURN "< 11 of 22 >" ENDIF
-    IF slots = 12 RETURN "< 12 of 22 >" ENDIF
-    IF slots = 13 RETURN "< 13 of 22 >" ENDIF
-    IF slots = 14 RETURN "< 14 of 22 >" ENDIF
-    IF slots = 15 RETURN "< 15 of 22 >" ENDIF
-    IF slots = 16 RETURN "< 16 of 22 >" ENDIF
-    IF slots = 17 RETURN "< 17 of 22 >" ENDIF
-    IF slots = 18 RETURN "< 18 of 22 >" ENDIF
-    IF slots = 19 RETURN "< 19 of 22 >" ENDIF
-    IF slots = 20 RETURN "< 20 of 22 >" ENDIF
-    IF slots = 21 RETURN "< 21 of 22 >" ENDIF
-    RETURN "< All 22 Slots >"
+    IF slots <= 0 RETURN TR("< None On This Car >", "< Ninguno en este coche >", "< 此车无此槽位 >", "< Keins bei diesem Auto >", "< この車両には無し >", "< Нет на этом авто >", "< Nenhum Neste Carro >", "< Aucun sur cette voiture >") ENDIF
+    IF slots = 1 RETURN "< 1 / 22 >" ENDIF
+    IF slots = 2 RETURN "< 2 / 22 >" ENDIF
+    IF slots = 3 RETURN "< 3 / 22 >" ENDIF
+    IF slots = 4 RETURN "< 4 / 22 >" ENDIF
+    IF slots = 5 RETURN "< 5 / 22 >" ENDIF
+    IF slots = 6 RETURN "< 6 / 22 >" ENDIF
+    IF slots = 7 RETURN "< 7 / 22 >" ENDIF
+    IF slots = 8 RETURN "< 8 / 22 >" ENDIF
+    IF slots = 9 RETURN "< 9 / 22 >" ENDIF
+    IF slots = 10 RETURN "< 10 / 22 >" ENDIF
+    IF slots = 11 RETURN "< 11 / 22 >" ENDIF
+    IF slots = 12 RETURN "< 12 / 22 >" ENDIF
+    IF slots = 13 RETURN "< 13 / 22 >" ENDIF
+    IF slots = 14 RETURN "< 14 / 22 >" ENDIF
+    IF slots = 15 RETURN "< 15 / 22 >" ENDIF
+    IF slots = 16 RETURN "< 16 / 22 >" ENDIF
+    IF slots = 17 RETURN "< 17 / 22 >" ENDIF
+    IF slots = 18 RETURN "< 18 / 22 >" ENDIF
+    IF slots = 19 RETURN "< 19 / 22 >" ENDIF
+    IF slots = 20 RETURN "< 20 / 22 >" ENDIF
+    IF slots = 21 RETURN "< 21 / 22 >" ENDIF
+    RETURN TR("< All 22 Slots >", "< Las 22 ranuras >", "< 全部 22 个槽位 >", "< Alle 22 Slots >", "< 全22スロット >", "< Все 22 слота >", "< Todos os 22 Slots >", "< Les 22 emplacements >")
 ENDFUNC
 
 FUNC STRING INTERIOR_AVAILABLE_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT available = INTERIOR_AVAILABLE()
-    IF available <= 0 RETURN "< None on this kit >" ENDIF
-    IF available = 1 RETURN "< 1 variant >" ENDIF
-    IF available = 2 RETURN "< 2 variants >" ENDIF
-    IF available = 3 RETURN "< 3 variants >" ENDIF
-    IF available = 4 RETURN "< 4 variants >" ENDIF
-    IF available = 5 RETURN "< 5 variants >" ENDIF
-    IF available = 6 RETURN "< 6 variants >" ENDIF
-    IF available = 7 RETURN "< 7 variants >" ENDIF
-    IF available = 8 RETURN "< 8 variants >" ENDIF
-    IF available = 9 RETURN "< 9 variants >" ENDIF
-    IF available = 10 RETURN "< 10 variants >" ENDIF
-    RETURN "< 10+ variants >"
+    IF available <= 0 RETURN TR("< None on this kit >", "< Ninguno en este kit >", "< 此套件无此项 >", "< Keins in diesem Kit >", "< このキットには無し >", "< Нет в этом ките >", "< Nenhum neste kit >", "< Aucun dans ce kit >") ENDIF
+    IF available = 1 RETURN "< 1 >" ENDIF
+    IF available = 2 RETURN "< 2 >" ENDIF
+    IF available = 3 RETURN "< 3 >" ENDIF
+    IF available = 4 RETURN "< 4 >" ENDIF
+    IF available = 5 RETURN "< 5 >" ENDIF
+    IF available = 6 RETURN "< 6 >" ENDIF
+    IF available = 7 RETURN "< 7 >" ENDIF
+    IF available = 8 RETURN "< 8 >" ENDIF
+    IF available = 9 RETURN "< 9 >" ENDIF
+    IF available = 10 RETURN "< 10 >" ENDIF
+    RETURN "< 10+ >"
 ENDFUNC
 
+// Live slot name from the game.  Falls back rather than rendering an empty row.
 FUNC STRING INTERIOR_SLOT_NAME_TEXT()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "-" ENDIF
     STRING slotName = GET_MOD_SLOT_NAME(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_TYPE, INTERIOR_SLOT()))
-    IF IS_STRING_NULL_OR_EMPTY(slotName) RETURN "< unnamed slot >" ENDIF
+    IF NOT IS_STRING_NULL_OR_EMPTY(slotName) AND NOT ARE_STRINGS_EQUAL(slotName, "NULL")
+        slotName = LSC_RESOLVE_LABEL(slotName)
+    ENDIF
+    IF IS_STRING_NULL_OR_EMPTY(slotName) OR ARE_STRINGS_EQUAL(slotName, "NULL")
+        RETURN TR("< unnamed slot >", "< ranura sin nombre >", "< 未命名槽位 >", "< unbenannter Slot >", "< 名称なしスロット >", "< слот без имени >", "< slot sem nome >", "< emplacement sans nom >")
+    ENDIF
     RETURN slotName
 ENDFUNC
 
+// Live variant name for the current choice.  "Stock" for -1, and an explicit
+// "no variants" message when the slot is absent on the active kit.
 FUNC STRING INTERIOR_VARIANT_NAME_TEXT()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "-" ENDIF
     INT available = INTERIOR_AVAILABLE()
-    IF available <= 0 RETURN "< none on this kit >" ENDIF
-    IF g_interior_choice < 0 RETURN "< Stock >" ENDIF
+    IF available <= 0 RETURN TR("< none on this kit >", "< ninguno en este kit >", "< 此套件无此项 >", "< keins in diesem Kit >", "< このキットには無し >", "< нет в этом ките >", "< nenhum neste kit >", "< aucun dans ce kit >") ENDIF
+    IF g_interior_choice < 0 RETURN TR("< Stock >", "< De serie >", "< 原厂 >", "< Serie >", "< 純正 >", "< Сток >", "< Original >", "< Origine >") ENDIF
     INT choice = g_interior_choice
     IF choice >= available choice = available - 1 ENDIF
     STRING variantName = GET_MOD_TEXT_LABEL(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_TYPE, INTERIOR_SLOT()), choice)
-    IF IS_STRING_NULL_OR_EMPTY(variantName) RETURN "< unnamed variant >" ENDIF
+    IF NOT IS_STRING_NULL_OR_EMPTY(variantName) AND NOT ARE_STRINGS_EQUAL(variantName, "NULL")
+        variantName = LSC_RESOLVE_LABEL(variantName)
+    ENDIF
+    IF IS_STRING_NULL_OR_EMPTY(variantName) OR ARE_STRINGS_EQUAL(variantName, "NULL")
+        RETURN TR("< unnamed variant >", "< variante sin nombre >", "< 未命名款式 >", "< unbenannte Variante >", "< 名称なしバリエーション >", "< вариант без имени >", "< variante sem nome >", "< variante sans nom >")
+    ENDIF
     RETURN variantName
 ENDFUNC
 
 FUNC STRING INTERIOR_VARIANT_TEXT()
-    IF INTERIOR_AVAILABLE() <= 0 RETURN "< None >" ENDIF
-    IF g_interior_choice < 0 RETURN "< Stock >" ENDIF
+    IF INTERIOR_AVAILABLE() <= 0 RETURN TR("< None >", "< Ninguno >", "< 无 >", "< Keins >", "< なし >", "< Нет >", "< Nenhum >", "< Aucun >") ENDIF
+    IF g_interior_choice < 0 RETURN TR("< Stock >", "< De serie >", "< 原厂 >", "< Serie >", "< 純正 >", "< Сток >", "< Original >", "< Origine >") ENDIF
     IF g_interior_choice = 0 RETURN "< 1 >" ENDIF
     IF g_interior_choice = 1 RETURN "< 2 >" ENDIF
     IF g_interior_choice = 2 RETURN "< 3 >" ENDIF
@@ -1863,6 +2428,7 @@ FUNC STRING INTERIOR_VARIANT_TEXT()
     RETURN "< 10+ >"
 ENDFUNC
 
+// Fill index for the "Apply To Every Slot" row.  0-9 literal table.
 FUNC STRING INTERIOR_FILL_TEXT()
     IF g_interior_fill_index = 0 RETURN "< 1 >" ENDIF
     IF g_interior_fill_index = 1 RETURN "< 2 >" ENDIF
@@ -1877,11 +2443,12 @@ FUNC STRING INTERIOR_FILL_TEXT()
 ENDFUNC
 
 FUNC STRING INTERIOR_STREAMED_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF HAVE_VEHICLE_MODS_STREAMED_IN(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) RETURN "< Yes >" ENDIF
-    RETURN "< Not yet >"
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF HAVE_VEHICLE_MODS_STREAMED_IN(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) RETURN TR("< Yes >", "< Sí >", "< 是 >", "< Ja >", "< はい >", "< Да >", "< Sim >", "< Oui >") ENDIF
+    RETURN TR("< Not yet >", "< Aún no >", "< 尚未 >", "< Noch nicht >", "< 未完了 >", "< Ещё нет >", "< Ainda não >", "< Pas encore >")
 ENDFUNC
-
+// Apply the chosen variant to the selected lowrider slot.  The kit search makes
+// this work on any car regardless of which kit holds the slot.
 PROC APPLY_INTERIOR_SLOT()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     INT slot = INTERIOR_SLOT()
@@ -1899,6 +2466,7 @@ PROC APPLY_INTERIOR_SLOT()
     ENDIF
 ENDPROC
 
+// Read-only: report what the active kit holds for the selected slot.
 PROC SYNC_INTERIOR_SLOT()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     LSC_USE_KIT(vehicle)
@@ -1906,6 +2474,9 @@ PROC SYNC_INTERIOR_SLOT()
     IF g_interior_choice >= INTERIOR_AVAILABLE() g_interior_choice = -1 ENDIF
 ENDPROC
 
+// Fill every lowrider slot this car actually has with the same variant index.
+// Slots with no variants on the active kit are skipped, so this cannot write an
+// out-of-range index into a slot that has fewer entries.
 PROC APPLY_INTERIOR_FILL()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     INT index = 0
@@ -1932,6 +2503,9 @@ PROC RESET_INTERIOR_SLOTS()
     g_interior_choice = -1
 ENDPROC
 
+// Trim (extra colour 5) and metal (extra colour 6).  The SDK's own param note
+// says both "should be taken from the list in carcols.dat", which is the same
+// palette the paint rows already use via LSC_COLOUR_ID.
 PROC APPLY_INTERIOR_COLOURS()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     SET_VEHICLE_EXTRA_COLOUR_5(vehicle, LSC_COLOUR_ID(g_lsc_trim_colour))
@@ -1940,25 +2514,25 @@ ENDPROC
 
 PROC DRAW_INTERIOR_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 DRAW_OPTION(y, "Apply To Every Slot", "APPLY", g_item = index, 2) BREAK
-        CASE 1 DRAW_OPTION(y, "Fill Variant", INTERIOR_FILL_TEXT(), g_item = index, 3) BREAK
-        CASE 2 DRAW_OPTION(y, "Slot", INTERIOR_SLOT_LABEL(g_interior_slot), g_item = index, 3) BREAK
-        CASE 3 DRAW_OPTION(y, "Variant", INTERIOR_VARIANT_TEXT(), g_item = index, 3) BREAK
-        CASE 4 DRAW_OPTION(y, "Available", INTERIOR_AVAILABLE_TEXT(), g_item = index, 2) BREAK
-        CASE 5 DRAW_OPTION(y, "Slot Name", INTERIOR_SLOT_NAME_TEXT(), g_item = index, 2) BREAK
-        CASE 6 DRAW_OPTION(y, "Variant Name", INTERIOR_VARIANT_NAME_TEXT(), g_item = index, 2) BREAK
-        CASE 7 DRAW_LSC_COLOUR_SELECTOR(y, "Trim Colour", g_lsc_trim_colour, g_item = index) BREAK
-        CASE 8 DRAW_LSC_COLOUR_SELECTOR(y, "Metal Colour", g_lsc_metal_colour, g_item = index) BREAK
-        CASE 9 DRAW_OPTION(y, "Mods Streamed", INTERIOR_STREAMED_TEXT(), g_item = index, 2) BREAK
-        CASE 10 DRAW_OPTION(y, "Reset Interior", "APPLY", g_item = index, 2) BREAK
+        CASE 0 DRAW_OPTION(y, TR("Apply To Every Slot", "Aplicar a cada ranura", "应用到所有槽位", "Auf jeden Slot anwenden", "全スロットに適用", "Применить ко всем слотам", "Aplicar a Todos os Slots", "Appliquer à chaque slot"), "APPLY", g_item = index, 2) BREAK
+        CASE 1 DRAW_OPTION(y, TR("Fill Variant", "Variante de relleno", "统一填充款式", "Füll-Variante", "一括バリエーション", "Вариант заполнения", "Variante de Preenchimento", "Variante de remplissage"), INTERIOR_FILL_TEXT(), g_item = index, 3) BREAK
+        CASE 2 DRAW_OPTION(y, TR("Slot", "Ranura", "槽位", "Slot", "スロット", "Слот", "Slot", "Emplacement"), INTERIOR_SLOT_LABEL(g_interior_slot), g_item = index, 3) BREAK
+        CASE 3 DRAW_OPTION(y, TR("Variant", "Variante", "款式", "Variante", "バリエーション", "Вариант", "Variante", "Variante"), INTERIOR_VARIANT_TEXT(), g_item = index, 3) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Available", "Disponibles", "可用数量", "Verfügbar", "利用可能数", "Доступно", "Disponíveis", "Disponibles"), INTERIOR_AVAILABLE_TEXT(), g_item = index, 2) BREAK
+        CASE 5 DRAW_OPTION(y, TR("Slot Name", "Nombre de ranura", "槽位名称", "Slot-Name", "スロット名", "Имя слота", "Nome do Slot", "Nom de l'emplacement"), INTERIOR_SLOT_NAME_TEXT(), g_item = index, 2) BREAK
+        CASE 6 DRAW_OPTION(y, TR("Variant Name", "Nombre de variante", "款式名称", "Variantenname", "バリエーション名", "Имя варианта", "Nome da Variante", "Nom de la variante"), INTERIOR_VARIANT_NAME_TEXT(), g_item = index, 2) BREAK
+        CASE 7 DRAW_LSC_COLOUR_SELECTOR(y, TR("Trim Colour", "Color de tapicería", "内饰饰条颜色", "Zierleistenfarbe", "トリムカラー", "Цвет отделки", "Cor do Acabamento", "Couleur de finition"), g_lsc_trim_colour, g_item = index) BREAK
+        CASE 8 DRAW_LSC_COLOUR_SELECTOR(y, TR("Metal Colour", "Color de metal", "金属装饰颜色", "Metallfarbe", "メタルカラー", "Цвет металла", "Cor do Metal", "Couleur du métal"), g_lsc_metal_colour, g_item = index) BREAK
+        CASE 9 DRAW_OPTION(y, TR("Mods Streamed", "Mods cargados", "改装件已加载", "Mods geladen", "改造データ読込済", "Моды загружены", "Mods Carregados", "Mods chargés"), INTERIOR_STREAMED_TEXT(), g_item = index, 2) BREAK
+        CASE 10 DRAW_OPTION(y, TR("Reset Interior", "Restablecer interior", "重置内饰", "Innenraum zurücksetzen", "内装をリセット", "Сбросить салон", "Redefinir Interior", "Réinitialiser l'intérieur"), "APPLY", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_INTERIOR_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "LOWRIDER INTERIOR")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("LOWRIDER INTERIOR", "INTERIOR LOWRIDER", "低底盘车内饰", "LOWRIDER-INNENRAUM", "ローライダー内装", "САЛОН ЛОУРАЙДЕРА", "INTERIOR LOWRIDER", "INTÉRIEUR LOWRIDER"))
     DRAW_MENU_VERSION_TAG()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        DRAW_OPTION(0.268, "Lowrider Interior", "NO VEHICLE", g_item = 0, 0)
+        DRAW_OPTION(0.268, TR("Lowrider Interior", "Interior lowrider", "低底盘车内饰", "Lowrider-Innenraum", "ローライダー内装", "Салон лоурайдера", "Interior Lowrider", "Intérieur lowrider"), "NO VEHICLE", g_item = 0, 0)
         EXIT
     ENDIF
     INT index = g_interior_scroll
@@ -1969,39 +2543,54 @@ PROC DRAW_INTERIOR_PAGE()
         row = row + 1
     ENDWHILE
 ENDPROC
+// ===========================================================================
+// LS Customs depth - Wheels & Tyres page (v0.9.9)
+//
+// Natives: SET_VEHICLE_WHEEL_TYPE / GET_VEHICLE_WHEEL_TYPE (MOD_WHEEL_TYPE
+// 0-12), SET_VEHICLE_MOD(..., variation) / GET_VEHICLE_MOD_VARIATION,
+// TOGGLE_VEHICLE_MOD(MOD_TOGGLE_TYRE_SMOKE), SET_VEHICLE_TYRES_CAN_BURST and
+// SET_REDUCED_SUSPENSION_FORCE (the SDK's param note: "so users can stance
+// cars").
+// ===========================================================================
 
+// MOD_WHEELS covers the front/normal wheels; MOD_REAR_WHEELS is the bike rear
+// wheel slot.  Both are real enum members (commands_vehicle.sch MOD_TYPE).
 FUNC INT WHEEL_SLOT_TYPE()
     IF g_wheeltyre_rear_slot RETURN ENUM_TO_INT(MOD_REAR_WHEELS) ENDIF
     RETURN ENUM_TO_INT(MOD_WHEELS)
 ENDFUNC
 
 FUNC STRING WHEEL_SLOT_LABEL()
-    IF g_wheeltyre_rear_slot RETURN "< Rear Wheel >" ENDIF
-    RETURN "< Front / All >"
+    IF g_wheeltyre_rear_slot RETURN TR("< Rear Wheel >", "< Rueda trasera >", "< 后轮 >", "< Hinterrad >", "< 後輪 >", "< Заднее колесо >", "< Roda Traseira >", "< Roue arrière >") ENDIF
+    RETURN TR("< Front / All >", "< Delantera / Todas >", "< 前轮 / 全部 >", "< Vorne / Alle >", "< 前輪 / すべて >", "< Передние / Все >", "< Dianteira / Todas >", "< Avant / Toutes >")
 ENDFUNC
 
 FUNC STRING WHEEL_VARIATION_TEXT()
-    IF g_wheeltyre_variation = 1 RETURN "< Variant B >" ENDIF
-    RETURN "< Variant A >"
+    IF g_wheeltyre_variation = 1 RETURN TR("< Variant B >", "< Variante B >", "< 款式 B >", "< Variante B >", "< バリエーションB >", "< Вариант B >", "< Variante B >", "< Variante B >") ENDIF
+    RETURN TR("< Variant A >", "< Variante A >", "< 款式 A >", "< Variante A >", "< バリエーションA >", "< Вариант A >", "< Variante A >", "< Variante A >")
 ENDFUNC
 
 FUNC STRING WHEEL_VARIATION_STATE_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT variation = GET_VEHICLE_MOD_VARIATION(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_TYPE, WHEEL_SLOT_TYPE()))
-    IF variation = 1 RETURN "< Variant B fitted >" ENDIF
-    RETURN "< Variant A fitted >"
+    IF variation = 1 RETURN TR("< Variant B fitted >", "< Variante B instalada >", "< 已装 B 款 >", "< Variante B montiert >", "< バリエーションB装着 >", "< Вариант B установлен >", "< Variante B instalada >", "< Variante B montée >") ENDIF
+    RETURN TR("< Variant A fitted >", "< Variante A instalada >", "< 已装 A 款 >", "< Variante A montiert >", "< バリエーションA装着 >", "< Вариант A установлен >", "< Variante A instalada >", "< Variante A montée >")
 ENDFUNC
 
 FUNC STRING WHEEL_TYRE_SMOKE_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF IS_TOGGLE_MOD_ON(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), MOD_TOGGLE_TYRE_SMOKE) RETURN "< Fitted >" ENDIF
-    RETURN "< Not fitted >"
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF IS_TOGGLE_MOD_ON(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), MOD_TOGGLE_TYRE_SMOKE) RETURN TR("< Fitted >", "< Instalado >", "< 已安装 >", "< Montiert >", "< 装着済 >", "< Установлено >", "< Instalado >", "< Installé >") ENDIF
+    RETURN TR("< Not fitted >", "< No instalado >", "< 未安装 >", "< Nicht montiert >", "< 未装着 >", "< Не установлено >", "< Não instalado >", "< Non installé >")
 ENDFUNC
 
 PROC APPLY_WHEEL_FAMILY()
     SET_VEHICLE_WHEEL_TYPE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_WHEEL_TYPE, g_lsc_wheel_type))
 ENDPROC
 
+// Variation is a property of the *current* mod index in the slot, so the row
+// re-writes the index the car already has with the variation flag flipped.  The
+// index is clamped to the slot's real variant count first, so a car whose wheel
+// slot is empty is a clean no-op instead of an out-of-range write.
 PROC APPLY_WHEEL_VARIATION()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     INT slot = WHEEL_SLOT_TYPE()
@@ -2024,6 +2613,11 @@ PROC APPLY_WHEEL_TYRE_SMOKE()
     TOGGLE_VEHICLE_MOD(vehicle, MOD_TOGGLE_TYRE_SMOKE, g_wheeltyre_smoke)
 ENDPROC
 
+// "Tyres Can Burst" (Wheels & Tyres) and the Vehicle Control "Bulletproof Tyres"
+// toggle drive the same native, so they are one setting with two rows.  Asking
+// for burstable tyres here clears the bulletproof toggle rather than being
+// overwritten by it on the next frame - the main loop only ever forces the tyres
+// unburstable while that toggle is ON.
 PROC APPLY_TYRES_CAN_BURST()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     SET_VEHICLE_TYRES_CAN_BURST(vehicle, g_wheeltyre_can_burst)
@@ -2033,11 +2627,20 @@ PROC APPLY_TYRES_CAN_BURST()
     ENDIF
 ENDPROC
 
+// "Soft Suspension" (Wheels & Tyres) and "Stance Softness" (Hydraulics) write the
+// same game flag - SET_REDUCED_SUSPENSION_FORCE - so they are likewise one setting
+// with two rows.  Each mirrors the value into the other's global, so the two rows
+// can never display contradictory states whichever one the player uses.
 PROC APPLY_SOFT_SUSPENSION()
     SET_REDUCED_SUSPENSION_FORCE(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_wheeltyre_soft_suspension)
     g_hydro_soft = g_wheeltyre_soft_suspension
 ENDPROC
 
+// Seeds the Wheels & Tyres rows from the current car when the page is opened, so
+// a row cannot be showing the previous car's state.  Tyre smoke is a real
+// readback (IS_TOGGLE_MOD_ON); tyres-can-burst and reduced suspension have no
+// getter in this header at all, so they are seeded from the menu's own single
+// source of truth for those two flags instead.
 PROC SYNC_WHEELTYRE_STATE()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     LSC_USE_KIT(vehicle)
@@ -2046,30 +2649,32 @@ PROC SYNC_WHEELTYRE_STATE()
     ELSE
         g_wheeltyre_smoke = FALSE
     ENDIF
+    // While the bulletproof toggle is ON the main loop is holding the tyres
+    // unburstable, so this row must not claim they can burst.
     IF g_vehicle_bulletproof_tyres g_wheeltyre_can_burst = FALSE ENDIF
     g_wheeltyre_soft_suspension = g_hydro_soft
 ENDPROC
 
 PROC DRAW_WHEELTYRE_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 DRAW_OPTION(y, "Wheel Family", WHEEL_FAMILY_LABEL(g_lsc_wheel_type), g_item = index, 3) BREAK
-        CASE 1 DRAW_OPTION(y, "Wheel Variation", WHEEL_VARIATION_TEXT(), g_item = index, 3) BREAK
-        CASE 2 DRAW_OPTION(y, "Wheel Slot", WHEEL_SLOT_LABEL(), g_item = index, 3) BREAK
-        CASE 3 DRAW_OPTION(y, "Apply Wheel Family", "APPLY", g_item = index, 2) BREAK
-        CASE 4 DRAW_OPTION(y, "Apply Wheel Variation", "APPLY", g_item = index, 2) BREAK
-        CASE 5 DRAW_OPTION(y, "Fitted Variation", WHEEL_VARIATION_STATE_TEXT(), g_item = index, 2) BREAK
-        CASE 6 DRAW_OPTION(y, "Smoke Fitted", WHEEL_TYRE_SMOKE_TEXT(), g_item = index, 2) BREAK
-        CASE 7 IF g_wheeltyre_smoke DRAW_OPTION(y, "Tyre Smoke", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Tyre Smoke", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 8 IF g_wheeltyre_can_burst DRAW_OPTION(y, "Tyres Can Burst", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Tyres Can Burst", "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 9 IF g_wheeltyre_soft_suspension DRAW_OPTION(y, "Soft Suspension", "ON", g_item = index, 1) ELSE DRAW_OPTION(y, "Soft Suspension", "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 0 DRAW_OPTION(y, TR("Wheel Family", "Familia de ruedas", "车轮系列", "Radfamilie", "ホイール系統", "Семейство колёс", "Família de Rodas", "Famille de roues"), WHEEL_FAMILY_LABEL(g_lsc_wheel_type), g_item = index, 3) BREAK
+        CASE 1 DRAW_OPTION(y, TR("Wheel Variation", "Variación de rueda", "轮胎花纹款式", "Radvariante", "ホイールバリエーション", "Вариация колёс", "Variação da Roda", "Variante de roue"), WHEEL_VARIATION_TEXT(), g_item = index, 3) BREAK
+        CASE 2 DRAW_OPTION(y, TR("Wheel Slot", "Ranura de rueda", "车轮位置", "Rad-Slot", "ホイール位置", "Слот колеса", "Slot de Roda", "Emplacement roue"), WHEEL_SLOT_LABEL(), g_item = index, 3) BREAK
+        CASE 3 DRAW_OPTION(y, TR("Apply Wheel Family", "Aplicar familia de ruedas", "应用车轮系列", "Radfamilie anwenden", "ホイール系統を適用", "Применить семейство", "Aplicar Família de Rodas", "Appliquer famille de roues"), "APPLY", g_item = index, 2) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Apply Wheel Variation", "Aplicar variación de rueda", "应用轮胎款式", "Radvariante anwenden", "バリエーションを適用", "Применить вариацию", "Aplicar Variação da Roda", "Appliquer variante de roue"), "APPLY", g_item = index, 2) BREAK
+        CASE 5 DRAW_OPTION(y, TR("Fitted Variation", "Variación instalada", "当前已装款式", "Montierte Variante", "装着バリエーション", "Установленная вариация", "Variação Instalada", "Variante montée"), WHEEL_VARIATION_STATE_TEXT(), g_item = index, 2) BREAK
+        CASE 6 DRAW_OPTION(y, TR("Smoke Fitted", "Humo instalado", "烧胎烟雾已装", "Reifenqualm montiert", "スモーク装着状態", "Дым покрышек уст.", "Fumaça Instalada", "Fumée installée"), WHEEL_TYRE_SMOKE_TEXT(), g_item = index, 2) BREAK
+        CASE 7 IF g_wheeltyre_smoke DRAW_OPTION(y, TR("Tyre Smoke", "Humo de neumáticos", "烧胎烟雾", "Reifenqualm", "タイヤスモーク", "Дым из-под колёс", "Fumaça dos Pneus", "Fumée de pneus"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Tyre Smoke", "Humo de neumáticos", "烧胎烟雾", "Reifenqualm", "タイヤスモーク", "Дым из-под колёс", "Fumaça dos Pneus", "Fumée de pneus"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 8 IF g_wheeltyre_can_burst DRAW_OPTION(y, TR("Tyres Can Burst", "Neumáticos perforables", "轮胎可爆胎", "Reifen können platzen", "パンク有効", "Пробиваемые шины", "Pneus Podem Furados", "Pneus crevables"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Tyres Can Burst", "Neumáticos perforables", "轮胎可爆胎", "Reifen können platzen", "パンク有効", "Пробиваемые шины", "Pneus Podem Furados", "Pneus crevables"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 9 IF g_wheeltyre_soft_suspension DRAW_OPTION(y, TR("Soft Suspension", "Suspensión blanda", "软性悬挂", "Weiche Federung", "ソフトサスペンション", "Мягкая подвеска", "Suspensão Macia", "Suspension souple"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Soft Suspension", "Suspensión blanda", "软性悬挂", "Weiche Federung", "ソフトサスペンション", "Мягкая подвеска", "Suspensão Macia", "Suspension souple"), "OFF", g_item = index, 0) ENDIF BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_WHEELTYRE_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "WHEELS AND TYRES")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("WHEELS AND TYRES", "RUEDAS Y NEUMÁTICOS", "车轮与轮胎", "RÄDER & REIFEN", "ホイール＆タイヤ", "КОЛЁСА И ШИНЫ", "RODAS E PNEUS", "ROUES ET PNEUS"))
     DRAW_MENU_VERSION_TAG()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        DRAW_OPTION(0.268, "Wheels & Tyres", "NO VEHICLE", g_item = 0, 0)
+        DRAW_OPTION(0.268, TR("Wheels & Tyres", "Ruedas y neumáticos", "车轮与轮胎", "Räder & Reifen", "ホイール＆タイヤ", "Колёса и шины", "Rodas e Pneus", "Roues et pneus"), "NO VEHICLE", g_item = 0, 0)
         EXIT
     ENDIF
     INT index = g_wheeltyre_scroll
@@ -2080,43 +2685,60 @@ PROC DRAW_WHEELTYRE_PAGE()
         row = row + 1
     ENDWHILE
 ENDPROC
+// ===========================================================================
+// LS Customs depth - Extras & Livery page (v0.9.9)
+//
+// Natives: SET_VEHICLE_LIVERY / GET_VEHICLE_LIVERY / GET_VEHICLE_LIVERY_COUNT /
+// GET_LIVERY_NAME, and the extras trio DOES_EXTRA_EXIST /
+// IS_VEHICLE_EXTRA_TURNED_ON / SET_VEHICLE_EXTRA.
+//
+// SET_VEHICLE_EXTRA's third parameter is named TurnOff in this header - it is
+// inverted relative to what the row label implies - so every call below passes
+// the negation explicitly and never an inferred value.
+// ===========================================================================
 
 FUNC STRING LIVERY_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT count = GET_VEHICLE_LIVERY_COUNT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
-    IF count <= 0 RETURN "< No liveries >" ENDIF
-    IF g_lsc_livery < 0 RETURN "< Stock >" ENDIF
-    IF g_lsc_livery = 0 RETURN "< Livery 1 >" ENDIF
-    IF g_lsc_livery = 1 RETURN "< Livery 2 >" ENDIF
-    IF g_lsc_livery = 2 RETURN "< Livery 3 >" ENDIF
-    IF g_lsc_livery = 3 RETURN "< Livery 4 >" ENDIF
-    IF g_lsc_livery = 4 RETURN "< Livery 5 >" ENDIF
-    IF g_lsc_livery = 5 RETURN "< Livery 6 >" ENDIF
-    IF g_lsc_livery = 6 RETURN "< Livery 7 >" ENDIF
-    IF g_lsc_livery = 7 RETURN "< Livery 8 >" ENDIF
-    RETURN "< Livery 9+ >"
+    IF count <= 0 RETURN TR("< No liveries >", "< Sin cubiertas >", "< 无涂装 >", "< Keine Designs >", "< ペイント無し >", "< Нет раскрасок >", "< Sem estampas >", "< Aucun motif >") ENDIF
+    IF g_lsc_livery < 0 RETURN TR("< Stock >", "< De serie >", "< 原厂 >", "< Serie >", "< 純正 >", "< Сток >", "< Original >", "< Origine >") ENDIF
+    IF g_lsc_livery = 0 RETURN "< 1 >" ENDIF
+    IF g_lsc_livery = 1 RETURN "< 2 >" ENDIF
+    IF g_lsc_livery = 2 RETURN "< 3 >" ENDIF
+    IF g_lsc_livery = 3 RETURN "< 4 >" ENDIF
+    IF g_lsc_livery = 4 RETURN "< 5 >" ENDIF
+    IF g_lsc_livery = 5 RETURN "< 6 >" ENDIF
+    IF g_lsc_livery = 6 RETURN "< 7 >" ENDIF
+    IF g_lsc_livery = 7 RETURN "< 8 >" ENDIF
+    RETURN "< 9+ >"
 ENDFUNC
 
 FUNC STRING LIVERY_COUNT_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
     INT count = GET_VEHICLE_LIVERY_COUNT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
-    IF count <= 0 RETURN "< None on this car >" ENDIF
-    IF count = 1 RETURN "< 1 livery >" ENDIF
-    IF count = 2 RETURN "< 2 liveries >" ENDIF
-    IF count = 3 RETURN "< 3 liveries >" ENDIF
-    IF count = 4 RETURN "< 4 liveries >" ENDIF
-    IF count = 5 RETURN "< 5 liveries >" ENDIF
-    IF count = 6 RETURN "< 6 liveries >" ENDIF
-    IF count = 7 RETURN "< 7 liveries >" ENDIF
-    IF count = 8 RETURN "< 8 liveries >" ENDIF
-    RETURN "< 9+ liveries >"
+    IF count <= 0 RETURN TR("< None on this car >", "< Ninguno en este coche >", "< 此车无涂装 >", "< Keins bei diesem Auto >", "< この車両には無し >", "< Нет на этом авто >", "< Nenhum neste carro >", "< Aucun sur cette voiture >") ENDIF
+    IF count = 1 RETURN "< 1 >" ENDIF
+    IF count = 2 RETURN "< 2 >" ENDIF
+    IF count = 3 RETURN "< 3 >" ENDIF
+    IF count = 4 RETURN "< 4 >" ENDIF
+    IF count = 5 RETURN "< 5 >" ENDIF
+    IF count = 6 RETURN "< 6 >" ENDIF
+    IF count = 7 RETURN "< 7 >" ENDIF
+    IF count = 8 RETURN "< 8 >" ENDIF
+    RETURN "< 9+ >"
 ENDFUNC
 
+// Live livery name from the game; falls back rather than rendering an empty row.
 FUNC STRING LIVERY_NAME_TEXT()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "-" ENDIF
-    IF g_lsc_livery < 0 RETURN "< Stock >" ENDIF
+    IF g_lsc_livery < 0 RETURN TR("< Stock >", "< De serie >", "< 原厂 >", "< Serie >", "< 純正 >", "< Сток >", "< Original >", "< Origine >") ENDIF
     STRING liveryName = GET_LIVERY_NAME(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_lsc_livery)
-    IF IS_STRING_NULL_OR_EMPTY(liveryName) RETURN "< unnamed livery >" ENDIF
+    IF NOT IS_STRING_NULL_OR_EMPTY(liveryName) AND NOT ARE_STRINGS_EQUAL(liveryName, "NULL")
+        liveryName = LSC_RESOLVE_LABEL(liveryName)
+    ENDIF
+    IF IS_STRING_NULL_OR_EMPTY(liveryName) OR ARE_STRINGS_EQUAL(liveryName, "NULL")
+        RETURN TR("< unnamed livery >", "< cubierta sin nombre >", "< 未命名涂装 >", "< unbenanntes Design >", "< 名称なしペイント >", "< раскраска без имени >", "< estampa sem nome >", "< motif sans nom >")
+    ENDIF
     RETURN liveryName
 ENDFUNC
 
@@ -2136,18 +2758,17 @@ FUNC STRING EXTRA_SLOT_TEXT()
 ENDFUNC
 
 FUNC STRING EXTRA_FITTED_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF DOES_EXTRA_EXIST(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_lsc_extra + 1) RETURN "< Fitted >" ENDIF
-    RETURN "< Not on this car >"
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF DOES_EXTRA_EXIST(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_lsc_extra + 1) RETURN TR("< Fitted >", "< Instalado >", "< 有此配件 >", "< Vorhanden >", "< あり >", "< Есть >", "< Presente >", "< Présent >") ENDIF
+    RETURN TR("< Not on this car >", "< No en este coche >", "< 此车无此项 >", "< Nicht bei diesem Auto >", "< この車両には無し >", "< Нет на этом авто >", "< Ausente neste carro >", "< Absent sur cette voiture >")
 ENDFUNC
 
 FUNC STRING EXTRA_STATE_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF NOT DOES_EXTRA_EXIST(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_lsc_extra + 1) RETURN "< Unavailable >" ENDIF
-    IF IS_VEHICLE_EXTRA_TURNED_ON(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_lsc_extra + 1) RETURN "< On >" ENDIF
-    RETURN "< Off >"
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF NOT DOES_EXTRA_EXIST(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_lsc_extra + 1) RETURN TR("< Unavailable >", "< No disponible >", "< 不可用 >", "< Nicht verfügbar >", "< 利用不可 >", "< Недоступно >", "< Indisponível >", "< Indisponible >") ENDIF
+    IF IS_VEHICLE_EXTRA_TURNED_ON(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), g_lsc_extra + 1) RETURN TR("< On >", "< Activo >", "< 开启 >", "< Ein >", "< オン >", "< Вкл >", "< Ligado >", "< Activé >") ENDIF
+    RETURN TR("< Off >", "< Inactivo >", "< 关闭 >", "< Aus >", "< オフ >", "< Выкл >", "< Desligado >", "< Désactivé >")
 ENDFUNC
-
 PROC REFRESH_EXTRA_PROBE()
     g_lsc_extra_exists = FALSE
     g_lsc_extra_on = FALSE
@@ -2159,6 +2780,8 @@ PROC REFRESH_EXTRA_PROBE()
     ENDIF
 ENDPROC
 
+// Toggle the selected extra.  TurnOff is inverted in this header, so the
+// negation is explicit.  A slot the car does not have is a clean no-op.
 PROC APPLY_EXTRA_TOGGLE()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
     REFRESH_EXTRA_PROBE()
@@ -2167,6 +2790,8 @@ PROC APPLY_EXTRA_TOGGLE()
     REFRESH_EXTRA_PROBE()
 ENDPROC
 
+// All 12 extras on or off.  Absent slots are skipped, so the loop can never
+// write an extra the car does not carry.
 PROC APPLY_ALL_EXTRAS(BOOL turnOn)
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
@@ -2194,24 +2819,24 @@ ENDPROC
 
 PROC DRAW_LSC_EXTRAS_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 DRAW_OPTION(y, "Livery", LIVERY_TEXT(), g_item = index, 3) BREAK
-        CASE 1 DRAW_OPTION(y, "Livery Count", LIVERY_COUNT_TEXT(), g_item = index, 2) BREAK
-        CASE 2 DRAW_OPTION(y, "Livery Name", LIVERY_NAME_TEXT(), g_item = index, 2) BREAK
-        CASE 3 DRAW_OPTION(y, "Apply Livery", "APPLY", g_item = index, 2) BREAK
-        CASE 4 DRAW_OPTION(y, "Extra Slot", EXTRA_SLOT_TEXT(), g_item = index, 3) BREAK
-        CASE 5 DRAW_OPTION(y, "Extra Fitted", EXTRA_FITTED_TEXT(), g_item = index, 2) BREAK
-        CASE 6 DRAW_OPTION(y, "Extra State", EXTRA_STATE_TEXT(), g_item = index, 2) BREAK
-        CASE 7 DRAW_OPTION(y, "Toggle This Extra", "APPLY", g_item = index, 2) BREAK
-        CASE 8 DRAW_OPTION(y, "Fit All Extras", "APPLY", g_item = index, 2) BREAK
-        CASE 9 DRAW_OPTION(y, "Remove All Extras", "APPLY", g_item = index, 2) BREAK
+        CASE 0 DRAW_OPTION(y, TR("Livery", "Cubierta", "涂装", "Design", "ペイントジョブ", "Раскраска", "Estampa", "Motif"), LIVERY_TEXT(), g_item = index, 3) BREAK
+        CASE 1 DRAW_OPTION(y, TR("Livery Count", "Cantidad de cubiertas", "涂装数量", "Design-Anzahl", "ペイント数", "Кол-во раскрасок", "Total de Estampas", "Nombre de motifs"), LIVERY_COUNT_TEXT(), g_item = index, 2) BREAK
+        CASE 2 DRAW_OPTION(y, TR("Livery Name", "Nombre de cubierta", "涂装名称", "Design-Name", "ペイント名", "Имя раскраски", "Nome da Estampa", "Nom du motif"), LIVERY_NAME_TEXT(), g_item = index, 2) BREAK
+        CASE 3 DRAW_OPTION(y, TR("Apply Livery", "Aplicar cubierta", "应用涂装", "Design anwenden", "ペイントを適用", "Применить раскраску", "Aplicar Estampa", "Appliquer motif"), "APPLY", g_item = index, 2) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Extra Slot", "Ranura de extra", "配件槽位", "Extra-Slot", "エクストラスロット", "Слот экстры", "Slot de Extra", "Emplacement extra"), EXTRA_SLOT_TEXT(), g_item = index, 3) BREAK
+        CASE 5 DRAW_OPTION(y, TR("Extra Fitted", "Extra disponible", "配件存在状态", "Extra vorhanden", "エクストラ有無", "Наличие экстры", "Extra Presente", "Extra présent"), EXTRA_FITTED_TEXT(), g_item = index, 2) BREAK
+        CASE 6 DRAW_OPTION(y, TR("Extra State", "Estado del extra", "配件开关状态", "Extra-Status", "エクストラ状態", "Состояние экстры", "Estado do Extra", "État de l'extra"), EXTRA_STATE_TEXT(), g_item = index, 2) BREAK
+        CASE 7 DRAW_OPTION(y, TR("Toggle This Extra", "Alternar este extra", "切换此配件", "Dieses Extra umschalten", "このエクストラを切替", "Переключить экстру", "Alternar Este Extra", "Basculer cet extra"), "APPLY", g_item = index, 2) BREAK
+        CASE 8 DRAW_OPTION(y, TR("Fit All Extras", "Instalar todos los extras", "开启全部配件", "Alle Extras montieren", "全エクストラを装着", "Включить все экстры", "Ativar Todos os Extras", "Activer tous les extras"), "APPLY", g_item = index, 2) BREAK
+        CASE 9 DRAW_OPTION(y, TR("Remove All Extras", "Quitar todos los extras", "移除全部配件", "Alle Extras entfernen", "全エクストラを解除", "Снять все экстры", "Remover Todos os Extras", "Retirer tous les extras"), "APPLY", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_LSC_EXTRAS_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "EXTRAS AND LIVERY")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("EXTRAS AND LIVERY", "EXTRAS Y CUBIERTA", "配件与涂装", "EXTRAS & DESIGN", "エクストラ＆ペイント", "ЭКСТРЫ И РАСКРАСКА", "EXTRAS E ESTAMPA", "EXTRAS ET MOTIF"))
     DRAW_MENU_VERSION_TAG()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        DRAW_OPTION(0.268, "Extras & Livery", "NO VEHICLE", g_item = 0, 0)
+        DRAW_OPTION(0.268, TR("Extras & Livery", "Extras y cubierta", "配件与涂装", "Extras & Design", "エクストラ＆ペイント", "Экстры и раскраска", "Extras e Estampa", "Extras et motif"), "NO VEHICLE", g_item = 0, 0)
         EXIT
     ENDIF
     INT index = g_lsc_extras_scroll
@@ -2222,14 +2847,42 @@ PROC DRAW_LSC_EXTRAS_PAGE()
         row = row + 1
     ENDWHILE
 ENDPROC
+// ===========================================================================
+// LS Customs depth - Bennys & Lowriders page (v0.9.9)
+//
+// The discoverability half of the lowrider work.  Before this page the only route
+// to the cars that can take a lowrider kit was to scroll every DLC entry in the
+// spawner - and of the twelve, only SABREGT2 and SLAMVAN3 appeared anywhere in
+// this menu's curated lists at all.  The other ten were unreachable unless you
+// already knew the model name.
+//
+// Every model here comes from BENNYS_CUSTOM_MODEL (Rockstar's own table - see the
+// note at the top of this file).  Availability is asked at runtime with
+// IS_MODEL_IN_CDIMAGE / IS_MODEL_VALID, so a model this port does not ship draws
+// as unavailable and its row refuses instead of requesting a model that is not
+// there.
+// ===========================================================================
 
+// Row value: SPAWN only when this build really has the model.  Nothing here
+// assumes the lowrider DLC packs are present - the port's contents are asked, not
+// inferred from the fact that the identifier compiles.
 FUNC STRING BENNYS_ROW_TEXT(INT index)
-    IF NOT IS_MODEL_IN_CDIMAGE(BENNYS_CUSTOM_MODEL(index)) RETURN "< Absent >" ENDIF
-    IF NOT IS_MODEL_VALID(BENNYS_CUSTOM_MODEL(index)) RETURN "< Unavailable >" ENDIF
-    RETURN "SPAWN"
+    IF NOT IS_MODEL_IN_CDIMAGE(BENNYS_CUSTOM_MODEL(index)) RETURN TR("< Absent >", "< Ausente >", "< 缺失 >", "< Fehlt >", "< 未収録 >", "< Отсутствует >", "< Ausente >", "< Absent >") ENDIF
+    IF NOT IS_MODEL_VALID(BENNYS_CUSTOM_MODEL(index)) RETURN TR("< Unavailable >", "< No disponible >", "< 不可用 >", "< Nicht verfügbar >", "< 利用不可 >", "< Недоступно >", "< Indisponível >", "< Indisponible >") ENDIF
+    RETURN TR("SPAWN", "GENERAR", "生成", "SPAWNEN", "出現", "СОЗДАТЬ", "GERAR", "FAIRE APPARAÎTRE")
 ENDFUNC
 
+// Spawns the selected car through the existing, hardware-proven spawn path
+// (START_VEHICLE_MODEL_SPAWN + FINISH_SELECTED_VEHICLE_SPAWN) instead of a second
+// copy of it: the asynchronous model request with its timeout, the formation
+// offset, honouring "TP in Spawned Vehicle" and the custom-car tracking all come
+// with it.
+//
+// An absent model is refused before anything is requested.
 PROC APPLY_BENNYS_SPAWN()
+    // The highlighted row IS the choice on this page: every row is one car and
+    // the draw proc marks the highlighted row with g_item, so there is no separate
+    // selector global to drift out of step with what is drawn.
     INT index = g_item
     IF index < 0 OR index >= BENNYS_MENU_ROWS EXIT ENDIF
     MODEL_NAMES model = BENNYS_CUSTOM_MODEL(index)
@@ -2255,7 +2908,7 @@ PROC DRAW_BENNYS_ROW(INT index, FLOAT y)
 ENDPROC
 
 PROC DRAW_BENNYS_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "BENNYS AND LOWRIDERS")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("BENNYS AND LOWRIDERS", "BENNY'S Y LOWRIDERS", "班尼车坊与低底盘车", "BENNY'S & LOWRIDER", "ベニーズ＆ローライダー", "BENNY'S И ЛОУРАЙДЕРЫ", "BENNY'S E LOWRIDERS", "BENNY'S ET LOWRIDERS"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_bennys_scroll
     INT row = 0
@@ -2266,38 +2919,59 @@ PROC DRAW_BENNYS_PAGE()
     ENDWHILE
 ENDPROC
 
+// Hydraulics readback for the Support Check page.  IS_TOGGLE_MOD_ON is the native
+// SYNC_LSC_VEHICLE_STATE already uses, so this page and the Hydraulics page can
+// never report a different fitted state.
 FUNC STRING HYDRO_FITTED_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF IS_TOGGLE_MOD_ON(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), MOD_TOGGLE_HYDRAULICS) RETURN "< Fitted >" ENDIF
-    RETURN "< Not Fitted >"
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF IS_TOGGLE_MOD_ON(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), MOD_TOGGLE_HYDRAULICS) RETURN TR("< Fitted >", "< Instalado >", "< 已安装 >", "< Montiert >", "< 装着済 >", "< Установлено >", "< Instalado >", "< Installé >") ENDIF
+    RETURN TR("< Not Fitted >", "< No instalado >", "< 未安装 >", "< Nicht montiert >", "< 未装着 >", "< Не установлено >", "< Não Instalado >", "< Non installé >")
 ENDFUNC
 
 FUNC STRING HYDRO_READY_TEXT()
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN "< No Vehicle >" ENDIF
-    IF PLAYER_CAR_HAS_HYDRO() RETURN "< Yes - Kit Fits >" ENDIF
-    RETURN "< No - Needs Custom >"
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN TR("< No Vehicle >", "< Sin vehículo >", "< 无载具 >", "< Kein Fahrzeug >", "< 車両なし >", "< Нет транспорта >", "< Sem Veículo >", "< Aucun véhicule >") ENDIF
+    IF PLAYER_CAR_HAS_HYDRO() RETURN TR("< Yes - Kit Fits >", "< Sí - Admite kit >", "< 是 - 支持套件 >", "< Ja - Kit passt >", "< 可 - キット対応 >", "< Да - Кит подходит >", "< Sim - Aceita Kit >", "< Oui - Kit compatible >") ENDIF
+    RETURN TR("< No - Needs Custom >", "< No - Requiere Custom >", "< 否 - 需升级改装版 >", "< Nein - Braucht Custom >", "< 不可 - 要カスタム変換 >", "< Нет - Нужен Custom >", "< Não - Requer Custom >", "< Non - Custom requis >")
 ENDFUNC
+
+// ===========================================================================
+// LS Customs depth - Vehicle Support Check page (v0.9.9)
+//
+// Read-only, and deliberately so: it has no apply path and no selector, so there
+// is nothing on it that can change the car or the menu.  It answers "why does
+// nothing on the Hydraulics page work", and it answers the two questions that
+// decide whether the lowrider feature set can work here at all:
+//
+//   * does this car carry a lowrider kit  -> Lowrider Slots / Hydraulics Ready
+//   * does this build ship the custom variant -> Custom Variant / Built From
+//
+// Every value is a live native readback or a count taken from the same helper the
+// page it explains uses (INTERIOR_SLOT list, LSC_KIT_* helpers, HYDRO_SUPPORTED),
+// so this page cannot drift away from the pages it is explaining.  If this build
+// ships none of the custom models the honest answer appears here as
+// "< None For This Car >" rather than a promise.
+// ===========================================================================
 
 PROC DRAW_SUPPORT_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 IF PLAYER_CAR_HAS_HYDRO() DRAW_OPTION(y, "Lowrider Support", LOWRIDER_SUPPORT_TEXT(), g_item = index, 1) ELSE DRAW_OPTION(y, "Lowrider Support", LOWRIDER_SUPPORT_TEXT(), g_item = index, 0) ENDIF BREAK
-        CASE 1 DRAW_OPTION(y, "Hydraulics Ready", HYDRO_READY_TEXT(), g_item = index, 2) BREAK
-        CASE 2 DRAW_OPTION(y, "Hydraulics Fitted", HYDRO_FITTED_TEXT(), g_item = index, 2) BREAK
-        CASE 3 DRAW_OPTION(y, "This Car", VEHICLE_MODEL_NAME_TEXT(LSC_PLAYER_VEHICLE_MODEL()), g_item = index, 2) BREAK
-        CASE 4 DRAW_OPTION(y, "Custom Variant", BENNYS_VARIANT_TEXT(), g_item = index, 2) BREAK
-        CASE 5 DRAW_OPTION(y, "Built From", BENNYS_BASE_TEXT(), g_item = index, 2) BREAK
-        CASE 6 DRAW_OPTION(y, "Mod Kits", LSC_KIT_COUNT_TEXT(), g_item = index, 2) BREAK
-        CASE 7 DRAW_OPTION(y, "Active Kit", LSC_KIT_INDEX_TEXT(), g_item = index, 2) BREAK
-        CASE 8 DRAW_OPTION(y, "Kit Type", LSC_KIT_TYPE_TEXT(), g_item = index, 2) BREAK
-        CASE 9 DRAW_OPTION(y, "Lowrider Slots", LOWRIDER_SLOT_TEXT(), g_item = index, 2) BREAK
+        CASE 0 IF PLAYER_CAR_HAS_HYDRO() DRAW_OPTION(y, TR("Lowrider Support", "Soporte Lowrider", "低底盘车支持", "Lowrider-Unterstützung", "ローライダー対応", "Поддержка лоурайдера", "Suporte Lowrider", "Support lowrider"), LOWRIDER_SUPPORT_TEXT(), g_item = index, 1) ELSE DRAW_OPTION(y, TR("Lowrider Support", "Soporte Lowrider", "低底盘车支持", "Lowrider-Unterstützung", "ローライダー対応", "Поддержка лоурайдера", "Suporte Lowrider", "Support lowrider"), LOWRIDER_SUPPORT_TEXT(), g_item = index, 0) ENDIF BREAK
+        CASE 1 DRAW_OPTION(y, TR("Hydraulics Ready", "Listo para hidráulica", "液压就绪", "Hydraulik-bereit", "ハイドロ対応可否", "Готовность к гидравлике", "Pronto p/ Hidráulica", "Prêt pour hydraulique"), HYDRO_READY_TEXT(), g_item = index, 2) BREAK
+        CASE 2 DRAW_OPTION(y, TR("Hydraulics Fitted", "Hidráulica instalada", "已安装液压", "Hydraulik montiert", "ハイドロ装着状態", "Гидравлика установлена", "Hidráulica Instalada", "Hydraulique installée"), HYDRO_FITTED_TEXT(), g_item = index, 2) BREAK
+        CASE 3 DRAW_OPTION(y, TR("This Car", "Este vehículo", "当前载具", "Dieses Auto", "現在の車両", "Этот транспорт", "Este Veículo", "Ce véhicule"), VEHICLE_MODEL_NAME_TEXT(LSC_PLAYER_VEHICLE_MODEL()), g_item = index, 2) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Custom Variant", "Variante Custom", "改装版型号", "Custom-Variante", "カスタム仕様", "Кастом-вариант", "Variante Custom", "Variante Custom"), BENNYS_VARIANT_TEXT(), g_item = index, 2) BREAK
+        CASE 5 DRAW_OPTION(y, TR("Built From", "Basado en", "原厂原型车", "Basismodell", "ベース車両", "Базовая модель", "Baseado em", "Basé sur"), BENNYS_BASE_TEXT(), g_item = index, 2) BREAK
+        CASE 6 DRAW_OPTION(y, TR("Mod Kits", "Kits de mod", "改装套件数", "Mod-Kits", "改造キット数", "Мод-киты", "Kits de Mod", "Kits de mod"), LSC_KIT_COUNT_TEXT(), g_item = index, 2) BREAK
+        CASE 7 DRAW_OPTION(y, TR("Active Kit", "Kit activo", "当前套件", "Aktives Kit", "有効キット", "Активный кит", "Kit Ativo", "Kit actif"), LSC_KIT_INDEX_TEXT(), g_item = index, 2) BREAK
+        CASE 8 DRAW_OPTION(y, TR("Kit Type", "Tipo de kit", "套件类型", "Kit-Typ", "キットタイプ", "Тип кита", "Tipo de Kit", "Type de kit"), LSC_KIT_TYPE_TEXT(), g_item = index, 2) BREAK
+        CASE 9 DRAW_OPTION(y, TR("Lowrider Slots", "Ranuras Lowrider", "低底盘槽位数", "Lowrider-Slots", "ローライダースロット", "Слоты лоурайдера", "Slots Lowrider", "Emplacements lowrider"), LOWRIDER_SLOT_TEXT(), g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
 PROC DRAW_SUPPORT_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "VEHICLE SUPPORT")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("VEHICLE SUPPORT", "SOPORTE DE VEHÍCULO", "载具支持检查", "FAHRZEUG-SUPPORT", "車両対応チェック", "ПОДДЕРЖКА ТРАНСПОРТА", "SUPORTE DO VEÍCULO", "SUPPORT VÉHICULE"))
     DRAW_MENU_VERSION_TAG()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
-        DRAW_OPTION(0.268, "Vehicle Support", "NO VEHICLE", g_item = 0, 0)
+        DRAW_OPTION(0.268, TR("Vehicle Support", "Soporte de vehículo", "载具支持", "Fahrzeug-Support", "車両対応", "Поддержка транспорта", "Suporte do Veículo", "Support véhicule"), "NO VEHICLE", g_item = 0, 0)
         EXIT
     ENDIF
     INT index = g_support_scroll
@@ -2308,3 +2982,4 @@ PROC DRAW_SUPPORT_PAGE()
         row = row + 1
     ENDWHILE
 ENDPROC
+

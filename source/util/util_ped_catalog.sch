@@ -1,3 +1,16 @@
+// GENERATED FILE - DO NOT HAND-EDIT THE TABLES BELOW.
+// Regenerate with: tools\Gen-PedCatalog.ps1
+//
+// Source: ModelEnums model_enums.sch /peds(\.pso)?\.meta/
+// Entries: 760 over 8 page(s) of up to 96.
+//
+// The compiler limits individual SWITCH blocks, so the complete list is
+// segmented internally while remaining one continuous scrollable selection
+// in the menu.  Names come from the game metadata because the Switch
+// runtime exposes no ped model-count / index / display-name native.
+//
+// Everything from FIND_PED_CHOICE_BY_NAME onward is hand-written and is
+// preserved verbatim by the generator.
 FUNC INT PED_CHOICE_COUNT()
     RETURN 760
 ENDFUNC
@@ -1654,6 +1667,19 @@ FUNC INT FIND_PED_CHOICE_BY_NAME(STRING modelName)
     RETURN -1
 ENDFUNC
 
+// ---------------------------------------------------------------------------
+// Spawn Stripper (Misc row 12).
+//
+// Four models, every one already present in this Switch ped enum - the same
+// names the catalog lists at S_F_Y_STRIPPERLITE / S_F_Y_STRIPPER_01 /
+// S_F_Y_STRIPPER_02 (PED_MODEL_PAGE_6) and MP_F_STRIPPERLITE
+// (PED_MODEL_PAGE_5, a DLC model).  No invented model names.
+//
+// MP_F_STRIPPERLITE is DLC, so the spawn path validates with
+// IS_MODEL_IN_CDIMAGE + IS_MODEL_VALID exactly like the bodyguard/attacker spawn
+// does: an install without that pack gets a clean no-op instead of an 8s request
+// that can only time out.
+// ---------------------------------------------------------------------------
 FUNC MODEL_NAMES STRIPPER_MODEL_FOR_CHOICE(INT choice)
     IF choice = 1 RETURN S_F_Y_STRIPPER_02 ENDIF
     IF choice = 2 RETURN S_F_Y_STRIPPERLITE ENDIF
@@ -1669,17 +1695,32 @@ FUNC STRING STRIPPER_NAME_FOR_CHOICE(INT choice)
 ENDFUNC
 
 FUNC INT SLOT_FOR_MODEL(MODEL_NAMES model)
+    IF model = PLAYER_ZERO RETURN 0 ENDIF
     IF model = PLAYER_ONE RETURN 1 ENDIF
     IF model = PLAYER_TWO RETURN 2 ENDIF
-    RETURN 0
+    RETURN g_character_slot
 ENDFUNC
 
 PROC SAVE_ACTIVE_CHARACTER_PED()
+    // Derive the slot from the live model if it matches a story protagonist,
+    // otherwise preserve the currently active g_character_slot for custom peds.
+    // Hardware truth (Switch port): Franklin = PLAYER_ZERO, Michael =
+    // PLAYER_ONE, Trevor = PLAYER_TWO.
     MODEL_NAMES currentModel = GET_ENTITY_MODEL(PLAYER_PED_ID())
-    INT liveSlot = SLOT_FOR_MODEL(currentModel)
-    IF liveSlot = 0 g_franklin_ped = currentModel ENDIF
-    IF liveSlot = 1 g_michael_ped = currentModel ENDIF
-    IF liveSlot = 2 g_trevor_ped = currentModel ENDIF
+    IF currentModel = PLAYER_ZERO
+        g_character_slot = 0
+        g_franklin_ped = currentModel
+    ELIF currentModel = PLAYER_ONE
+        g_character_slot = 1
+        g_michael_ped = currentModel
+    ELIF currentModel = PLAYER_TWO
+        g_character_slot = 2
+        g_trevor_ped = currentModel
+    ELSE
+        IF g_character_slot = 0 g_franklin_ped = currentModel ENDIF
+        IF g_character_slot = 1 g_michael_ped = currentModel ENDIF
+        IF g_character_slot = 2 g_trevor_ped = currentModel ENDIF
+    ENDIF
 ENDPROC
 
 FUNC MODEL_NAMES SAVED_CHARACTER_PED(INT slot)
@@ -1720,6 +1761,10 @@ FUNC STRING CURRENT_VEHICLE_SEARCH_LABEL()
 ENDFUNC
 
 PROC REQUEST_PED_CHANGE(MODEL_NAMES model)
+    // Changing the player model while seated is unsafe on the Switch port;
+    // require the same safe on-foot state used by the native character swap.
+    // Custom loader fix: a new search overrides a stale pending request so a
+    // typed addon name (ex. goku) is never silently dropped while green.
     IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
     IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) EXIT ENDIF
     IF g_ped_change_pending
@@ -1748,6 +1793,9 @@ PROC FINISH_PED_CHANGE()
 ENDPROC
 
 PROC MAINTAIN_PED_CHANGE_REQUEST()
+    // Addon PEDs stream from DLC packs (often SD on Switch): keep the
+    // request alive every tick while pending so slow streaming still
+    // completes instead of silently stalling on one REQUEST_MODEL.
     IF NOT g_ped_change_pending EXIT ENDIF
     IF HAS_MODEL_LOADED(g_pending_ped_model) EXIT ENDIF
     REQUEST_MODEL(g_pending_ped_model)
@@ -1760,7 +1808,23 @@ FUNC MODEL_NAMES STORY_MODEL_FOR_SLOT(INT slot)
 ENDFUNC
 
 PROC PROCESS_PED_DEATH_RECOVERY()
+    // Custom-PED death hangs the respawn load on black: the loader snapshots
+    // whatever model is equipped and chokes rebuilding custom assets.
+    // Batch22 swapped only on IS_ENTITY_DEAD (post-snapshot, too late) with
+    // no retry and restored on first control flicker (mid-load). Now:
+    // Gate A fires on IS_PED_INJURED (fatal-damage frame, pre-dead latch) OR
+    // dead, whichever trips first, to beat the snapshot. Gate B re-forces
+    // the story model every dead frame the equipped model still isn't story
+    // (covers a lost Gate A race). Restore waits for 90 consecutive ticks of
+    // live control on foot before re-applying async, so the loader is provably
+    // settled. Never stacks with a pending change; story deaths cost nothing.
     MODEL_NAMES currentModel = GET_ENTITY_MODEL(PLAYER_PED_ID())
+    // Keep the active character slot in sync with a story character the player
+    // picked on the game's character wheel. The menu used to be the only place
+    // that refreshed g_character_slot, so dying with a custom PED while playing
+    // a switched-to character could force the wrong story model during the
+    // respawn load. Only story models update it, so a custom PED in use does
+    // not clobber the remembered slot.
     IF currentModel = PLAYER_ZERO g_character_slot = 0 ENDIF
     IF currentModel = PLAYER_ONE g_character_slot = 1 ENDIF
     IF currentModel = PLAYER_TWO g_character_slot = 2 ENDIF
@@ -1802,48 +1866,53 @@ ENDPROC
 
 PROC ADJUST_PED_SELECTOR(INT direction)
     INT nextSlot = 0
-    IF g_item = 2
+    IF g_item = 3
         nextSlot = g_character_slot + direction
         IF nextSlot < 0 nextSlot = 2 ENDIF
         IF nextSlot > 2 nextSlot = 0 ENDIF
-        SAVE_ACTIVE_CHARACTER_PED()
-        APPLY_CHARACTER_PROFILE(nextSlot)
+        g_character_slot = nextSlot
     ENDIF
 ENDPROC
 
 PROC DRAW_CHARACTER_PROFILE(FLOAT y, BOOL selected)
-    IF g_character_slot = 0 DRAW_OPTION(y, "Character Profile:", "< Michael >", selected, 3) ENDIF
-    IF g_character_slot = 1 DRAW_OPTION(y, "Character Profile:", "< Franklin >", selected, 3) ENDIF
-    IF g_character_slot = 2 DRAW_OPTION(y, "Character Profile:", "< Trevor >", selected, 3) ENDIF
+    IF g_character_slot = 0 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Franklin >", "< Franklin >", "< 富兰克林 >", "< Franklin >", "< フランクリン >", "< Франклин >", "< Franklin >", "< Franklin >"), selected, 3) ENDIF
+    IF g_character_slot = 1 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Michael >", "< Michael >", "< 麦克 >", "< Michael >", "< マイケル >", "< Майкл >", "< Michael >", "< Michael >"), selected, 3) ENDIF
+    IF g_character_slot = 2 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Trevor >", "< Trevor >", "< 崔佛 >", "< Trevor >", "< トレバー >", "< Тревор >", "< Trevor >", "< Trevor >"), selected, 3) ENDIF
 ENDPROC
 
 PROC DRAW_PED_PAGE()
-    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, "PED CHANGER")
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("PED CHANGER", "CAMBIADOR DE PED", "人物模型更换", "PED-WECHSLER", "PEDチェンジャー", "СМЕНА МОДЕЛИ PED", "TROCADOR DE PED", "CHANGEUR DE PED"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_scroll
     INT row = 0
-    WHILE row < 8 AND index < PED_CHOICE_COUNT() + 3
+    WHILE row < 8 AND index < PED_CHOICE_COUNT() + 4
         FLOAT y = 0.268 + (TO_FLOAT(row) * ROW_H)
         IF index = 0
-            IF g_ped_search_not_found
-                DRAW_OPTION(y, "PED Search", "NOT FOUND", g_item = index, 0)
-            ELIF g_ped_search_has_value
-                DRAW_OPTION(y, "PED Search", g_ped_search_value, g_item = index, 1)
-            ELSE
-                DRAW_OPTION(y, "PED Search", CURRENT_PED_SEARCH_LABEL(), g_item = index, 2)
-            ENDIF
+            DRAW_OPTION(y, TR("Custom Story PEDs", "PEDs de historia", "故事角色模型", "Story-Charakter-PEDs", "ストーリーPED変更", "Модели сюжетных PED", "PEDs do Modo História", "PEDs du mode Histoire"), "OPEN", g_item = index, 2)
         ELIF index = 1
-            DRAW_OPTION(y, "Random PED", "APPLY", g_item = index, 2)
+            IF g_ped_search_not_found
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "NOT FOUND", g_item = index, 0)
+            ELIF g_ped_search_has_value
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), g_ped_search_value, g_item = index, 1)
+            ELSE
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), CURRENT_PED_SEARCH_LABEL(), g_item = index, 2)
+            ENDIF
         ELIF index = 2
+            DRAW_OPTION(y, TR("Random PED", "PED aleatorio", "随机人物模型", "Zufälliger PED", "ランダムPED", "Случайный PED", "PED aleatório", "PED aléatoire"), "APPLY", g_item = index, 2)
+        ELIF index = 3
             DRAW_CHARACTER_PROFILE(y, g_item = index)
         ELSE
-            DRAW_OPTION(y, "PED:", PED_NAME_FOR_CHOICE(index - 3), g_item = index, 2)
+            DRAW_OPTION(y, TR("PED:", "PED:", "人物:", "PED:", "PED:", "PED:", "PED:", "PED :"), PED_NAME_FOR_CHOICE(index - 4), g_item = index, 2)
         ENDIF
         index = index + 1
         row = row + 1
     ENDWHILE
 ENDPROC
 
+// Stat Manager and all of its stat read/write/verify helpers used to live here.
+// Removed: on this port only the Special ability key accepted a write, so seven of the
+// eight editable stats could never be applied. APPLY_RANDOM_* above and
+// INIT_MENU_DEFAULTS below are unrelated and kept.
 PROC APPLY_RANDOM_PED()
     INT attempts = 0
     INT choice = 0
@@ -1900,13 +1969,19 @@ PROC APPLY_RANDOM_ATTACKER_PED()
 ENDPROC
 
 PROC INIT_MENU_DEFAULTS()
+    // The catalog is alphabetical, so index 0 is A_C_BOAR, while the declared
+    // label default was "PLAYER_ZERO": the menu named one ped and spawned a
+    // different one (the boar). Bind the default choice and label to the same
+    // catalog entry instead of trusting either literal.
     g_guard_ped_choice = PED_CHOICE_FOR_MODEL(PLAYER_ZERO)
     IF g_guard_ped_choice < 0 g_guard_ped_choice = 0 ENDIF
     g_guard_ped_name = PED_NAME_FOR_CHOICE(g_guard_ped_choice)
     g_attacker_ped_choice = g_guard_ped_choice
     g_attacker_ped_name = g_guard_ped_name
+    // Both default to the catalog entry, not a typed custom model.
     g_guard_ped_search_is_custom = FALSE
     g_guard_ped_model = PLAYER_ZERO
     g_attacker_ped_search_is_custom = FALSE
     g_attacker_ped_model = PLAYER_ZERO
 ENDPROC
+

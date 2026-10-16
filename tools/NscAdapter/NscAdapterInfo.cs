@@ -1,5 +1,11 @@
 using NscCore;
+
 namespace NscAdapter;
+
+/// <summary>
+/// Diagnostics. --info is deliberately lenient: it reports on files that cannot
+/// be decoded, because describing a broken artifact is the whole point.
+/// </summary>
 internal static class NscAdapterInfo
 {
     public static int Info(NscAdapterOptions options, TextWriter output, TextWriter error)
@@ -10,8 +16,10 @@ internal static class NscAdapterInfo
             NscAdapterUsage.Write(error);
             return NscExitCodes.Usage;
         }
+
         NscReferenceResolution resolution = NscReferenceResolver.Resolve(options.Positional[0], options.PreferredName);
         NscAdapterReport.WriteReferenceLine(output, resolution);
+
         NscPayload? reference = NscAdapterDescribe.Write(output, resolution.Path, "reference");
         if (options.Positional.Count == 2)
         {
@@ -46,6 +54,7 @@ internal static class NscAdapterInfo
             NscAdapterUsage.Write(error);
             return NscExitCodes.Usage;
         }
+
         string target = options.Positional[0];
         bool isDirectory = Directory.Exists(target);
         if (!isDirectory && !File.Exists(target))
@@ -53,9 +62,11 @@ internal static class NscAdapterInfo
             error.WriteLine($"ERROR not found: {target}");
             return NscExitCodes.InvalidReference;
         }
+
         NscNameValidationResult result = isDirectory
             ? NscNameValidation.ValidateDirectory(target)
             : NscNameValidation.ValidateFile(target);
+
         foreach (NscNameProblem problem in result.Problems)
         {
             string label = isDirectory ? Path.GetRelativePath(target, problem.File).Replace('\\', '/') : problem.File;
@@ -63,6 +74,10 @@ internal static class NscAdapterInfo
                            + $"\theaderHash=0x{problem.HeaderHash:X8}\texpected=0x{problem.ExpectedHash:X8}\t{problem.Reason}");
         }
         output.WriteLine($"VALIDATED {result.FilesChecked} files; mismatches={result.Problems.Count} skipped={result.Skipped}");
+
+        // Exit code 0 even when there are mismatches: *.pc.nsc files are
+        // expected to be flagged, so callers treat this as a report rather than
+        // a gate. --validate during an adaptation is the strict path.
         return NscExitCodes.Ok;
     }
 }

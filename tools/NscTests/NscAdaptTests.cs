@@ -1,8 +1,16 @@
 using NscCore;
 using Xunit;
+
 namespace NscTests;
+
 public class NscAdaptTests
 {
+    /// <summary>
+    /// The real-world diff, reproduced: adapting our Win64 intermediate onto the
+    /// stock profile changes exactly 6 byte VALUES (0x02,0x03,0x18,0x19,0x1A,0x1B)
+    /// because 6 of the 12 copied bytes were already equal. Measured on
+    /// ragemenu.pc.nsc vs ragemenu.nsc in out-lscc-v099e-20260928.
+    /// </summary>
     [Fact]
     public void Adapt_changes_only_the_adaptable_bytes_and_only_where_they_differ()
     {
@@ -10,7 +18,9 @@ public class NscAdaptTests
         byte[] candidateBytes = SyntheticNsc.Payload("ragemenu", SyntheticNsc.CandidatePageBase, SyntheticNsc.CandidateBuildWord);
         NscPayload reference = NscContainer.Read(referenceBytes, "reference");
         NscPayload candidate = NscContainer.Read(candidateBytes, "candidate");
+
         NscAdaptResult result = NscAdapt.Adapt(reference, candidate, null, dryRun: true);
+
         Assert.Equal(new[] { 0x02, 0x03, 0x18, 0x19, 0x1A, 0x1B }, result.ChangedOffsets.ToArray());
         Assert.False(result.AlreadyMatched);
         Assert.Equal(candidateBytes.Length, result.Payload.Length);
@@ -19,6 +29,7 @@ public class NscAdaptTests
         Assert.Equal(SyntheticNsc.CandidatePageBase, result.CandidatePageBase);
         Assert.Equal(SyntheticNsc.CandidateBuildWord, result.CandidateBuildWord);
     }
+
     [Fact]
     public void Adapt_leaves_code_native_table_and_internal_name_untouched()
     {
@@ -27,7 +38,9 @@ public class NscAdaptTests
             "ragemenu", SyntheticNsc.CandidatePageBase, SyntheticNsc.CandidateBuildWord, codeLength: 0x1234, nativeCount: 377);
         NscPayload reference = NscContainer.Read(referenceBytes, "reference");
         NscPayload candidate = NscContainer.Read(candidateBytes, "candidate");
+
         NscAdaptResult result = NscAdapt.Adapt(reference, candidate, null, dryRun: true);
+
         for (int i = 0; i < candidateBytes.Length; i++)
         {
             if (result.ChangedOffsets.Contains(i)) continue;
@@ -42,17 +55,21 @@ public class NscAdaptTests
         Assert.Equal("ragemenu", NscHeader.InternalName(result.Payload));
         Assert.Equal(NscHeader.Joaat("ragemenu"), NscHeader.NameHash(result.Payload));
     }
+
     [Fact]
     public void Adapt_is_idempotent_when_the_candidate_already_matches_the_reference()
     {
         byte[] payload = SyntheticNsc.Payload("ragemenu", SyntheticNsc.StockPageBase, SyntheticNsc.StockBuildWord);
         NscPayload reference = NscContainer.Read(payload, "reference");
         NscPayload candidate = NscContainer.Read(payload, "candidate");
+
         NscAdaptResult result = NscAdapt.Adapt(reference, candidate, null, dryRun: true);
+
         Assert.True(result.AlreadyMatched);
         Assert.Empty(result.ChangedOffsets);
         Assert.Equal(payload, result.Payload);
     }
+
     [Fact]
     public void Describe_offsets_renders_ranges_and_singles()
     {
