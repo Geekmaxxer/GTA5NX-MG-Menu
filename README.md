@@ -18,8 +18,8 @@ See [Features](docs/FEATURES.md) and [v1.0.8 changes](docs/CHANGELOG.md).
   through `-DevNgRoot`; compiler/project dependencies must also resolve there.
 - Your own stock **Switch `script_rel.rpf`** reference script or extraction from
   the exact game build you target. `script.rpf` is a different archive.
-- The ScriptHookV-NX SDK or source checkout for its binding generator, and the
-  matching runtime installed on the Switch. Use ScriptHookV-NX v1.4.1 Preview
+- The [ScriptHookV-NX SDK](https://github.com/Geekmaxxer/ScriptHookV-NX/releases) or source checkout for its binding generator, and the
+  matching runtime (`subsdk5` runtime NSO) installed on the Switch. Use ScriptHookV-NX v1.4.1 Preview
   or a compatible newer release, including its main.npdm and the generated
   menu binding. Older public-loader test builds lack the required natives.
 - An RPF editor to install the compiled scripts into your own archive.
