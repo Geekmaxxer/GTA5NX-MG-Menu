@@ -581,11 +581,22 @@ ENDPROC
 PROC PRUNE_MENU_PED_TRACKING()
     INT readIndex = 0
     INT writeIndex = 0
+    INT oldCnt = 0
+    INT clearIdx = 0
     REPEAT g_bodyguard_count readIndex
         IF DOES_ENTITY_EXIST(g_bodyguards[readIndex])
-            g_bodyguards[writeIndex] = g_bodyguards[readIndex]
-            g_bodyguard_blip_handles[writeIndex] = g_bodyguard_blip_handles[readIndex]
-            writeIndex = writeIndex + 1
+            IF NOT IS_ENTITY_DEAD(g_bodyguards[readIndex])
+                g_bodyguards[writeIndex] = g_bodyguards[readIndex]
+                g_bodyguard_blip_handles[writeIndex] = g_bodyguard_blip_handles[readIndex]
+                writeIndex = writeIndex + 1
+            ELSE
+                IF DOES_BLIP_EXIST(g_bodyguard_blip_handles[readIndex])
+                    REMOVE_BLIP(g_bodyguard_blip_handles[readIndex])
+                    g_bodyguard_blip_handles[readIndex] = NULL
+                ENDIF
+                REMOVE_PED_FROM_GROUP(g_bodyguards[readIndex])
+                SET_PED_AS_NO_LONGER_NEEDED(g_bodyguards[readIndex])
+            ENDIF
         ELSE
             IF DOES_BLIP_EXIST(g_bodyguard_blip_handles[readIndex])
                 REMOVE_BLIP(g_bodyguard_blip_handles[readIndex])
@@ -593,21 +604,40 @@ PROC PRUNE_MENU_PED_TRACKING()
             ENDIF
         ENDIF
     ENDREPEAT
+    oldCnt = g_bodyguard_count
     g_bodyguard_count = writeIndex
+    clearIdx = writeIndex
+    WHILE clearIdx < oldCnt
+        g_bodyguards[clearIdx] = NULL
+        g_bodyguard_blip_handles[clearIdx] = NULL
+        clearIdx = clearIdx + 1
+    ENDWHILE
     g_bodyguard_scan_index = 0
     IF g_bodyguard_count <= 0 AND DOES_GROUP_EXIST(g_bodyguard_group)
         REMOVE_GROUP(g_bodyguard_group)
         g_bodyguard_group = NULL
     ENDIF
+
     readIndex = 0
     writeIndex = 0
     REPEAT g_brawl_ped_count readIndex
         IF DOES_ENTITY_EXIST(g_brawl_peds[readIndex])
-            g_brawl_peds[writeIndex] = g_brawl_peds[readIndex]
-            writeIndex = writeIndex + 1
+            IF NOT IS_ENTITY_DEAD(g_brawl_peds[readIndex])
+                g_brawl_peds[writeIndex] = g_brawl_peds[readIndex]
+                writeIndex = writeIndex + 1
+            ELSE
+                SET_PED_AS_NO_LONGER_NEEDED(g_brawl_peds[readIndex])
+            ENDIF
         ENDIF
     ENDREPEAT
+    oldCnt = g_brawl_ped_count
     g_brawl_ped_count = writeIndex
+    clearIdx = writeIndex
+    WHILE clearIdx < oldCnt
+        g_brawl_peds[clearIdx] = NULL
+        clearIdx = clearIdx + 1
+    ENDWHILE
+
     // Same treatment for the Spawn Stripper ring (v0.9.9).  Its write cursor is
     // reset so the next spawn refills from the start of the compacted array
     // instead of pointing past the new end.
@@ -615,23 +645,47 @@ PROC PRUNE_MENU_PED_TRACKING()
     writeIndex = 0
     REPEAT g_stripper_count readIndex
         IF DOES_ENTITY_EXIST(g_stripper_peds[readIndex])
-            g_stripper_peds[writeIndex] = g_stripper_peds[readIndex]
-            writeIndex = writeIndex + 1
+            IF NOT IS_ENTITY_DEAD(g_stripper_peds[readIndex])
+                g_stripper_peds[writeIndex] = g_stripper_peds[readIndex]
+                writeIndex = writeIndex + 1
+            ELSE
+                SET_PED_AS_NO_LONGER_NEEDED(g_stripper_peds[readIndex])
+            ENDIF
         ENDIF
     ENDREPEAT
+    oldCnt = g_stripper_count
     g_stripper_count = writeIndex
+    clearIdx = writeIndex
+    WHILE clearIdx < oldCnt
+        g_stripper_peds[clearIdx] = NULL
+        clearIdx = clearIdx + 1
+    ENDWHILE
     g_stripper_write_index = 0
     IF g_stripper_count < STRIPPER_TRACK_MAX g_stripper_write_index = g_stripper_count ENDIF
     IF g_stripper_write_index >= STRIPPER_TRACK_MAX g_stripper_write_index = 0 ENDIF
+
     readIndex = 0
     writeIndex = 0
     REPEAT g_menu_attacker_count readIndex
         IF DOES_ENTITY_EXIST(g_menu_attackers[readIndex])
-            g_menu_attackers[writeIndex] = g_menu_attackers[readIndex]
-            writeIndex = writeIndex + 1
+            IF NOT IS_ENTITY_DEAD(g_menu_attackers[readIndex])
+                g_menu_attackers[writeIndex] = g_menu_attackers[readIndex]
+                writeIndex = writeIndex + 1
+            ELSE
+                SET_PED_AS_NO_LONGER_NEEDED(g_menu_attackers[readIndex])
+            ENDIF
         ENDIF
     ENDREPEAT
+    oldCnt = g_menu_attacker_count
     g_menu_attacker_count = writeIndex
+    clearIdx = writeIndex
+    WHILE clearIdx < oldCnt
+        g_menu_attackers[clearIdx] = NULL
+        clearIdx = clearIdx + 1
+    ENDWHILE
+
+    // Also prune custom spawned vehicles regularly to release dead handles
+    PRUNE_SPAWNED_VEHICLE_TRACKING()
 ENDPROC
 
 PROC PROCESS_BODYGUARD_SPAWN()
@@ -1491,6 +1545,7 @@ PROC CLOSE_ALL_SUBMENUS()
     g_radio_open = FALSE
     g_weapon_upgrades_open = FALSE
     g_spawner_open = FALSE
+    g_vehicle_list_open = FALSE
     g_neon_anim_open = FALSE
     g_vehicle_control_open = FALSE
     g_chauffeur_open = FALSE
@@ -1516,6 +1571,10 @@ PROC CLOSE_ALL_SUBMENUS()
     g_plugin_mgr_detail_open = FALSE
     g_credits_open = FALSE
     g_language_open = FALSE
+    g_saved_vehicles_open = FALSE
+    g_saved_veh_confirm_open = FALSE
+    g_menu_nav_dirty = TRUE
+    g_description_dirty = TRUE
 ENDPROC
 
 FUNC INT ITEM_COUNT()
@@ -1545,42 +1604,47 @@ FUNC INT ITEM_COUNT()
         RETURN CHAUFFEUR_MENU_ROWS
     ENDIF
     IF g_tab = 3 AND g_neon_anim_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN 3
     ENDIF
-    IF g_tab = 3 AND g_spawner_open RETURN 11 ENDIF
+    IF g_tab = 3 AND g_spawner_open
+        IF g_saved_veh_confirm_open RETURN 2 ENDIF
+        IF g_saved_vehicles_open RETURN SAVED_VEHICLES_TOTAL_ROWS() ENDIF
+        IF g_vehicle_list_open RETURN VEHICLE_LIST_TOTAL_ROWS() ENDIF
+        RETURN 12
+    ENDIF
     IF g_tab = 3 AND g_vehicle_control_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN 9
     ENDIF
     // LSC child pages must be tested BEFORE g_lsc_open: g_lsc_open stays TRUE
     // while a child page is open (its own item/scroll are saved and restored by the
     // B-back chain), exactly like g_spawner_open/g_neon_anim_open above.
     IF g_tab = 3 AND g_hydro_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN HYDRO_MENU_ROWS
     ENDIF
     IF g_tab = 3 AND g_interior_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN INTERIOR_MENU_ROWS
     ENDIF
     IF g_tab = 3 AND g_wheeltyre_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN WHEELTYRE_MENU_ROWS
     ENDIF
     IF g_tab = 3 AND g_lsc_extras_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN LSC_EXTRAS_MENU_ROWS
     ENDIF
     // Same reason as the child pages above: both are checked before g_lsc_open,
     // which stays TRUE while a child page is open.
     IF g_tab = 3 AND g_bennys_open RETURN BENNYS_MENU_ROWS ENDIF
     IF g_tab = 3 AND g_support_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN SUPPORTCHECK_MENU_ROWS
     ENDIF
     IF g_tab = 3 AND g_lsc_open
-        IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 1 ENDIF
+        IF NOT g_cached_player_in_veh RETURN 1 ENDIF
         RETURN LSC_MENU_ROWS
     ENDIF
     IF g_tab = 1 AND g_weapon_upgrades_open RETURN 7 ENDIF
@@ -1671,8 +1735,17 @@ PROC SAVE_NAVIGATION_STATE()
         g_home_item = g_item
         g_home_scroll = g_scroll
     ELIF g_tab = 3 AND g_spawner_open
-        g_spawner_item = g_item
-        g_spawner_scroll = g_scroll
+        IF g_saved_veh_confirm_open
+            // Confirmation prompt uses transient cursor
+        ELIF g_saved_vehicles_open
+            g_saved_vehicles_item = g_item
+            g_saved_vehicles_scroll = g_scroll
+        ELIF g_vehicle_list_open
+            // Vehicle list cursor tracks current selection
+        ELSE
+            g_spawner_item = g_item
+            g_spawner_scroll = g_scroll
+        ENDIF
     ELIF g_tab = 3 AND g_vehicle_control_open
         g_vehicle_control_item = g_item
         g_vehicle_control_scroll = g_scroll
@@ -2243,7 +2316,9 @@ PROC TASK_NEARBY_NPCS_TO_BRAWL()
     PED_INDEX nearbyPeds[32]
     INT index = 0
     INT pair = 0
-    INT nearbyCount = GET_PED_NEARBY_PEDS(PLAYER_PED_ID(), nearbyPeds, PEDTYPE_INVALID)
+    INT nearbyCount = 0
+    IF GET_MISSION_FLAG() EXIT ENDIF
+    nearbyCount = GET_PED_NEARBY_PEDS(PLAYER_PED_ID(), nearbyPeds, PEDTYPE_INVALID)
     IF nearbyCount > COUNT_OF(nearbyPeds) nearbyCount = COUNT_OF(nearbyPeds) ENDIF
     STOP_NPC_BRAWL()
     REPEAT nearbyCount index
@@ -2252,6 +2327,7 @@ PROC TASK_NEARBY_NPCS_TO_BRAWL()
         AND NOT IS_PED_INJURED(nearbyPeds[index])
         AND NOT IS_PED_IN_ANY_VEHICLE(nearbyPeds[index])
         AND NOT IS_PED_A_PLAYER(nearbyPeds[index])
+        AND NOT IS_ENTITY_A_MISSION_ENTITY(nearbyPeds[index])
             IF g_brawl_ped_count < COUNT_OF(g_brawl_peds)
                 g_brawl_peds[g_brawl_ped_count] = nearbyPeds[index]
                 g_brawl_ped_count = g_brawl_ped_count + 1
@@ -2524,73 +2600,6 @@ PROC PROCESS_RGB_ACCENT()
     ENDIF
 ENDPROC
 
-FUNC BOOL DLC_CATEGORY_MATCH(INT category, INT index)
-    INT total = GET_NUM_DLC_VEHICLES()
-    MODEL_NAMES model
-    IF index < 0 OR index >= total RETURN FALSE ENDIF
-    model = GET_DLC_VEHICLE_MODEL(index)
-    IF category = 3 RETURN IS_THIS_MODEL_A_CAR(model) ENDIF
-    IF category = 4 RETURN IS_THIS_MODEL_A_BIKE(model) ENDIF
-    IF category = 5 RETURN IS_THIS_MODEL_A_PLANE(model) OR IS_THIS_MODEL_A_HELI(model) ENDIF
-    IF category = 6 RETURN IS_THIS_MODEL_A_BOAT(model) ENDIF
-    RETURN FALSE
-ENDFUNC
-
-FUNC INT FIND_FIRST_DLC_FOR_CATEGORY(INT category)
-    INT index = 0
-    INT total = GET_NUM_DLC_VEHICLES()
-    WHILE index < total
-        IF DLC_CATEGORY_MATCH(category, index) RETURN index ENDIF
-        index = index + 1
-    ENDWHILE
-    RETURN -1
-ENDFUNC
-
-PROC ADJUST_VEHICLE_SPAWN_CHOICE(INT direction)
-    INT first = 0
-    INT last = 18
-    INT candidate = 0
-    INT attempts = 0
-    IF g_vehicle_spawn_category = 1
-        first = 19
-        last = 23
-    ENDIF
-    IF g_vehicle_spawn_category = 2
-        first = 24
-        last = 27
-    ENDIF
-    IF g_vehicle_spawn_category = 7
-        first = 72
-        last = 88
-    ENDIF
-    IF g_vehicle_spawn_category = 8
-        first = 89
-        last = 189
-    ENDIF
-    IF g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6
-        IF GET_NUM_DLC_VEHICLES() <= 0 EXIT ENDIF
-        IF g_dlc_vehicle_index < 0 OR NOT DLC_CATEGORY_MATCH(g_vehicle_spawn_category, g_dlc_vehicle_index)
-            g_dlc_vehicle_index = FIND_FIRST_DLC_FOR_CATEGORY(g_vehicle_spawn_category)
-        ENDIF
-        IF g_dlc_vehicle_index < 0 EXIT ENDIF
-        candidate = g_dlc_vehicle_index + direction
-        WHILE attempts < 512
-            IF candidate < 0 candidate = GET_NUM_DLC_VEHICLES() - 1 ENDIF
-            IF candidate >= GET_NUM_DLC_VEHICLES() candidate = 0 ENDIF
-            IF DLC_CATEGORY_MATCH(g_vehicle_spawn_category, candidate)
-                g_dlc_vehicle_index = candidate
-                EXIT
-            ENDIF
-            candidate = candidate + direction
-            attempts = attempts + 1
-        ENDWHILE
-        EXIT
-    ENDIF
-    g_vehicle_spawn_choice = g_vehicle_spawn_choice + direction
-    IF g_vehicle_spawn_choice < first g_vehicle_spawn_choice = last ENDIF
-    IF g_vehicle_spawn_choice > last g_vehicle_spawn_choice = first ENDIF
-ENDPROC
-
 FUNC BOOL IS_SELECTOR_ACTIVE()
     IF g_tab = 0 AND g_outfit_open RETURN TRUE ENDIF
     IF g_tab = 0 AND g_radio_open RETURN FALSE ENDIF
@@ -2631,7 +2640,8 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
         RETURN FALSE
     ENDIF
     IF g_tab = 3 AND g_spawner_open
-        IF g_item = 1 OR g_item = 2 OR g_item = 3 OR g_item = 5 OR g_item = 6 RETURN TRUE ENDIF
+        IF g_saved_veh_confirm_open OR g_saved_vehicles_open OR g_vehicle_list_open RETURN FALSE ENDIF
+        IF g_item = 3 OR g_item = 5 OR g_item = 7 OR g_item = 8 RETURN TRUE ENDIF
         RETURN FALSE
     ENDIF
     IF g_tab = 6
@@ -2732,6 +2742,7 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
 ENDFUNC
 
 PROC ADJUST_SELECTOR(INT direction)
+    g_description_dirty = TRUE
     IF g_tab = 0 AND g_outfit_open
         ADJUST_OUTFIT_SLOT(direction)
         EXIT
@@ -2758,7 +2769,9 @@ PROC ADJUST_SELECTOR(INT direction)
         EXIT
     ENDIF
     IF g_tab = 3 AND g_spawner_open
-        IF g_item = 1
+        IF g_saved_veh_confirm_open OR g_saved_vehicles_open OR g_vehicle_list_open EXIT ENDIF
+        IF g_item = 3
+            g_saved_veh_selected_index = -1
             g_vehicle_spawn_category = g_vehicle_spawn_category + direction
             IF g_vehicle_spawn_category < 0 g_vehicle_spawn_category = 8 ENDIF
             IF g_vehicle_spawn_category > 8 g_vehicle_spawn_category = 0 ENDIF
@@ -2770,15 +2783,13 @@ PROC ADJUST_SELECTOR(INT direction)
             ENDIF
             IF g_vehicle_spawn_category = 7 g_vehicle_spawn_choice = 72 ENDIF
             IF g_vehicle_spawn_category = 8 g_vehicle_spawn_choice = 89 ENDIF
-        ELIF g_item = 2
-            ADJUST_VEHICLE_SPAWN_CHOICE(direction)
-        ELIF g_item = 3
+        ELIF g_item = 5
             g_spawn_count = g_spawn_count + direction
             IF g_spawn_count < 1 g_spawn_count = 500 ENDIF
             IF g_spawn_count > 500 g_spawn_count = 1 ENDIF
-        ELIF g_item = 5
+        ELIF g_item = 7
             g_spawn_alignment = 1 - g_spawn_alignment
-        ELIF g_item = 6
+        ELIF g_item = 8
             g_spawn_facing = g_spawn_facing + direction
             IF g_spawn_facing < 0 g_spawn_facing = 3 ENDIF
             IF g_spawn_facing > 3 g_spawn_facing = 0 ENDIF

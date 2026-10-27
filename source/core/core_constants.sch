@@ -250,16 +250,23 @@ CONST_INT SPOONER_FEEDBACK_MS 2200
 // Maximum tracked spawned custom vehicles in g_spawned_custom_vehicles[].
 CONST_INT MAX_TRACKED_CUSTOM_VEHICLES 128
 
+// Saved Vehicles submenu & SD persistence (Vehicle Spawner, util_saved_vehicles.sch)
+CONST_INT MAX_SAVED_VEHICLES 16
+CONST_INT PERSIST_VEH_WORDS_PER_RECORD 126
+CONST_INT PERSIST_VEH_BUFFER_WORDS 2048
+CONST_INT PERSIST_VEH_MAGIC 1297040712 // 'MVEH' (0x4D564548)
+CONST_INT PERSIST_VEH_VERSION 1
+
 // Custom NSC Loader submenu (Menu Settings tab Row 1, util_nsc_loader.sch).
 // Switch keyboard .nsc filename entry (filtering out the 1,026 stock script_rel.rpf
 // scripts and ragemenu.nsc), menu persistence across launches, active THREADID
 // Header rows are dynamically returned by FUNC INT NSC_LOADER_HEADER_ROWS()
 // in util_nsc_loader.sch (4 when >= 1 custom script is active, 3 when none).
-CONST_INT NSC_MAX_CUSTOM_SCRIPTS 16
-CONST_INT NSC_MAX_SAVED_LETTERS 100
+CONST_INT NSC_MAX_CUSTOM_SCRIPTS 64
+CONST_INT NSC_MAX_SAVED_LETTERS 1000
 CONST_INT NSC_PERSIST_SLOTS_PER_CHAR 44
-CONST_INT NSC_PERSIST_CHAR_SLOTS 132
-CONST_INT NSC_PERSIST_EXT_SLOTS 132
+CONST_INT NSC_PERSIST_CHAR_SLOTS 950
+CONST_INT NSC_PERSIST_EXT_SLOTS 950
 CONST_INT NSC_PERSIST_SEP_CODE 62
 CONST_INT NSC_STAGE_IDLE 0
 CONST_INT NSC_STAGE_TERMINATING 1

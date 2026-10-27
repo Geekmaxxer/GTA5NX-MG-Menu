@@ -1765,7 +1765,10 @@ PROC REQUEST_PED_CHANGE(MODEL_NAMES model)
     // require the same safe on-foot state used by the native character swap.
     // Custom loader fix: a new search overrides a stale pending request so a
     // typed addon name (ex. goku) is never silently dropped while green.
-    IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
+        g_ped_search_error = 1
+        EXIT
+    ENDIF
     IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) EXIT ENDIF
     IF g_ped_change_pending
         IF g_pending_ped_model = model EXIT ENDIF
@@ -1773,12 +1776,14 @@ PROC REQUEST_PED_CHANGE(MODEL_NAMES model)
         g_ped_change_pending = FALSE
     ENDIF
     REQUEST_MODEL(model)
+    g_ped_search_error = 0
     g_pending_ped_model = model
     g_ped_change_pending = TRUE
     g_ped_request_time = GET_GAME_TIMER()
 ENDPROC
 
 PROC FINISH_PED_CHANGE()
+    g_ped_search_error = 0
     IF HAS_MODEL_LOADED(g_pending_ped_model)
         SET_PLAYER_MODEL(PLAYER_ID(), g_pending_ped_model)
         SET_PED_DEFAULT_COMPONENT_VARIATION(PLAYER_PED_ID())
@@ -1890,7 +1895,13 @@ PROC DRAW_PED_PAGE()
         IF index = 0
             DRAW_OPTION(y, TR("Custom Story PEDs", "PEDs de historia", "故事角色模型", "Story-Charakter-PEDs", "ストーリーPED変更", "Модели сюжетных PED", "PEDs do Modo História", "PEDs du mode Histoire"), "OPEN", g_item = index, 2)
         ELIF index = 1
-            IF g_ped_search_not_found
+            IF g_ped_search_error = 1
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "EXIT VEHICLE", g_item = index, 0)
+            ELIF g_ped_search_error = 2
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "LOAD TIMEOUT", g_item = index, 0)
+            ELIF g_ped_change_pending
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "LOADING", g_item = index, 2)
+            ELIF g_ped_search_not_found
                 DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "NOT FOUND", g_item = index, 0)
             ELIF g_ped_search_has_value
                 DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), g_ped_search_value, g_item = index, 1)

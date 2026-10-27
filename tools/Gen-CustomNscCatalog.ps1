@@ -1,10 +1,11 @@
-﻿<#
+<#
 .SYNOPSIS
     Generates the 1,026 stock .nsc exclusion filter and custom .nsc candidate
     table in source\util\util_nsc_loader.sch.
 
 .DESCRIPTION
-    Scans the supplied reference stock script directory
+    Scans the reference stock script directory:
+        C:\Users\Megatard\Desktop\switchgta5\stock nsc's for cross-reference\script_rel.rpf
     to build a complete 1,026-entry stock .nsc hash filter (segmented into
     SWITCH pages of 90 cases to stay well within sc.exe's per-SWITCH limit),
     explicitly excludes ragemenu.nsc, and scans target script directories for
@@ -14,7 +15,7 @@
     source\util\util_nsc_loader.sch is preserved verbatim when regenerating.
 #>
 param(
-    [Parameter(Mandatory = $true)][string]$StockNscDirectory,
+    [string]$StockNscDirectory = "C:\Users\Megatard\Desktop\switchgta5\stock nsc's for cross-reference\script_rel.rpf",
     [string[]]$ScanDirectories = @(),
     [string]$OutputFile = (Join-Path $PSScriptRoot "..\source\util\util_nsc_loader.sch"),
     [int]$PageSize = 90
@@ -54,7 +55,7 @@ $pageCount = [Math]::Ceiling($stockNames.Count / [double]$PageSize)
 [void]$sb.AppendLine("// GENERATED HEADER SECTION - DO NOT HAND-EDIT ABOVE THE MARKER.")
 [void]$sb.AppendLine("// Regenerate with: tools\Gen-CustomNscCatalog.ps1")
 [void]$sb.AppendLine("//")
-[void]$sb.AppendLine("// Stock reference baseline: supplied script_rel.rpf extraction")
+[void]$sb.AppendLine("// Stock reference baseline: C:\Users\Megatard\Desktop\switchgta5\stock nsc's for cross-reference\script_rel.rpf")
 [void]$sb.AppendLine("// Stock .nsc count: $($stockNames.Count) across $pageCount SWITCH page(s) of up to $PageSize.")
 [void]$sb.AppendLine("// Explicitly ignores all $($stockNames.Count) stock .nsc files and ragemenu.nsc.")
 [void]$sb.AppendLine("")

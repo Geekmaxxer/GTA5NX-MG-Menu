@@ -14,15 +14,13 @@
 //  persistence:
 //    - Saves settings to alternating checksummed files under switch/gtav-megatard/.
 //    - Zero modifications to single-player progression stats or SGTA50000 save files.
-//    - MEGASAVE / MEGALOAD require the ScriptHookV-NX compatibility bridge in subsdk5.
+//    - MEGASAVE / MEGALOAD use the ScriptHookV-NX compatibility bridge in subsdk5.
 //    - Script INTs occupy 8-byte VM slots; the bridge packs their 32-bit values.
 //    - Storage Self-Test uses separate files and cannot overwrite menu settings.
 //
 //|=======================================================================================|
 
-// Bridge Natives declared for dev_ng compiler
-NATIVE FUNC BOOL MEGASAVE(INT &buffer, INT size, INT testStorage = 0) = "0x4d45474153415645"
-NATIVE FUNC INT MEGALOAD(INT &buffer, INT size, INT testStorage = 0) = "0x4d4547414c4f4144"
+// Bridge Natives declared in core_globals.sch (MEGASAVE, MEGALOAD)
 
 // Magic Header sentinel: 0x4D454741 ('MEGA')
 CONST_INT PERSIST_MAGIC_HEADER 1296385857
@@ -37,8 +35,8 @@ CONST_INT PERSIST_WORD_STATUS 3
 CONST_INT PERSIST_WORD_BOOL_BASE 4   // 37 bools: words 4..40
 CONST_INT PERSIST_WORD_INT_BASE 41   // 27 ints: words 41..67
 CONST_INT PERSIST_WORD_LANG 68       // Menu Language: word 68
-CONST_INT PERSIST_WORD_NSC_BASE 69   // Custom NSC script names: words 69..126
-CONST_INT PERSIST_BUFFER_WORDS 128
+CONST_INT PERSIST_WORD_NSC_BASE 69   // Custom NSC script names: words 69..1019
+CONST_INT PERSIST_BUFFER_WORDS 1024
 
 // ---- Bool slot ids (0..36) -------------------------------------------------
 CONST_INT PERSIST_BOOL_GOD 0
@@ -397,10 +395,10 @@ PROC PERSIST_LOAD_CUSTOM_NSC_LIST()
     STRING ch = ""
 
     g_nsc_discovered_count = 0
-    WHILE nscIdx < 58
+    WHILE nscIdx < 950
         code = g_persist_sd_data[PERSIST_WORD_NSC_BASE + nscIdx]
         IF code <= 0
-            nscIdx = 58
+            nscIdx = 950
         ELIF code = NSC_PERSIST_SEP_CODE
             IF currentLen > 0
                 TRY_REGISTER_CUSTOM_NSC(currentName)
@@ -470,7 +468,7 @@ PROC PERSIST_PACK_ALL_TO_BUFFER()
 
     g_persist_sd_data[PERSIST_WORD_LANG] = g_menu_language
 
-    WHILE nscIdx < 58
+    WHILE nscIdx < 950
         g_persist_sd_data[PERSIST_WORD_NSC_BASE + nscIdx] = NSC_PERSIST_CHAR_AT(nscIdx)
         nscIdx = nscIdx + 1
     ENDWHILE
@@ -610,9 +608,17 @@ ENDPROC
 // Loads all saved settings from SD card file upon boot
 FUNC BOOL PERSIST_LOAD_ALL()
     INT wordsRead = MEGALOAD(g_persist_sd_data[0], PERSIST_BUFFER_WORDS)
-    IF wordsRead != PERSIST_BUFFER_WORDS
+    IF wordsRead < 128
         g_persist_boot_status = 1
         RETURN FALSE
+    ENDIF
+
+    IF wordsRead < PERSIST_BUFFER_WORDS
+        INT padIdx = wordsRead
+        WHILE padIdx < PERSIST_BUFFER_WORDS
+            g_persist_sd_data[padIdx] = 0
+            padIdx = padIdx + 1
+        ENDWHILE
     ENDIF
 
     IF g_persist_sd_data[PERSIST_WORD_MAGIC] != PERSIST_MAGIC_HEADER OR g_persist_sd_data[PERSIST_WORD_VERSION] != PERSIST_SCHEMA_VERSION

@@ -1,4 +1,4 @@
-# MEGATARD Menu v1.0.6 for GTA V Nintendo Switch
+# MEGATARD Menu v1.0.8 for GTA V Nintendo Switch
 
 SanScript source and build tools for MEGATARD's single-player mod menu, with
 [ScriptHookV-NX](https://github.com/Geekmaxxer/ScriptHookV-NX) SD settings and plugin management.
@@ -6,7 +6,7 @@ Created by **MEGATARD / @Geekmaxxer**.
 
 Player, weapon, vehicle, world, teleport and NPC options sit alongside Object
 Spooner, Custom NSC Loader, custom story PEDs, language settings and persistence.
-See [Features](docs/FEATURES.md) and [v1.0.6 changes](docs/CHANGELOG.md).
+See [Features](docs/FEATURES.md) and [v1.0.8 changes](docs/CHANGELOG.md).
 
 ## Requirements
 
@@ -19,10 +19,9 @@ See [Features](docs/FEATURES.md) and [v1.0.6 changes](docs/CHANGELOG.md).
 - Your own stock **Switch `script_rel.rpf`** reference script or extraction from
   the exact game build you target. `script.rpf` is a different archive.
 - The ScriptHookV-NX SDK or source checkout for its binding generator, and the
-  matching runtime installed on the Switch. v1.0.6 uses manager API 3 and custom
-  natives; install the runtime and the matched binding before launching it. Use
-  Public Preview 1 / Safe Manager Test 2 or a verified later runtime; Public
-  Plugin Loader Test 1 lacks this menu's manager natives.
+  matching runtime installed on the Switch. Use ScriptHookV-NX v1.4.1 Preview
+  or a compatible newer release, including its main.npdm and the generated
+  menu binding. Older public-loader test builds lack the required natives.
 - An RPF editor to install the compiled scripts into your own archive.
 
 The current integration targets title `0100b00b51230000`, executable build
@@ -39,7 +38,7 @@ Run from this repository's root; replace the example paths with your locations:
   -DevNgRoot 'C:/modding/dev_ng' `
   -ScriptHookRoot 'C:/modding/ScriptHookV-NX' `
   -SwitchHeaderReferenceFolder 'C:/modding/stock/script_rel.rpf' `
-  -OutputDirectory './out-v106-test1'
+  -OutputDirectory './out-v108-test1'
 ```
 
 Use a new output directory for each build. This produces `ragemenu.nsc`,
@@ -48,14 +47,14 @@ snapshots, intermediates and build manifests. It does not install anything.
 `-SwitchHeaderReference <file>` can replace the folder option.
 
 The lower-level `Build-Menu.ps1`, `Build-Controller.ps1`, `Build-Both.ps1` and
-`Build-Any.ps1` remain available. They compile/adapt scripts but do **not**
-generate ScriptHookV-NX bindings. See [Developing](docs/DEVELOPING.md).
+`Build-Any.ps1` remain available. They compile/adapt scripts and generate
+matched `.snb` bindings through NscAdapter. See [Developing](docs/DEVELOPING.md).
 
 ## Install your build
 
 Close GTA and back up your working files first.
 
-1. Install the matching ScriptHookV-NX runtime's `subsdk5` under
+1. Install the matching ScriptHookV-NX runtime's `subsdk5` and `main.npdm` under
    `atmosphere/contents/0100b00b51230000/exefs/`.
 2. Add/replace `ragemenu.nsc` and `achievement_controller.nsc` in your own
    `update2.rpf/switch/levels/gta5/script/script_rel.rpf` as **normal compressed
@@ -83,7 +82,8 @@ Install NROs in `switch/gtav-scripthook/plugins/`. In
   custom native handlers remain mapped until GTA exits; this does not reclaim a
   resident slot or reverse gameplay changes made by the plugin.
 
-The runtime supports four resident NROs per session. Rescan discovers files;
+The runtime defaults to 8 resident NROs, 16 cooperative script slots and an
+8 MiB plugin budget; runtime.ini can override configured limits. Rescan discovers files;
 replacing a resident NRO needs a game restart. A standalone manager is available
 in the ScriptHookV-NX project for players without this menu.
 
@@ -96,10 +96,10 @@ belong to the separate ScriptHookV-NX project.
 Edit the modules under `source/core`, `features`, `submenus` and `util`.
 [Developing](docs/DEVELOPING.md) covers builds, native checks and contributions.
 
-Menu persistence and manager startup policies were confirmed on Switch after
-restart. The latest shared description-renderer repair passed local compiled
-checks; **its visual behavior still needs Switch testing**. Compilation, header
-validation and native-table coverage do not establish in-game behavior.
+The current source compiles with matched bindings and passes 62 tooling tests.
+See [build verification](docs/BUILD-VERIFICATION.md) for the source and artifact
+hashes. This source synchronization has not received a new Switch gameplay test.
+Compilation, header validation and native coverage do not establish in-game behavior.
 
 This project retains its [GPL-2.0 license](LICENSE). ScriptHookV-NX is a separate
 project with its own license. Third-party decompiler code retains its original

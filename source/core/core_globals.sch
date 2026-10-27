@@ -1,3 +1,7 @@
+// Bridge Natives for ScriptHookV-NX persistence
+NATIVE FUNC BOOL MEGASAVE(INT &buffer, INT size, INT testStorage = 0) = "0x4d45474153415645"
+NATIVE FUNC INT MEGALOAD(INT &buffer, INT size, INT testStorage = 0) = "0x4d4547414c4f4144"
+
 BOOL g_open = FALSE
 BOOL g_home = TRUE
 INT g_tab = 0
@@ -101,6 +105,8 @@ BOOL g_vehicle_bulletproof_tyres = FALSE
 BOOL g_bulletproof_tyres_applied = FALSE
 BOOL g_vehicle_speedometer = FALSE
 INT g_vehicle_speed_unit = 0
+VEHICLE_INDEX g_speedometer_cached_veh = NULL
+STRING g_speedometer_cached_name = ""
 BOOL g_lsc_open = FALSE
 VEHICLE_INDEX g_lsc_vehicle
 INT g_lsc_slot_choice = 0
@@ -229,6 +235,10 @@ INT g_stripper_write_index = 0
 INT g_vehicle_spawn_choice = 0
 INT g_vehicle_spawn_category = 0
 INT g_dlc_vehicle_index = 0
+INT g_dlc_cars_count = -1
+INT g_dlc_bikes_count = -1
+INT g_dlc_aircraft_count = -1
+INT g_dlc_boats_count = -1
 BOOL g_vehicle_spawn_pending = FALSE
 BOOL g_delete_previous_spawned_vehicle = TRUE
 BOOL g_spawn_teleport_into_vehicle = FALSE
@@ -240,6 +250,7 @@ INT g_vehicle_spawn_request_time = 0
 BOOL g_spawner_open = FALSE
 INT g_spawner_item = 0
 INT g_spawner_scroll = 0
+BOOL g_vehicle_list_open = FALSE
 BOOL g_tp_stores_open = FALSE
 INT g_tp_stores_item = 0
 INT g_tp_stores_scroll = 0
@@ -281,6 +292,7 @@ INT g_ped_item = 0
 INT g_ped_scroll = 0
 INT g_ped_choice = 0
 BOOL g_ped_search_not_found = FALSE
+INT g_ped_search_error = 0 // 1: seated; 2: streaming timeout
 BOOL g_ped_search_has_value = FALSE
 STRING g_ped_search_value = ""
 BOOL g_ped_search_is_custom = FALSE
@@ -441,8 +453,26 @@ FLOAT g_description_height = 0.0
 INT g_description_lines = 0
 BOOL g_description_layout_valid = FALSE
 SCALEFORM_INDEX g_instructional_scaleform = NULL
+
+// Performance optimization caches & dirty flags
+INT g_instructional_buttons_mode = -1
+INT g_instructional_cached_lang = -1
+BOOL g_show_instructional_buttons = TRUE
+BOOL g_menu_nav_dirty = TRUE
+BOOL g_description_dirty = TRUE
+INT g_description_cached_item = -1
+INT g_description_cached_page_id = -1
+FLOAT g_description_cached_extra_height = -0.020
+BOOL g_chaos_mod_running = FALSE
+INT g_chaos_mod_check_timer = 0
+INT g_next_prune_tracked_entities_timer = 0
+TEXT_LABEL_63 g_live_coords_cached_line_x = ""
+TEXT_LABEL_63 g_live_coords_cached_line_y = ""
+TEXT_LABEL_63 g_live_coords_cached_line_z = ""
+FLOAT g_live_coords_cached_coord_x = 0.850
+
 // Single source of truth for the menu version (version tag + welcome message).
-STRING g_menu_version = "v1.0.6"
+STRING g_menu_version = "v1.0.8"
 INT g_menu_language = 0
 BOOL g_language_open = FALSE
 INT g_language_item = 0
@@ -463,8 +493,8 @@ BOOL g_persist_dirty = FALSE
 INT g_persist_load_attempts = 0
 INT g_persist_next_write = 0
 
-// ScriptHookV-NX Direct SD Card Storage Buffer (128 words = 512 bytes, FAT32 sector aligned)
-INT g_persist_sd_data[128]
+// ScriptHookV-NX Direct SD Card Storage Buffer (1024 words = 4096 bytes, 4KB page aligned)
+INT g_persist_sd_data[1024]
 
 // Write shadow (v0.9.9 hitch fix).  PERSIST_SAVE_DELTA - the writer the frame loop
 // uses - compares each setting against the value this array says is already in the
@@ -844,4 +874,101 @@ BOOL g_seatbelt_applied = FALSE
 BOOL g_accel_applied = FALSE
 BOOL g_grip_applied = FALSE
 BOOL g_was_menu_open = FALSE
+
+// ---------------------------------------------------------------------------
+// Saved Vehicles Submenu & SD Persistence (v1.0.7)
+// ---------------------------------------------------------------------------
+BOOL g_saved_vehicles_open = FALSE
+INT g_saved_vehicles_item = 0
+INT g_saved_vehicles_scroll = 0
+BOOL g_saved_veh_confirm_open = FALSE
+INT g_saved_veh_delete_target = -1
+INT g_saved_veh_selected_index = -1
+INT g_saved_vehicles_count = 0
+INT g_saved_veh_feedback = 0
+INT g_saved_veh_feedback_until = 0
+
+// Track whether spawn was initiated from a saved vehicle
+BOOL g_spawn_is_saved_vehicle = FALSE
+INT g_spawn_saved_vehicle_index = -1
+
+// 16 vehicles * 50 mod slots = 800 slots
+INT g_saved_veh_mods[800]
+
+// Vehicle metadata arrays (16 entries each)
+TEXT_LABEL_31 g_saved_veh_names[16]
+TEXT_LABEL_31 g_saved_veh_display_names[16]
+INT g_saved_veh_model_hashes[16]
+INT g_saved_veh_primary[16]
+INT g_saved_veh_secondary[16]
+INT g_saved_veh_pearlescent[16]
+INT g_saved_veh_wheel_colour[16]
+INT g_saved_veh_xenon[16]
+INT g_saved_veh_window_tint[16]
+INT g_saved_veh_wheel_type[16]
+INT g_saved_veh_custom_tyres[16]
+INT g_saved_veh_plate_style[16]
+TEXT_LABEL_15 g_saved_veh_plate_text[16]
+INT g_saved_veh_livery[16]
+INT g_saved_veh_roof_state[16]
+BOOL g_saved_veh_has_cust_prim[16]
+INT g_saved_veh_cust_prim_r[16]
+INT g_saved_veh_cust_prim_g[16]
+INT g_saved_veh_cust_prim_b[16]
+BOOL g_saved_veh_has_cust_sec[16]
+INT g_saved_veh_cust_sec_r[16]
+INT g_saved_veh_cust_sec_g[16]
+INT g_saved_veh_cust_sec_b[16]
+INT g_saved_veh_neon_enabled[16]
+INT g_saved_veh_neon_r[16]
+INT g_saved_veh_neon_g[16]
+INT g_saved_veh_neon_b[16]
+INT g_saved_veh_smoke_r[16]
+INT g_saved_veh_smoke_g[16]
+INT g_saved_veh_smoke_b[16]
+BOOL g_saved_veh_turbo[16]
+BOOL g_saved_veh_xenon_toggle[16]
+BOOL g_saved_veh_smoke_toggle[16]
+BOOL g_saved_veh_hydro_toggle[16]
+INT g_saved_veh_extras[16]
+
+// Staging variables while OSK keyboard is open
+INT g_save_stage_model = 0
+TEXT_LABEL_31 g_save_stage_display_name = ""
+INT g_save_stage_primary = 0
+INT g_save_stage_secondary = 0
+INT g_save_stage_pearlescent = 0
+INT g_save_stage_wheel_colour = 0
+INT g_save_stage_xenon = 0
+INT g_save_stage_window_tint = 0
+INT g_save_stage_wheel_type = 0
+INT g_save_stage_custom_tyres = 0
+INT g_save_stage_plate_style = 0
+TEXT_LABEL_15 g_save_stage_plate_text = ""
+INT g_save_stage_livery = 0
+INT g_save_stage_roof_state = 0
+BOOL g_save_stage_has_cust_prim = FALSE
+INT g_save_stage_cust_prim_r = 0
+INT g_save_stage_cust_prim_g = 0
+INT g_save_stage_cust_prim_b = 0
+BOOL g_save_stage_has_cust_sec = FALSE
+INT g_save_stage_cust_sec_r = 0
+INT g_save_stage_cust_sec_g = 0
+INT g_save_stage_cust_sec_b = 0
+INT g_save_stage_neon_enabled = 0
+INT g_save_stage_neon_r = 255
+INT g_save_stage_neon_g = 255
+INT g_save_stage_neon_b = 255
+INT g_save_stage_smoke_r = 255
+INT g_save_stage_smoke_g = 255
+INT g_save_stage_smoke_b = 255
+BOOL g_save_stage_turbo = FALSE
+BOOL g_save_stage_xenon_toggle = FALSE
+BOOL g_save_stage_smoke_toggle = FALSE
+BOOL g_save_stage_hydro_toggle = FALSE
+INT g_save_stage_extras = 0
+INT g_save_stage_mods[50]
+
+// SD Card Buffer for Saved Vehicles (2048 words = 8192 bytes, 8KB FAT32 cluster aligned)
+INT g_persist_veh_sd_data[2048]
 

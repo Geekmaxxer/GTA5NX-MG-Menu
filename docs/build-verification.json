@@ -1,40 +1,93 @@
 {
-  "date": "2026-10-16",
-  "version": "v1.0.6",
-  "menu_source_files_synced": 24,
-  "source_byte_identical_to_workspace": true,
-  "menu_and_binding_byte_identical_to_description_fix_build": true,
-  "tool_tests": {
-    "passed": 54,
-    "failed": 0,
-    "optional_historical_fixture_tests": 8,
-    "optional_fixtures_present": false
-  },
-  "native_checks": {
-    "menu_self_rotation_matches": 487,
-    "menu_self_direct_matches": 487,
-    "menu_stock_matches": 472,
-    "menu_custom_entries": 15,
-    "custom_entries_equal_binding_manifest": true,
-    "controller_stock_matches": 89,
-    "stock_scripts_read": 1020
-  },
+  "version": "v1.0.8",
+  "date": "2026-10-27",
+  "source_files_identical": 25,
+  "tool_tests_passed": 62,
+  "stock_menu_natives": 489,
+  "custom_menu_bindings": 15,
+  "stock_loader_natives": 89,
+  "packaged": false,
+  "runtimeVerified": false,
   "artifacts": {
-    "ragemenu.nsc": {
-      "bytes": 760176,
-      "sha256": "b0f0a0a4668f60574284fd2d612993bca92a27b29a8b8569b07db12dc8f5a977"
+    "ragemenu": {
+      "artifacts": {
+        "sco": {
+          "file": "ragemenu.sco",
+          "sha256": "bd4a8ebccce0c53965a6bf108370dde6e9b5ba78355a6084375d644b56ed6bdc",
+          "bytes": 312866
+        },
+        "pcNsc": {
+          "file": "ragemenu.pc.nsc",
+          "sha256": "2e73027fadb20e814183cd6468ecb7856de05ecfaa900e5696967c9500dbb31d",
+          "bytes": 819152
+        },
+        "nsc": {
+          "file": "ragemenu.nsc",
+          "sha256": "9de03d9a38b410b1f7bd09a476e70b4cec772d60437aec371233e1b2b02e1f0f",
+          "bytes": 819136
+        },
+        "nativeBinding": {
+          "file": "ragemenu.snb",
+          "sha256": "249571fa59950685514c9be890e67a5bb7afae23d34fad8c322d9ca745badb51",
+          "bytes": 304
+        }
+      },
+      "payload": {
+        "fileBytes": 819136,
+        "payloadBytes": 819136,
+        "barePayload": "yes",
+        "rsc7Envelope": "no",
+        "pageBase": "0x00007FF7BAD5B3A8",
+        "buildWord": "0x94C75B53",
+        "codeLength": 327603,
+        "statics": 8275,
+        "natives": 504,
+        "internalName": "ragemenu",
+        "nameHash": "0x4BD26EEF",
+        "nameHashMatches": "yes",
+        "profile": "stock/script_rel"
+      },
+      "runtimeVerified": false
     },
-    "ragemenu.snb": {
-      "bytes": 304,
-      "sha256": "6092cf327f34959d344e125618f9e00336b3be1f6cb6aa7bb25e669a4a923886"
-    },
-    "achievement_controller.nsc": {
-      "bytes": 81920,
-      "sha256": "717b8b19ab45b0eb47277a29ce5fafd5f6f97332449ecfb998cc175bb86afc1a"
+    "achievement_controller": {
+      "artifacts": {
+        "sco": {
+          "file": "achievement_controller.sco",
+          "sha256": "214da78bb77eed723f5f18f49b1330cec21d59e385d45ac490b9675701739c0b",
+          "bytes": 32843
+        },
+        "pcNsc": {
+          "file": "achievement_controller.pc.nsc",
+          "sha256": "37e926875c38c33f8a87ea74e4b71fe84fb27f30d82075b2e436f73f2fd9cec5",
+          "bytes": 81936
+        },
+        "nsc": {
+          "file": "achievement_controller.nsc",
+          "sha256": "a102fc44547ebb11c5aeb8a0a3be3c8a89eb9b631fd79afb95cd21be26afbf78",
+          "bytes": 81920
+        },
+        "nativeBinding": {
+          "file": "achievement_controller.snb",
+          "sha256": "6ec943367dcfb5dcdddcc7bc12a7fc8e94e640ce23dc41a4f683f161bf3d8ac3",
+          "bytes": 16
+        }
+      },
+      "payload": {
+        "fileBytes": 81920,
+        "payloadBytes": 81920,
+        "barePayload": "yes",
+        "rsc7Envelope": "no",
+        "pageBase": "0x00007FF7BAD5B3A8",
+        "buildWord": "0x94C75B53",
+        "codeLength": 76545,
+        "statics": 74,
+        "natives": 89,
+        "internalName": "achievement_controller",
+        "nameHash": "0xDF034893",
+        "nameHashMatches": "yes",
+        "profile": "stock/script_rel"
+      },
+      "runtimeVerified": false
     }
-  },
-  "switch_tested_this_checkout_build": false,
-  "description_visual_test_pending": true,
-  "git_committed": false,
-  "git_pushed": false
+  }
 }

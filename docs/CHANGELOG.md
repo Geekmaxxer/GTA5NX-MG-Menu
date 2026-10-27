@@ -1,4 +1,12 @@
-# v1.0.6
+# Changelog
+
+## v1.0.8 source synchronization - 2026-10-27
+
+- Synchronize all 25 script source files with the current working SDK, including saved vehicles and the current loader.
+- Preserve the working menu layout and repository directory structure.
+- Refresh binding-generation documentation and current runtime installation requirements.
+- Rebuild both scripts against the stock Switch header and verify matched bindings. Local validation: 62 tests, 489 stock menu natives plus 15 custom bridge bindings, and 89 stock loader natives.
+- No archive installation or new Switch gameplay test accompanies this source synchronization.
 
 
 ## v1.0.8 runtime bundle refresh - 2026-10-23

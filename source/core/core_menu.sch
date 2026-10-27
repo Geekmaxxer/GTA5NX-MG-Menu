@@ -50,57 +50,70 @@ ENDPROC
 // The stock instructional-buttons scaleform gives us the same compact,
 // controller-aware prompts used by RageMenu.  It is drawn independently of
 // the menu rectangle, so the menu dimensions never need to grow for hints.
+// Scaleform data slots are cached so CLEAR_ALL and SET_DATA_SLOT only run
+// when the required layout or language changes, saving ~1.5-2.0ms per frame.
 PROC DRAW_INSTRUCTIONAL_BUTTONS()
+    IF NOT g_show_instructional_buttons
+        EXIT
+    ENDIF
     IF g_instructional_scaleform = NULL
         g_instructional_scaleform = REQUEST_SCALEFORM_MOVIE("INSTRUCTIONAL_BUTTONS")
     ENDIF
     IF NOT HAS_SCALEFORM_MOVIE_LOADED(g_instructional_scaleform)
         EXIT
     ENDIF
-    BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "TOGGLE_MOUSE_BUTTONS")
-        SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(TRUE)
-    END_SCALEFORM_MOVIE_METHOD()
-    CALL_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "CLEAR_ALL")
+    INT wantedMode = 0
     IF NOT g_home AND g_tab = 7 AND g_credits_open
-        BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(0)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUT_FRONTEND_CANCEL, TRUE))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Back", "Atrás", "返回", "Zurück", "戻る", "Назад", "Voltar", "Retour"))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUT_FRONTEND_CANCEL))
+        wantedMode = 1
+    ENDIF
+    IF g_instructional_buttons_mode != wantedMode OR g_instructional_cached_lang != g_menu_language
+        g_instructional_buttons_mode = wantedMode
+        g_instructional_cached_lang = g_menu_language
+        BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "TOGGLE_MOUSE_BUTTONS")
+            SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(TRUE)
         END_SCALEFORM_MOVIE_METHOD()
-        BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(1)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_GROUP_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUTGROUP_FRONTEND_DPAD_ALL, TRUE))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Move", "Mover", "移动", "Bewegen", "移動", "Движение", "Mover", "Déplacer"))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUTGROUP_FRONTEND_DPAD_ALL))
-        END_SCALEFORM_MOVIE_METHOD()
-    ELSE
-        BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(0)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT, TRUE))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Select", "Seleccionar", "选择", "Auswählen", "選択", "Выбрать", "Selecionar", "Sélectionner"))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUT_FRONTEND_ACCEPT))
-        END_SCALEFORM_MOVIE_METHOD()
-        BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(1)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUT_FRONTEND_CANCEL, TRUE))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Back", "Atrás", "返回", "Zurück", "戻る", "Назад", "Voltar", "Retour"))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUT_FRONTEND_CANCEL))
-        END_SCALEFORM_MOVIE_METHOD()
-        BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(2)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_GROUP_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUTGROUP_FRONTEND_DPAD_ALL, TRUE))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Move", "Mover", "移动", "Bewegen", "移動", "Движение", "Mover", "Déplacer"))
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
-            SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUTGROUP_FRONTEND_DPAD_ALL))
+        CALL_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "CLEAR_ALL")
+        IF wantedMode = 1
+            BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(0)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUT_FRONTEND_CANCEL, TRUE))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Back", "Atrás", "返回", "Zurück", "戻る", "Назад", "Voltar", "Retour"))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUT_FRONTEND_CANCEL))
+            END_SCALEFORM_MOVIE_METHOD()
+            BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(1)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_GROUP_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUTGROUP_FRONTEND_DPAD_ALL, TRUE))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Move", "Mover", "移动", "Bewegen", "移動", "Движение", "Mover", "Déplacer"))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUTGROUP_FRONTEND_DPAD_ALL))
+            END_SCALEFORM_MOVIE_METHOD()
+        ELSE
+            BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(0)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUT_FRONTEND_ACCEPT, TRUE))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Select", "Seleccionar", "选择", "Auswählen", "選択", "Выбрать", "Selecionar", "Sélectionner"))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUT_FRONTEND_ACCEPT))
+            END_SCALEFORM_MOVIE_METHOD()
+            BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(1)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUT_FRONTEND_CANCEL, TRUE))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Back", "Atrás", "返回", "Zurück", "戻る", "Назад", "Voltar", "Retour"))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUT_FRONTEND_CANCEL))
+            END_SCALEFORM_MOVIE_METHOD()
+            BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "SET_DATA_SLOT")
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(2)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_PLAYER_NAME_STRING(GET_CONTROL_GROUP_INSTRUCTIONAL_BUTTONS_STRING(FRONTEND_CONTROL, INPUTGROUP_FRONTEND_DPAD_ALL, TRUE))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_TEXTURE_NAME_STRING(TR("Move", "Mover", "移动", "Bewegen", "移動", "Движение", "Mover", "Déplacer"))
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_BOOL(FALSE)
+                SCALEFORM_MOVIE_METHOD_ADD_PARAM_INT(ENUM_TO_INT(INPUTGROUP_FRONTEND_DPAD_ALL))
+            END_SCALEFORM_MOVIE_METHOD()
+        ENDIF
+        BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "DRAW_INSTRUCTIONAL_BUTTONS")
         END_SCALEFORM_MOVIE_METHOD()
     ENDIF
-    BEGIN_SCALEFORM_MOVIE_METHOD(g_instructional_scaleform, "DRAW_INSTRUCTIONAL_BUTTONS")
-    END_SCALEFORM_MOVIE_METHOD()
     DRAW_SCALEFORM_MOVIE_FULLSCREEN(g_instructional_scaleform, 255, 255, 255, 220, 0)
 ENDPROC
 
@@ -125,6 +138,14 @@ PROC SET_DESCRIPTION_STYLE()
 ENDPROC
 
 PROC PREPARE_DESCRIPTION_LAYOUT(STRING value)
+    IF IS_STRING_NULL_OR_EMPTY(value)
+        g_description_layout_valid = FALSE
+        g_description_cached_value = ""
+        g_description_chunk_count = 0
+        g_description_lines = 0
+        g_description_height = 0.0
+        EXIT
+    ENDIF
     INT totalCharacters = 0
     INT characterOffset = 0
     INT copiedCharacters = 0
@@ -144,7 +165,6 @@ PROC PREPARE_DESCRIPTION_LAYOUT(STRING value)
     g_description_lines = 0
     g_description_height = 0.0
     g_description_scale = 0.3
-    IF IS_STRING_NULL_OR_EMPTY(value) EXIT ENDIF
     totalCharacters = GET_LENGTH_OF_LITERAL_STRING(value)
     WHILE characterOffset < totalCharacters AND g_description_chunk_count < 10
         piece = GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME_WITH_BYTE_LIMIT(value, characterOffset, totalCharacters, 56)
@@ -154,11 +174,11 @@ PROC PREPARE_DESCRIPTION_LAYOUT(STRING value)
         g_description_chunk_count = g_description_chunk_count + 1
         characterOffset = characterOffset + copiedCharacters
     ENDWHILE
-    // Measure precisely what we draw. The old single-component measurement
-    // saw the same truncated prefix as drawing; raw character estimates hid it.
+    // Measure precisely what we draw using CELL_EMAIL_BCON (10 ~a~ components).
+    // The previous STRING label only had a single ~a~ and truncated chunks 1-9.
     WHILE attempt < 4
         SET_DESCRIPTION_STYLE()
-        BEGIN_TEXT_COMMAND_GET_NUMBER_OF_LINES_FOR_STRING("STRING")
+        BEGIN_TEXT_COMMAND_GET_NUMBER_OF_LINES_FOR_STRING("CELL_EMAIL_BCON")
             APPEND_DESCRIPTION_COMPONENTS()
         g_description_lines = END_TEXT_COMMAND_GET_NUMBER_OF_LINES_FOR_STRING(g_menu_x - 0.130, 0.594 + g_menu_y)
         IF g_description_lines < 1 g_description_lines = 1 ENDIF
@@ -180,7 +200,7 @@ PROC MENU_DESCRIPTION_TEXT(STRING value)
     SET_DESCRIPTION_STYLE()
     SET_TEXT_COLOUR(205, 212, 220, 255)
     SET_TEXT_DROPSHADOW(1, 0, 0, 0, 150)
-    BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
+    BEGIN_TEXT_COMMAND_DISPLAY_TEXT("CELL_EMAIL_BCON")
         APPEND_DESCRIPTION_COMPONENTS()
     END_TEXT_COMMAND_DISPLAY_TEXT(g_menu_x - 0.130, 0.594 + g_menu_y)
 ENDPROC
@@ -207,6 +227,7 @@ ENDFUNC
 // core_globals.sch): STRING params are copy-on-write for text commands, so a
 // helper PROC cannot return the text through its own parameter.
 PROC SELECTED_DESCRIPTION_TEXT()
+    g_selected_description = ""
     IF g_home
         SWITCH g_item
             CASE 0 g_selected_description = TR("Player abilities, appearance, and character tools.", "Habilidades del jugador, apariencia y herramientas del personaje.", "玩家能力、外观和角色工具。", "Spielerfähigkeiten, Aussehen und Charakter-Werkzeuge.", "プレイヤーの能力、外見、キャラクターツール。", "Способности игрока, внешность и инструменты персонажа.", "Habilidades do jogador, aparência e ferramentas do personagem.", "Capacités du joueur, apparence et outils du personnage.") BREAK
@@ -306,19 +327,35 @@ PROC SELECTED_DESCRIPTION_TEXT()
             IF g_item >= 4 g_selected_description = TR("Apply the selected PED model to the player.", "Aplica el modelo PED seleccionado al jugador.", "将所选 PED 模型应用到玩家。", "Das ausgewählte PED-Modell auf den Spieler anwenden.", "選択したPEDモデルをプレイヤーに適用します。", "Применить выбранную модель PED к игроку.", "Aplicar o modelo PED selecionado ao jogador.", "Appliquer le modèle PED sélectionné au joueur.") ENDIF
         ENDIF
     ELIF g_spawner_open
-        SWITCH g_item
-            CASE 0 g_selected_description = TR("Spawn the selected vehicle, using the configured count and layout.", "Genera el vehículo seleccionado con la cantidad y disposición configuradas.", "按配置的数量和排列生成所选载具。", "Ausgewähltes Fahrzeug mit eingestellter Anzahl und Formation spawnen.", "設定した台数と配置で選択中の乗り物を出現させます。", "Создать выбранный транспорт в указанном количестве и построении.", "Gera o veículo selecionado usando a quantidade e o formato configurados.", "Faire apparaître le véhicule sélectionné selon le nombre et la disposition définis.") BREAK
-            CASE 1 g_selected_description = TR("Choose a base-game, DLC, aircraft, bike, watercraft, or misc list.", "Elige una lista del juego base, DLC, aeronaves, motos, barcos o varios.", "选择本体、DLC、飞机、摩托、船只或杂项载具列表。", "Liste wählen: Basisspiel, DLC, Luftfahrzeuge, Motorräder, Boote oder Sonstiges.", "本編、DLC、航空機、バイク、船舶、その他のリストを選択します。", "Выберите список: базовая игра, DLC, авиация, мото, водный или разное.", "Escolha uma lista do jogo base, DLC, aeronaves, motos, barcos ou diversos.", "Choisir une liste : jeu de base, DLC, avions, motos, bateaux ou divers.") BREAK
-            CASE 2 g_selected_description = TR("Choose the model to spawn; DLC entries follow the installed content.", "Elige el modelo a generar; los DLC dependen del contenido instalado.", "选择要生成的模型；DLC 载具取决于已安装内容。", "Modell zum Spawnen wählen; DLC-Einträge richten sich nach installierten Inhalten.", "出現させるモデルを選択します（DLCはインストール済みコンテンツに準拠）。", "Выберите модель для создания; доступность DLC зависит от установленного контента.", "Escolha o modelo para gerar; itens de DLC dependem do conteúdo instalado.", "Choisir le modèle à générer ; les entrées DLC suivent le contenu installé.") BREAK
-            CASE 3 g_selected_description = TR("Set how many copies to create at once; DPAD Left/Right changes the count by intervals of 1; 500 Max", "Define cuántas copias crear a la vez; Izquierda/Derecha cambia de 1 en 1; máx. 500.", "设置一次生成的数量；方向键左/右每次增减 1；最多 500 辆。", "Anzahl gleichzeitig erzeugter Fahrzeuge; Steuerkreuz Links/Rechts ändert um 1; Max. 500.", "一度に出現させる台数を設定（十字キー左右で1ずつ変更、最大500）。", "Количество создаваемых копий за раз; Влево/Вправо меняет на 1; макс. 500.", "Defina quantas cópias criar de uma vez; Esquerda/Direita altera de 1 em 1; máx. 500.", "Définir le nombre de copies à créer ; Gauche/Droite change de 1 ; 500 max.") BREAK
-            CASE 4 g_selected_description = TR("Apply the highest available upgrade to every spawned vehicle.", "Aplica la mejora máxima disponible a cada vehículo generado.", "为每辆生成的载具应用最高可用升级。", "Höchstes verfügbares Upgrade auf jedes gespawnte Fahrzeug anwenden.", "出現するすべての乗り物に最高レベルの改造を適用します。", "Применить максимальные улучшения ко всем создаваемым машинам.", "Aplica a melhoria máxima disponível a cada veículo gerado.", "Appliquer la meilleure amélioration disponible à chaque véhicule généré.") BREAK
-            CASE 5 g_selected_description = TR("Choose door-to-door or bumper-to-bumper formation.", "Elige formación puerta con puerta o parachoques con parachoques.", "选择并排（车门对车门）或纵列（首尾相接）队形。", "Formation Tür-an-Tür oder Stoßstange-an-Stoßstange wählen.", "横並び（ドア・ツー・ドア）か縦並び（バンパー・ツー・バンパー）を選択します。", "Выберите построение: бок о бок или бампер к бамперу.", "Escolha a formação lado a lado ou para-choque com para-choque.", "Choisir la formation côte à côte ou pare-chocs contre pare-chocs.") BREAK
-            CASE 6 g_selected_description = TR("Choose the heading of spawned vehicles relative to the player.", "Elige la orientación de los vehículos generados respecto al jugador.", "选择生成载具相对于玩家的朝向。", "Ausrichtung der gespawnten Fahrzeuge relativ zum Spieler wählen.", "プレイヤーに対する出現車両の向きを選択します。", "Выберите направление создаваемого транспорта относительно игрока.", "Escolha a direção dos veículos gerados em relação ao jogador.", "Choisir l'orientation des véhicules générés par rapport au joueur.") BREAK
-            CASE 7 g_selected_description = TR("Automatically remove the previous custom vehicle when spawning.", "Elimina automáticamente el vehículo personalizado anterior al generar otro.", "生成新载具时自动移除上一辆自定义载具。", "Vorheriges eigenes Fahrzeug beim Spawnen automatisch entfernen.", "新しい車両を出現させる際、前のカスタム車両を自動的に消去します。", "Автоматически удалять предыдущий созданный транспорт при спавне нового.", "Remove automaticamente o veículo personalizado anterior ao gerar outro.", "Supprimer automatiquement le véhicule personnalisé précédent lors de l'apparition.") BREAK
-            CASE 8 g_selected_description = TR("Delete every vehicle created by this menu.", "Elimina todos los vehículos creados por este menú.", "删除此菜单创建的所有载具。", "Alle von diesem Menü erstellten Fahrzeuge löschen.", "このメニューで作成したすべての乗り物を削除します。", "Удалить весь транспорт, созданный через это меню.", "Excluir todos os veículos criados por este menu.", "Supprimer tous les véhicules créés par ce menu.") BREAK
-            CASE 9 g_selected_description = TR("Enter a spawned vehicle automatically after it is created.", "Entra automáticamente en el vehículo generado tras crearlo.", "生成载具后自动进入驾驶座。", "Nach dem Erstellen automatisch in das gespawnte Fahrzeug einsteigen.", "出現させた乗り物に自動的に乗り込みます。", "Автоматически садиться в созданный транспорт после появления.", "Entrar automaticamente no veículo gerado após a criação.", "Monter automatiquement dans le véhicule après sa création.") BREAK
-            CASE 10 g_selected_description = TR("Find a vehicle by model name. Extremely case sensitive. ALWAYS USE CAPS!", "Busca un vehículo por nombre de modelo. Sensible a mayúsculas. ¡USA SIEMPRE MAYÚSCULAS!", "按模型名称查找载具。严格区分大小写，请务必使用大写字母！", "Fahrzeug nach Modellnamen suchen. Extrem groß-/kleinschreibungsempfindlich. IMMER GROSSBUCHSTABEN!", "モデル名で乗り物を検索（大文字・小文字を厳密に区別します。常に大文字で入力！）。", "Найти транспорт по имени модели. Чувствителен к регистру. ВСЕГДА ИСПОЛЬЗУЙТЕ ЗАГЛАВНЫЕ БУКВЫ!", "Encontre um veículo pelo nome do modelo. Diferencia maiúsculas. USE SEMPRE MAIÚSCULAS!", "Trouver un véhicule par nom de modèle. Très sensible à la casse. UTILISEZ TOUJOURS DES MAJUSCULES !") BREAK
-        ENDSWITCH
+        IF g_saved_veh_confirm_open
+            SWITCH g_item
+                CASE 0 g_selected_description = TR("Cancel and keep this saved vehicle in your list.", "Cancelar y mantener este vehículo guardado.", "取消并保留此已保存载具。", "Abbrechen und dieses Fahrzeug behalten.", "キャンセルしてこの保存済み車両を保持します。", "Отмена и сохранение этого ТС в списке.", "Cancelar e manter este veículo salvo.", "Annuler et conserver ce véhicule sauvegardé.") BREAK
+                CASE 1 g_selected_description = TR("Permanently delete this saved vehicle entry from SD card storage.", "Eliminar permanentemente este vehículo guardado del almacenamiento SD.", "从 SD 卡存储中永久删除此已保存载具。", "Dieses gespeicherte Fahrzeug dauerhaft von der SD-Karte löschen.", "この保存済み車両をSDカードストレージから完全に削除します。", "Навсегда удалить этот сохраненный транспорт с SD-карты.", "Excluir permanentemente este veículo salvo do cartão SD.", "Supprimer définitivement ce véhicule sauvegardé de la carte SD.") BREAK
+            ENDSWITCH
+        ELIF g_saved_vehicles_open
+            IF g_item = 0
+                g_selected_description = TR("Save current vehicle with all its modifications, colors, and neon to SD card.", "Guarda el vehículo actual con todas sus modificaciones y colores en la SD.", "保存当前载具及其所有改装、涂装与霓虹灯到 SD 卡。", "Aktuelles Fahrzeug mit allen Mods, Farben und Neon auf SD speichern.", "現在の車両の全改造・カラー・ネオン設定をSDカードに保存します。", "Сохранить текущий транспорт со всеми модификациями на SD-карту.", "Salvar veículo atual com todas as modificações no cartão SD.", "Sauvegarder le véhicule actuel et toutes ses modifications sur la carte SD.")
+            ELSE
+                g_selected_description = TR("Press A to select for Spawner. Press LB + RB + X to delete.", "Pulsa A para elegirlo en el generador. Pulsa LB + RB + X para borrar.", "按 A 选择用于生成器。按 LB + RB + X 删除。", "A drücken zum Auswählen für Spawner. LB + RB + X zum Löschen.", "Aでスポナー用に選択。LB + RB + Xで削除。", "Нажмите A для выбора в спавнере. Нажмите LB + RB + X для удаления.", "Pressione A para selecionar no gerador. Pressione LB + RB + X para excluir.", "Appuyez sur A pour sélectionner dans le spawner. LB + RB + X pour supprimer.")
+            ENDIF
+        ELIF g_vehicle_list_open
+            g_selected_description = TR("Press A to select this vehicle and spawn 1 immediately.", "Pulsa A para elegir este vehículo y generar 1 al instante.", "按 A 选择此载具并立即生成 1 辆。", "A drücken, um dieses Fahrzeug auszuwählen und sofort 1 zu spawnen.", "Aを押してこの車両を選択し、すぐに1台スポーンします。", "Нажмите A для выбора этого ТС и немедленного спавна 1 шт.", "Pressione A para selecionar este veículo e gerar 1 imediatamente.", "Appuyez sur A pour sélectionner ce véhicule et en faire apparaître 1 immédiatement.")
+        ELSE
+            SWITCH g_item
+                CASE 0 g_selected_description = TR("Spawn the selected vehicle, using the configured count and layout.", "Genera el vehículo seleccionado con la cantidad y disposición configuradas.", "按配置的数量和排列生成所选载具。", "Ausgewähltes Fahrzeug mit eingestellter Anzahl und Formation spawnen.", "設定した台数と配置で選択中の乗り物を出現させます。", "Создать выбранный транспорт в указанном количестве и построении.", "Gera o veículo selecionado usando a quantidade e o formato configurados.", "Faire apparaître le véhicule sélectionné selon le nombre et la disposition définis.") BREAK
+                CASE 1 g_selected_description = TR("View and manage custom saved vehicles stored on your SD card.", "Ver y gestionar vehículos guardados personalizados en tu tarjeta SD.", "查看并管理存储在 SD 卡上的自定义已保存载具。", "Auf der SD-Karte gespeicherte eigene Fahrzeuge ansehen und verwalten.", "SDカードに保存されたカスタム車両を表示・管理します。", "Просмотр и управление сохраненными ТС на SD-карте.", "Ver e gerenciar veículos personalizados salvos no seu cartão SD.", "Afficher et gérer les véhicules sauvegardés personnalisés sur la carte SD.") BREAK
+                CASE 2 g_selected_description = TR("Find a vehicle by model name. Extremely case sensitive. ALWAYS USE CAPS!", "Busca un vehículo por nombre de modelo. Sensible a mayúsculas. ¡USA SIEMPRE MAYÚSCULAS!", "按模型名称查找载具。严格区分大小写，请务必使用大写字母！", "Fahrzeug nach Modellnamen suchen. Extrem groß-/kleinschreibungsempfindlich. IMMER GROSSBUCHSTABEN!", "モデル名で乗り物を検索（大文字・小文字を厳密に区別します。常に大文字で入力！）。", "Найти транспорт по имени модели. Чувствителен к регистру. ВСЕГДА ИСПОЛЬЗУЙТЕ ЗАГЛАВНЫЕ БУКВЫ!", "Encontre um veículo pelo nome do modelo. Diferencia maiúsculas. USE SEMPRE MAIÚSCULAS!", "Trouver un véhicule par nom de modèle. Très sensible à la casse. UTILISEZ TOUJOURS DES MAJUSCULES !") BREAK
+                CASE 3 g_selected_description = TR("Choose a base-game, DLC, aircraft, bike, watercraft, or misc list.", "Elige una lista del juego base, DLC, aeronaves, motos, barcos o varios.", "选择本体、DLC、飞机、摩托、船只或杂项载具列表。", "Liste wählen: Basisspiel, DLC, Luftfahrzeuge, Motorräder, Boote oder Sonstiges.", "本編、DLC、航空機、バイク、船舶、その他のリストを選択します。", "Выберите список: базовая игра, DLC, авиация, мото, водный или разное.", "Escolha uma lista do juego base, DLC, aeronaves, motos, barcos ou diversos.", "Choisir une liste : jeu de base, DLC, avions, motos, bateaux ou divers.") BREAK
+                CASE 4 g_selected_description = TR("Browse and select vehicles from the active category list. Spawns 1 vehicle directly.", "Explora y selecciona vehículos de la categoría activa. Genera 1 al pulsar A.", "浏览并选择当前类别中的载具。按 A 直接生成 1 辆。", "Fahrzeuge der aktiven Kategorie durchsuchen und wählen. Spawnt direkt 1 Fahrzeug.", "選択中カテゴリーの車両一覧を表示・選択。Aで1台直接スポーン。", "Список транспорта активной категории. Нажмите A для спавна 1 машины.", "Navegue e selecione veículos da categoria ativa. Gera 1 veículo diretamente.", "Parcourir et sélectionner des véhicules de la catégorie. Fait apparaître 1 véhicule directement.") BREAK
+                CASE 5 g_selected_description = TR("Set how many copies to create at once; DPAD Left/Right changes the count by intervals of 1; 500 Max", "Define cuántas copias crear a la vez; Izquierda/Derecha cambia de 1 en 1; máx. 500.", "设置一次生成的数量；方向键左/右每次增减 1；最多 500 辆。", "Anzahl gleichzeitig erzeugter Fahrzeuge; Steuerkreuz Links/Rechts ändert um 1; Max. 500.", "一度に出現させる台数を設定（十字キー左右で1ずつ変更、最大500）。", "Количество создаваемых копий за раз; Влево/Вправо меняет на 1; макс. 500.", "Defina quantas cópias criar de uma vez; Esquerda/Direita altera de 1 em 1; máx. 500.", "Définir le nombre de copies à créer ; Gauche/Droite change de 1 ; 500 max.") BREAK
+                CASE 6 g_selected_description = TR("Apply the highest available upgrade to every spawned vehicle.", "Aplica la mejora máxima disponible a cada vehículo generado.", "为每辆生成的载具应用最高可用升级。", "Höchstes verfügbares Upgrade auf jedes gespawnte Fahrzeug anwenden.", "出現するすべての乗り物に最高レベルの改造を適用します。", "Применить максимальные улучшения ко всем создаваемым машинам.", "Aplica a melhoria máxima disponível a cada veículo gerado.", "Appliquer la meilleure amélioration disponible à chaque véhicule généré.") BREAK
+                CASE 7 g_selected_description = TR("Choose door-to-door or bumper-to-bumper formation.", "Elige formación puerta con puerta o parachoques con parachoques.", "选择并排（车门对车门）或纵列（首尾相接）队形。", "Formation Tür-an-Tür oder Stoßstange-an-Stoßstange wählen.", "横並び（ドア・ツー・ドア）か縦並び（バンパー・ツー・バンパー）を選択します。", "Выберите построение: бок о бок или бампер к бамперу.", "Escolha a formação lado a lado ou para-choque com para-choque.", "Choisir la formation côte à côte ou pare-chocs contre pare-chocs.") BREAK
+                CASE 8 g_selected_description = TR("Choose the heading of spawned vehicles relative to the player.", "Elige la orientación de los vehículos generados respecto al jugador.", "选择生成载具相对于玩家的朝向。", "Ausrichtung der gespawnten Fahrzeuge relativ zum Spieler wählen.", "プレイヤーに対する出現車両の向きを選択します。", "Выберите направление создаваемого транспорта относительно игрока.", "Escolha a direção dos veículos gerados em relação ao jogador.", "Choisir l'orientation des véhicules générés par rapport au joueur.") BREAK
+                CASE 9 g_selected_description = TR("Automatically remove the previous custom vehicle when spawning.", "Elimina automáticamente el vehículo personalizado anterior al generar otro.", "生成新载具时自动移除上一辆自定义载具。", "Vorheriges eigenes Fahrzeug beim Spawnen automatisch entfernen.", "新しい車両を出現させる際、前のカスタム車両を自動的に消去します。", "Автоматически удалять предыдущий созданный транспорт при спавне нового.", "Remove automaticamente o veículo personalizado anterior ao gerar outro.", "Supprimer automatiquement le véhicule personnalisé précédent lors de l'apparition.") BREAK
+                CASE 10 g_selected_description = TR("Delete every vehicle created by this menu.", "Elimina todos los vehículos creados por este menú.", "删除此菜单创建的所有载具。", "Alle von diesem Menü erstellten Fahrzeuge löschen.", "このメニューで作成したすべての乗り物を削除します。", "Удалить весь транспорт, созданный через это меню.", "Excluir todos os veículos criados por este menu.", "Supprimer tous les véhicules créés par ce menu.") BREAK
+                CASE 11 g_selected_description = TR("Enter a spawned vehicle automatically after it is created.", "Entra automáticamente en el vehículo generado tras crearlo.", "生成载具后自动进入驾驶座。", "Nach dem Erstellen automatisch in das gespawnte Fahrzeug einsteigen.", "出現させた乗り物に自動的に乗り込みます。", "Автоматически садиться в созданный транспорт после появления.", "Entrar automaticamente no veículo gerado após a criação.", "Monter automatiquement dans le véhicule après sa création.") BREAK
+            ENDSWITCH
+        ENDIF
     // The six LSC child pages are checked further down this chain, so the parent
     // branch has to stand aside while one of them is open.  Without this guard
     // g_lsc_open is always TRUE when a child is open, the parent branch swallows
@@ -734,7 +771,7 @@ PROC SELECTED_DESCRIPTION_TEXT()
                     g_selected_description = TR("Press A to immediately terminate and unload this script from the RAGE VM.", "Pulsa A para terminar y descargar inmediatamente este script de la máquina virtual RAGE.", "按 A 立即终止并从 RAGE 虚拟机中卸载此脚本。", "A drücken, um dieses Skript sofort zu beenden und aus der RAGE-VM zu entladen.", "Aボタンを押してこのスクリプトを即座に終了し、RAGE VMからアンロードします。", "Нажмите A, чтобы немедленно остановить и выгрузить этот скрипт из RAGE VM.", "Pressione A para encerrar e descarregar imediatamente este script da RAGE VM.", "Appuyez sur A pour arrêter et décharger immédiatement ce script de la RAGE VM.")
                 ELIF g_nsc_loader_open
                     IF g_item = 0
-                        g_selected_description = TR("Enter a .nsc filename with the Switch keyboard and save it to persistence (100-letter max).", "Introduce un nombre de archivo .nsc con el teclado de Switch y guárdalo (máx. 100 letras).", "使用 Switch 键盘输入 .nsc 文件名并保存到持久化存储（最多 100 个字符）。", "Einen .nsc-Dateinamen per Switch-Tastatur eingeben und dauerhaft speichern (max. 100 Zeichen).", "Switchのキーボードで.nscファイル名を入力し、保存します（最大100文字）。", "Введите имя файла .nsc с клавиатуры Switch и сохраните его в список (макс. 100 символов).", "Digite um nome de arquivo .nsc com o teclado do Switch e salve-o (máx. 100 letras).", "Saisir un nom de fichier .nsc au clavier Switch et le sauvegarder (100 caractères max).")
+                        g_selected_description = TR("Enter a .nsc filename with the Switch keyboard and save it to persistence (1000-letter max).", "Introduce un nombre de archivo .nsc con el teclado de Switch y guárdalo (máx. 1000 letras).", "使用 Switch 键盘输入 .nsc 文件名并保存到持久化存储（最多 1000 个字符）。", "Einen .nsc-Dateinamen per Switch-Tastatur eingeben und dauerhaft speichern (max. 1000 Zeichen).", "Switchのキーボードで.nscファイル名を入力し、保存します（最大1000文字）。", "Введите имя файла .nsc с клавиатуры Switch и сохраните его в список (макс. 1000 символов).", "Digite um nome de arquivo .nsc com o teclado do Switch e salve-o (máx. 1000 letras).", "Saisir un nom de fichier .nsc au clavier Switch et le sauvegarder (1000 caractères max).")
                     ELIF g_item = 1
                         g_selected_description = TR("Select the RAGE VM stack pool size allocated when launching or reloading a .nsc script.", "Selecciona el tamaño de pila (stack) de la RAGE VM al iniciar o recargar un script .nsc.", "选择启动或重载 .nsc 脚本时分配的 RAGE 虚拟机栈池大小。", "Stack-Größe der RAGE-VM auswählen, die beim Starten eines .nsc-Skripts reserviert wird.", ".nscスクリプトの起動・再読み込み時に割り当てるRAGE VMスタックサイズを選択します。", "Выберите размер стека RAGE VM, выделяемый при запуске или перезагрузке скрипта .nsc.", "Selecione o tamanho da pilha (stack) da RAGE VM ao iniciar ou recarregar um script .nsc.", "Sélectionner la taille de pile RAGE VM allouée au lancement d'un script .nsc.")
                     ELIF g_item = 2
@@ -878,14 +915,90 @@ PROC SELECTED_DESCRIPTION_TEXT()
     ENDIF
 ENDPROC
 
-PROC DRAW_SELECTED_DESCRIPTION()
+FUNC INT CURRENT_PAGE_ID()
+    IF g_home RETURN 0 ENDIF
+    IF g_outfit_open RETURN 100 ENDIF
+    IF g_radio_open RETURN 101 ENDIF
+    IF g_bodyguard_open
+        IF g_guard_ped_open RETURN 102 ENDIF
+        RETURN 103
+    ENDIF
+    IF g_attacker_open
+        IF g_attacker_ped_open RETURN 104 ENDIF
+        RETURN 105
+    ENDIF
+    IF g_ped_open
+        IF g_story_ped_picker_open RETURN 106 ENDIF
+        IF g_story_peds_open RETURN 107 ENDIF
+        RETURN 108
+    ENDIF
+    IF g_chauffeur_open
+        IF g_chauffeur_armed_open RETURN 109 ENDIF
+        IF g_chauffeur_vehicle_open RETURN 110 ENDIF
+        IF g_chauffeur_ped_open RETURN 111 ENDIF
+        RETURN 112
+    ENDIF
+    IF g_neon_anim_open RETURN 113 ENDIF
+    IF g_spawner_open
+        IF g_saved_veh_confirm_open RETURN 114 ENDIF
+        IF g_saved_vehicles_open RETURN 115 ENDIF
+        IF g_vehicle_list_open RETURN 138 ENDIF
+        RETURN 116
+    ENDIF
+    IF g_vehicle_control_open RETURN 117 ENDIF
+    IF g_hydro_open RETURN 118 ENDIF
+    IF g_interior_open RETURN 119 ENDIF
+    IF g_wheeltyre_open RETURN 120 ENDIF
+    IF g_lsc_extras_open RETURN 121 ENDIF
+    IF g_bennys_open RETURN 122 ENDIF
+    IF g_support_open RETURN 123 ENDIF
+    IF g_lsc_open RETURN 124 ENDIF
+    IF g_weapon_upgrades_open RETURN 125 ENDIF
+    IF g_tp_stores_open RETURN 126 ENDIF
+    IF g_tp_locs_open RETURN 127 ENDIF
+    IF g_timeweather_open RETURN 128 ENDIF
+    IF g_mayhem_open RETURN 129 ENDIF
+    IF g_language_open RETURN 130 ENDIF
+    IF g_spooner_open RETURN 131 ENDIF
+    IF g_nsc_unload_open RETURN 132 ENDIF
+    IF g_nsc_loader_open RETURN 133 ENDIF
+    IF g_plugin_mgr_open
+        IF g_plugin_mgr_detail_open RETURN 134 ENDIF
+        RETURN 135
+    ENDIF
+    IF g_credits_open RETURN 136 ENDIF
+    IF g_persist_open RETURN 137 ENDIF
+    RETURN g_tab + 1
+ENDFUNC
+
+PROC UPDATE_CURRENT_DESCRIPTION()
+    INT pageId = CURRENT_PAGE_ID()
+    IF NOT g_description_dirty
+        IF g_description_cached_item = g_item AND g_description_cached_page_id = pageId AND g_description_cached_language = g_menu_language AND g_description_cached_x = g_menu_x AND g_description_cached_y = g_menu_y
+            EXIT
+        ENDIF
+    ENDIF
+    g_description_dirty = FALSE
+    g_description_cached_item = g_item
+    g_description_cached_page_id = pageId
     SELECTED_DESCRIPTION_TEXT()
+    PREPARE_DESCRIPTION_LAYOUT(g_selected_description)
+    IF g_description_height <= 0.0
+        g_description_cached_extra_height = -0.070
+    ELSE
+        g_description_cached_extra_height = g_description_height - 0.054
+        IF g_description_cached_extra_height < -0.020
+            g_description_cached_extra_height = -0.020
+        ENDIF
+    ENDIF
+ENDPROC
+
+PROC DRAW_SELECTED_DESCRIPTION()
     MENU_DESCRIPTION_TEXT(g_selected_description)
 ENDPROC
 
 FUNC FLOAT SELECTED_DESCRIPTION_PANEL_HEIGHT()
-    SELECTED_DESCRIPTION_TEXT()
-    RETURN DESCRIPTION_PANEL_HEIGHT(g_selected_description)
+    RETURN g_description_height
 ENDFUNC
 
 PROC DRAW_DESCRIPTION_PANEL()
@@ -904,13 +1017,7 @@ ENDPROC
 // text never pokes past the menu bottom and 1-line text leaves no dead gap.
 // Short 2-line descriptions keep the original dimensions.
 FUNC FLOAT DESCRIPTION_PANEL_EXTRA_HEIGHT()
-    FLOAT panelHeight = SELECTED_DESCRIPTION_PANEL_HEIGHT()
-    IF panelHeight <= 0.0
-        RETURN -0.070
-    ENDIF
-    FLOAT extraHeight = panelHeight - 0.054
-    IF extraHeight < -0.020 extraHeight = -0.020 ENDIF
-    RETURN extraHeight
+    RETURN g_description_cached_extra_height
 ENDFUNC
 
 PROC DRAW_MENU_BACKDROP()
@@ -1105,23 +1212,21 @@ PROC DRAW_LIVE_COORDINATES()
     IF GET_GAME_TIMER() >= g_live_coords_next_update
         g_live_coords_pos = g_cached_player_coords
         g_live_coords_next_update = GET_GAME_TIMER() + LIVE_COORDS_UPDATE_MS
+
+        g_live_coords_cached_line_x = FORMAT_LIVE_COORD_LINE("X: ", g_live_coords_pos.x)
+        g_live_coords_cached_line_y = FORMAT_LIVE_COORD_LINE("Y: ", g_live_coords_pos.y)
+        g_live_coords_cached_line_z = FORMAT_LIVE_COORD_LINE("Z: ", g_live_coords_pos.z)
+
+        INT lenX = GET_LENGTH_OF_LITERAL_STRING(g_live_coords_cached_line_x)
+        INT lenY = GET_LENGTH_OF_LITERAL_STRING(g_live_coords_cached_line_y)
+        INT lenZ = GET_LENGTH_OF_LITERAL_STRING(g_live_coords_cached_line_z)
+        INT maxChars = lenX
+        IF lenY > maxChars maxChars = lenY ENDIF
+        IF lenZ > maxChars maxChars = lenZ ENDIF
+
+        g_live_coords_cached_coord_x = 0.985 - (TO_FLOAT(maxChars) * 0.0062)
+        IF g_live_coords_cached_coord_x < 0.700 g_live_coords_cached_coord_x = 0.700 ENDIF
     ENDIF
-
-    TEXT_LABEL_63 lineX = FORMAT_LIVE_COORD_LINE("X: ", g_live_coords_pos.x)
-    TEXT_LABEL_63 lineY = FORMAT_LIVE_COORD_LINE("Y: ", g_live_coords_pos.y)
-    TEXT_LABEL_63 lineZ = FORMAT_LIVE_COORD_LINE("Z: ", g_live_coords_pos.z)
-
-    INT lenX = GET_LENGTH_OF_LITERAL_STRING(lineX)
-    INT lenY = GET_LENGTH_OF_LITERAL_STRING(lineY)
-    INT lenZ = GET_LENGTH_OF_LITERAL_STRING(lineZ)
-    INT maxChars = lenX
-    IF lenY > maxChars maxChars = lenY ENDIF
-    IF lenZ > maxChars maxChars = lenZ ENDIF
-
-    // Auto-adjust X position from the top-right margin based on the longest
-    // coordinate string so large values never run off the right edge of the screen.
-    FLOAT coordX = 0.985 - (TO_FLOAT(maxChars) * 0.0062)
-    IF coordX < 0.700 coordX = 0.700 ENDIF
 
     SET_TEXT_RENDER_ID(1)
     SET_SCRIPT_GFX_DRAW_BEHIND_PAUSEMENU(TRUE)
@@ -1134,8 +1239,8 @@ PROC DRAW_LIVE_COORDINATES()
     SET_TEXT_COLOUR(g_accent_r, g_accent_g, g_accent_b, 255)
     SET_TEXT_DROPSHADOW(1, 0, 0, 0, 190)
     BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
-        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(lineX)
-    END_TEXT_COMMAND_DISPLAY_TEXT(coordX, AUTO_SAVE_TIMER_Y)
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(g_live_coords_cached_line_x)
+    END_TEXT_COMMAND_DISPLAY_TEXT(g_live_coords_cached_coord_x, AUTO_SAVE_TIMER_Y)
 
     SET_TEXT_WRAP(0.0, 1.0)
     SET_TEXT_RIGHT_JUSTIFY(FALSE)
@@ -1144,8 +1249,8 @@ PROC DRAW_LIVE_COORDINATES()
     SET_TEXT_COLOUR(g_accent_r, g_accent_g, g_accent_b, 255)
     SET_TEXT_DROPSHADOW(1, 0, 0, 0, 190)
     BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
-        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(lineY)
-    END_TEXT_COMMAND_DISPLAY_TEXT(coordX, AUTO_SAVE_TIMER_Y + 0.020)
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(g_live_coords_cached_line_y)
+    END_TEXT_COMMAND_DISPLAY_TEXT(g_live_coords_cached_coord_x, AUTO_SAVE_TIMER_Y + 0.020)
 
     SET_TEXT_WRAP(0.0, 1.0)
     SET_TEXT_RIGHT_JUSTIFY(FALSE)
@@ -1154,15 +1259,18 @@ PROC DRAW_LIVE_COORDINATES()
     SET_TEXT_COLOUR(g_accent_r, g_accent_g, g_accent_b, 255)
     SET_TEXT_DROPSHADOW(1, 0, 0, 0, 190)
     BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
-        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(lineZ)
-    END_TEXT_COMMAND_DISPLAY_TEXT(coordX, AUTO_SAVE_TIMER_Y + 0.040)
+        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(g_live_coords_cached_line_z)
+    END_TEXT_COMMAND_DISPLAY_TEXT(g_live_coords_cached_coord_x, AUTO_SAVE_TIMER_Y + 0.040)
 ENDPROC
 
 PROC DRAW_SPEEDOMETER()
     IF NOT g_vehicle_speedometer
         EXIT
     ENDIF
-    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) OR IS_PAUSE_MENU_ACTIVE() OR IS_WARNING_MESSAGE_ACTIVE() OR IS_SCREEN_FADED_OUT() OR IS_SCREEN_FADING_OUT() OR IS_SCREEN_FADING_IN()
+    IF NOT g_cached_player_in_veh OR IS_PAUSE_MENU_ACTIVE() OR IS_WARNING_MESSAGE_ACTIVE() OR IS_SCREEN_FADED_OUT() OR IS_SCREEN_FADING_OUT() OR IS_SCREEN_FADING_IN()
+        EXIT
+    ENDIF
+    IF NOT DOES_ENTITY_EXIST(g_cached_player_veh) OR IS_ENTITY_DEAD(g_cached_player_veh)
         EXIT
     ENDIF
 
@@ -1170,23 +1278,24 @@ PROC DRAW_SPEEDOMETER()
     SET_SCRIPT_GFX_DRAW_BEHIND_PAUSEMENU(TRUE)
     SET_SCRIPT_GFX_DRAW_ORDER(GFX_ORDER_BEFORE_HUD_PRIORITY_LOW)
 
-    FLOAT vehicleSpeed = GET_ENTITY_SPEED(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
+    FLOAT vehicleSpeed = GET_ENTITY_SPEED(g_cached_player_veh)
 
-    // Model name line, one row above the unit. Right-justified to the same x as
-    // the unit/number so long names ("Pfister 811", "Cargobob") grow leftward
-    // instead of running off screen. Uses the player-name string component, the
-    // same dynamic-text path the page counter uses.
-    VEHICLE_INDEX speedVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
-    STRING speedVehicleName = GET_DISPLAY_NAME_FROM_VEHICLE_MODEL(GET_ENTITY_MODEL(speedVehicle))
-    SET_TEXT_FONT(FONT_ROCKSTAR_TAG)
-    SET_TEXT_SCALE(0.55, 0.55)
-    SET_TEXT_OUTLINE()
-    SET_TEXT_WRAP(0.0, 0.905)
-    SET_TEXT_RIGHT_JUSTIFY(TRUE)
-    BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
-        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(speedVehicleName)
+    IF g_speedometer_cached_veh != g_cached_player_veh
+        g_speedometer_cached_veh = g_cached_player_veh
+        g_speedometer_cached_name = GET_DISPLAY_NAME_FROM_VEHICLE_MODEL(GET_ENTITY_MODEL(g_cached_player_veh))
+    ENDIF
+
+    IF NOT IS_STRING_NULL_OR_EMPTY(g_speedometer_cached_name)
+        SET_TEXT_FONT(FONT_ROCKSTAR_TAG)
+        SET_TEXT_SCALE(0.55, 0.55)
+        SET_TEXT_OUTLINE()
+        SET_TEXT_WRAP(0.0, 0.905)
+        SET_TEXT_RIGHT_JUSTIFY(TRUE)
+        BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
+            ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(g_speedometer_cached_name)
         END_TEXT_COMMAND_DISPLAY_TEXT(0.905, 0.686)
-    SET_TEXT_RIGHT_JUSTIFY(FALSE)
+        SET_TEXT_RIGHT_JUSTIFY(FALSE)
+    ENDIF
 
     IF g_vehicle_speed_unit = 0
         vehicleSpeed = vehicleSpeed * 2.23694
@@ -1194,16 +1303,16 @@ PROC DRAW_SPEEDOMETER()
         SET_TEXT_SCALE(0.9, 0.9)
         SET_TEXT_OUTLINE()
         BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
-            ADD_TEXT_COMPONENT_SUBSTRING_KEYBOARD_DISPLAY("MPH")
-            END_TEXT_COMMAND_DISPLAY_TEXT(0.905, 0.720)
+            ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("MPH")
+        END_TEXT_COMMAND_DISPLAY_TEXT(0.905, 0.720)
     ELSE
         vehicleSpeed = vehicleSpeed * 3.6
         SET_TEXT_FONT(FONT_ROCKSTAR_TAG)
         SET_TEXT_SCALE(0.9, 0.9)
         SET_TEXT_OUTLINE()
         BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
-            ADD_TEXT_COMPONENT_SUBSTRING_KEYBOARD_DISPLAY("KMPH")
-            END_TEXT_COMMAND_DISPLAY_TEXT(0.905, 0.720)
+            ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("KMPH")
+        END_TEXT_COMMAND_DISPLAY_TEXT(0.905, 0.720)
     ENDIF
 
     SET_TEXT_FONT(FONT_ROCKSTAR_TAG)

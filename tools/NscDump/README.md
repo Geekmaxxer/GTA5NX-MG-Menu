@@ -12,19 +12,19 @@ is no compression flag inside the envelope (see `docs\DEVELOPING.md`).
 Build it from the repository root:
 
 ```powershell
-dotnet build tools/NscDump/NscDump.csproj -c Release --no-restore
+dotnet build \NscDump\NscDump.csproj -c Release --no-restore
 ```
 
 Inspect an extracted script:
 
 ```powershell
-dotnet run --project tools/NscDump/NscDump.csproj -c Release --no-build -- path\to\pausemenu.nsc
+dotnet run --project \NscDump\NscDump.csproj -c Release --no-build -- path\to\pausemenu.nsc
 ```
 
 Scan a directory of extracted Switch scripts and get one compact row per file:
 
 ```powershell
-dotnet run --project tools/NscDump/NscDump.csproj -c Release --no-build -- --scan-dir path\to\nscs
+dotnet run --project \NscDump\NscDump.csproj -c Release --no-build -- --scan-dir path\to\nscs
 ```
 
 The scan reports each script's code length, native-slot count, total candidate
@@ -37,7 +37,7 @@ anything.
 Generate a crossmap-ready database from the same extraction:
 
 ```powershell
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --native-db path\to\nscs \switch-native-db.json
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --native-db path\to\nscs \switch-native-db.json
 ```
 
 The JSON records the rotation-decoded 64-bit value, every script/index where it
@@ -49,7 +49,7 @@ Compare a Switch resource against a PC `.ysc`/raw script before attempting a
 patch:
 
 ```powershell
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --compare-native-tables switch.nsc pc.ysc
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --compare-native-tables switch.nsc pc.ysc
 ```
 
 The report distinguishes PC hashes that match after the Switch rotation from
@@ -59,13 +59,13 @@ native index; an unmatched call still needs a verified Switch equivalent.
 The URL form is useful for public reference binaries and does not write them to the repository:
 
 ```powershell
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --compare-native-url local-switch.nsc https://example/script.ysc.full
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --compare-native-url local-switch.nsc https://example/script.ysc.full
 ```
 
 Write a reviewable per-index crossmap instead of modifying either input:
 
 ```powershell
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --write-crossmap local-switch.nsc pc.ysc \crossmap.json
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --write-crossmap local-switch.nsc pc.ysc \crossmap.json
 ```
 
 The crossmap decodes the stored rotation on both resources and records the
@@ -75,7 +75,7 @@ before any script or RPF is changed.
 Copy only the observed Switch header profile onto a candidate, writing a new file:
 
 ```powershell
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --adapt-header switch-reference.nsc candidate.nsc output.nsc
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --adapt-header switch-reference.nsc candidate.nsc output.nsc
 ```
 
 The reference may be a single `.nsc` or a stock folder (a folder resolves to
@@ -98,7 +98,7 @@ into `script_rel.rpf`.
 Search the extracted resources for references to a script's JOAAT name hash:
 
 ```powershell
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --find-script path\to\nscs achievement_controller
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --find-script path\to\nscs achievement_controller
 ```
 
 This is a hint for identifying startup/host relationships; a hash occurrence
@@ -107,8 +107,8 @@ alone does not prove that the surrounding code launches the script.
 Validate compiled-name invariants before packaging a resource:
 
 ```powershell
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --validate-names path\to\script_rel.rpf
-dotnet run --project analysistools/NscDump/NscDump.csproj -c Release --no-build -- --validate-names path\to\ragemenu.nsc
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --validate-names path\to\script_rel.rpf
+dotnet run --project analysis\NscDump\NscDump.csproj -c Release --no-build -- --validate-names path\to\ragemenu.nsc
 ```
 
 Both a directory and a single file are accepted. This checks that each filename

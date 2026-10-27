@@ -45,6 +45,7 @@ USING "core/core_outfit.sch"
 USING "util/util_spooner.sch"
 USING "util/util_nsc_loader.sch"
 USING "util/util_plugin_manager.sch"
+USING "util/util_saved_vehicles.sch"
 USING "util/util_vehicle_catalog.sch"
 USING "util/util_weapons.sch"
 USING "util/util_chauffeur.sch"
@@ -56,6 +57,7 @@ SCRIPT
     INIT_MENU_DEFAULTS()
     INIT_CHAUFFEUR_DEFAULTS()
     INIT_STORY_PEDS_DEFAULTS()
+    PERSIST_LOAD_SAVED_VEHICLES()
     g_menu_start_time = GET_GAME_TIMER()
 
     WHILE TRUE
@@ -100,6 +102,8 @@ SCRIPT
                 g_item = g_home_item
                 g_scroll = g_home_scroll
                 CLOSE_ALL_SUBMENUS()
+                g_menu_nav_dirty = TRUE
+                g_description_dirty = TRUE
             ELSE
                 // Closing the menu while the Spawner is open used to leave its
                 // preview car alive: the flag stayed set, so the preview kept
@@ -119,6 +123,8 @@ SCRIPT
                 // after. PERSIST_REQUEST_DISK_SAVE stays debounced, so this cannot turn
                 // every menu close into a save-file write.
                 PERSIST_FLUSH_NOW()
+                g_instructional_buttons_mode = -1
+                g_instructional_cached_lang = -1
             ENDIF
             MENU_PLAY_SOUND("SELECT")
         ENDIF
@@ -126,18 +132,21 @@ SCRIPT
         // invincibility off every frame: missions and cutscenes may use it.
         IF g_god SET_PLAYER_INVINCIBLE(g_cached_player_id, TRUE) ENDIF
         IF g_never_wanted CLEAR_PLAYER_WANTED_LEVEL(g_cached_player_id) ENDIF
-        BOOL chaosModRunning = GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(HASH("chaosmod")) > 0
+        IF GET_GAME_TIMER() >= g_chaos_mod_check_timer
+            g_chaos_mod_running = GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(HASH("chaosmod")) > 0
+            g_chaos_mod_check_timer = GET_GAME_TIMER() + 2000
+        ENDIF
         IF g_fast_run
             SET_RUN_SPRINT_MULTIPLIER_FOR_PLAYER(g_cached_player_id, 1.49)
             g_fast_run_applied = TRUE
-        ELIF g_fast_run_applied AND NOT chaosModRunning
+        ELIF g_fast_run_applied AND NOT g_chaos_mod_running
             SET_RUN_SPRINT_MULTIPLIER_FOR_PLAYER(g_cached_player_id, 1.0)
             g_fast_run_applied = FALSE
         ENDIF
         IF g_fast_swim
             SET_SWIM_MULTIPLIER_FOR_PLAYER(g_cached_player_id, 1.49)
             g_fast_swim_applied = TRUE
-        ELIF g_fast_swim_applied AND NOT chaosModRunning
+        ELIF g_fast_swim_applied AND NOT g_chaos_mod_running
             SET_SWIM_MULTIPLIER_FOR_PLAYER(g_cached_player_id, 1.0)
             g_fast_swim_applied = FALSE
         ENDIF
@@ -153,17 +162,19 @@ SCRIPT
         IF g_explosive_melee SET_EXPLOSIVE_MELEE_THIS_FRAME(g_cached_player_id) ENDIF
         IF g_unlimited_oxygen APPLY_UNLIMITED_OXYGEN() ENDIF
         IF g_unlimited_ability APPLY_UNLIMITED_ABILITY() ENDIF
-        PROCESS_SUPER_PUNCH()
-        PROCESS_RGB_ACCENT()
-        PROCESS_PLAYER_NOCLIP()
-        PROCESS_NOCLIP_VEHICLE_LOCK()
-        PROCESS_BODYGUARD_FOLLOW()
-        PROCESS_NEON_ANIM()
-        PROCESS_VEHICLE_HAZARDS()
+        IF g_super_punch PROCESS_SUPER_PUNCH() ENDIF
+        IF g_accent_rgb AND g_accent_choice = 14 PROCESS_RGB_ACCENT() ENDIF
+        IF g_player_noclip
+            PROCESS_PLAYER_NOCLIP()
+            PROCESS_NOCLIP_VEHICLE_LOCK()
+        ENDIF
+        IF g_bodyguard_count > 0 PROCESS_BODYGUARD_FOLLOW() ENDIF
+        IF g_neon_mode != 0 PROCESS_NEON_ANIM() ENDIF
+        IF g_vehicle_hazards PROCESS_VEHICLE_HAZARDS() ENDIF
         // Chauffeur (Vehicle Settings row 25).  Unconditional: the driver has
         // to keep driving to the waypoint - and keep responding to the style
         // and traffic-light rows - whether or not the menu is still open.
-        PROCESS_CHAUFFEUR()
+        IF g_chauffeur_spawn_pending OR DOES_ENTITY_EXIST(g_chauffeur_vehicle) PROCESS_CHAUFFEUR() ENDIF
         IF g_everyone_ignores
             SET_EVERYONE_IGNORE_PLAYER(g_cached_player_id, TRUE)
             g_everyone_ignores_applied = TRUE
@@ -191,17 +202,23 @@ SCRIPT
                 IF g_spawner_open CLEANUP_VEHICLE_PREVIEW() ENDIF
                 IF g_spooner_open CLEANUP_SPOONER_PREVIEW() ENDIF
                 CLOSE_ALL_SUBMENUS()
+                g_instructional_buttons_mode = -1
+                g_instructional_cached_lang = -1
             ENDIF
             IF g_player_noclip SET_PLAYER_NOCLIP_ENABLED(FALSE) ENDIF
             IF g_player_freecam SET_PLAYER_FREECAM_ENABLED(FALSE) ENDIF
         ENDIF
-        PROCESS_SPECIAL_GUN()
+        IF g_special_gun_mode != 0 PROCESS_SPECIAL_GUN() ENDIF
 
         // ===================================================================
         // Smooth 30 FPS: 4-Phase Staggered Background Tasks (each ~7.5 Hz)
         // ===================================================================
         SWITCH g_frame_phase
             CASE 0
+                IF GET_GAME_TIMER() >= g_next_prune_tracked_entities_timer
+                    PRUNE_MENU_PED_TRACKING()
+                    g_next_prune_tracked_entities_timer = GET_GAME_TIMER() + 5000
+                ENDIF
                 PROCESS_PED_DEATH_RECOVERY()
                 PROCESS_CUSTOM_STORY_PEDS()
                 PROCESS_STRIPPER_SPAWN()
@@ -214,14 +231,10 @@ SCRIPT
                         MAINTAIN_PED_CHANGE_REQUEST()
                         IF HAS_MODEL_LOADED(g_pending_ped_model)
                             FINISH_PED_CHANGE()
-                        ELIF GET_GAME_TIMER() > g_ped_request_time + 8000
+                        ELIF GET_GAME_TIMER() > g_ped_request_time + 20000
                             SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_ped_model)
                             g_ped_change_pending = FALSE
-                            IF g_ped_search_is_custom
-                                g_ped_search_not_found = TRUE
-                                g_ped_search_has_value = FALSE
-                                g_ped_search_is_custom = FALSE
-                            ENDIF
+                            g_ped_search_error = 2
                         ENDIF
                     ENDIF
                 ENDIF
@@ -315,9 +328,17 @@ SCRIPT
         // feature it drives was pulled from the UI in v0.8.6 (spawned nothing on
         // Switch streaming), so g_projectile_choice can never leave 0 and the
         // call only tested that global every frame.
-        PROCESS_PENDING_TELEPORT()
-        PROCESS_VEHICLE_PREVIEW()
-        PROCESS_SPOONER_PREVIEW()
+        IF g_teleport_pending PROCESS_PENDING_TELEPORT() ENDIF
+        IF g_vehicle_preview_enabled AND g_open AND NOT g_home AND g_spawner_open AND g_vehicle_list_open
+            PROCESS_VEHICLE_PREVIEW()
+        ELSE
+            CLEANUP_VEHICLE_PREVIEW()
+        ENDIF
+        IF g_open AND g_spooner_open
+            PROCESS_SPOONER_PREVIEW()
+        ELSE
+            CLEANUP_SPOONER_PREVIEW()
+        ENDIF
         IF g_open AND g_tab = 0 AND g_ped_open
             REFRESH_CURRENT_PED_LABEL()
         ENDIF
@@ -397,15 +418,17 @@ SCRIPT
             IF g_grip_applied g_grip_applied = FALSE ENDIF
             IF g_bulletproof_tyres_applied g_bulletproof_tyres_applied = FALSE ENDIF
         ENDIF
-        IF g_player_in_vehicle
+        IF g_player_in_vehicle AND DOES_ENTITY_EXIST(g_cached_player_veh) AND NOT IS_ENTITY_DEAD(g_cached_player_veh)
             VEHICLE_INDEX currentVehicle = g_cached_player_veh
             FLOAT currentVehicleSpeed = GET_ENTITY_SPEED(currentVehicle)
             IF g_vehicle_auto_repair
-                SET_VEHICLE_FIXED(currentVehicle)
-                SET_VEHICLE_ENGINE_HEALTH(currentVehicle, 1000.0)
-                SET_VEHICLE_PETROL_TANK_HEALTH(currentVehicle, 1000.0)
-                SET_VEHICLE_BODY_HEALTH(currentVehicle, 1000.0)
-                SET_VEHICLE_UNDRIVEABLE(currentVehicle, FALSE)
+                IF GET_ENTITY_HEALTH(currentVehicle) < 1000 OR GET_VEHICLE_ENGINE_HEALTH(currentVehicle) < 1000.0 OR GET_VEHICLE_BODY_HEALTH(currentVehicle) < 1000.0 OR GET_VEHICLE_PETROL_TANK_HEALTH(currentVehicle) < 1000.0
+                    SET_VEHICLE_FIXED(currentVehicle)
+                    SET_VEHICLE_ENGINE_HEALTH(currentVehicle, 1000.0)
+                    SET_VEHICLE_PETROL_TANK_HEALTH(currentVehicle, 1000.0)
+                    SET_VEHICLE_BODY_HEALTH(currentVehicle, 1000.0)
+                    SET_VEHICLE_UNDRIVEABLE(currentVehicle, FALSE)
+                ENDIF
             ENDIF
             MAINTAIN_VEHICLE_GOD_STATE(currentVehicle)
             IF g_vehicle_always_max AND NOT IS_PED_IN_ANY_TRAIN(g_cached_player_ped)
@@ -434,14 +457,14 @@ SCRIPT
                 IF g_vehicle_acceleration_level > 0 AND currentVehicleSpeed < 72.0
                     SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, VEHICLE_MULTIPLIER_VALUE(g_vehicle_acceleration_level))
                     g_accel_applied = TRUE
-                ELIF g_accel_applied AND NOT chaosModRunning
+                ELIF g_accel_applied AND NOT g_chaos_mod_running
                     SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, 1.0)
                     g_accel_applied = FALSE
                 ENDIF
                 IF g_vehicle_grip_level != 0
                     SET_VEHICLE_FRICTION_OVERRIDE(currentVehicle, VEHICLE_GRIP_VALUE(g_vehicle_grip_level))
                     g_grip_applied = TRUE
-                ELIF g_grip_applied AND NOT chaosModRunning
+                ELIF g_grip_applied AND NOT g_chaos_mod_running
                     SET_VEHICLE_FRICTION_OVERRIDE(currentVehicle, -1.0)
                     g_grip_applied = FALSE
                 ENDIF
@@ -592,12 +615,16 @@ SCRIPT
                             MARK_PERSIST_DIRTY()
                         ENDIF
                     ENDIF
+                    g_menu_nav_dirty = TRUE
+                    g_description_dirty = TRUE
                 ENDIF
             ENDIF
             IF IS_DISABLED_CONTROL_JUST_RELEASED(PLAYER_CONTROL, INPUT_FRONTEND_CANCEL)
                 MENU_PLAY_SOUND("BACK")
                 IF g_home
                     g_open = FALSE
+                    g_instructional_buttons_mode = -1
+                    g_instructional_cached_lang = -1
                     // Same reason as the combo-close path above: a change that was made
                     // and then dismissed with B should not still be pending in the quiet
                     // window.
@@ -632,12 +659,30 @@ SCRIPT
                         g_scroll = g_page_scroll[3]
                     ENDIF
                 ELIF g_spawner_open
-                    g_spawner_item = g_item
-                    g_spawner_scroll = g_scroll
-                    g_spawner_open = FALSE
-                    CLEANUP_VEHICLE_PREVIEW()
-                    g_item = g_page_item[3]
-                    g_scroll = g_page_scroll[3]
+                    IF g_saved_veh_confirm_open
+                        g_saved_veh_confirm_open = FALSE
+                        g_item = g_saved_veh_delete_target + 1
+                        g_scroll = 0
+                    ELIF g_saved_vehicles_open
+                        g_saved_vehicles_item = g_item
+                        g_saved_vehicles_scroll = g_scroll
+                        g_saved_vehicles_open = FALSE
+                        g_saved_veh_feedback = 0
+                        g_item = 1
+                        g_scroll = 0
+                    ELIF g_vehicle_list_open
+                        g_vehicle_list_open = FALSE
+                        CLEANUP_VEHICLE_PREVIEW()
+                        g_item = 4
+                        g_scroll = g_spawner_scroll
+                    ELSE
+                        g_spawner_item = g_item
+                        g_spawner_scroll = g_scroll
+                        g_spawner_open = FALSE
+                        CLEANUP_VEHICLE_PREVIEW()
+                        g_item = g_page_item[3]
+                        g_scroll = g_page_scroll[3]
+                    ENDIF
                 ELIF g_vehicle_control_open
                     g_vehicle_control_item = g_item
                     g_vehicle_control_scroll = g_scroll
@@ -848,9 +893,15 @@ SCRIPT
                     g_item = g_home_item
                     g_scroll = g_home_scroll
                 ENDIF
+                g_menu_nav_dirty = TRUE
+                g_description_dirty = TRUE
             ENDIF
-            UPDATE_SCROLL()
-            SAVE_NAVIGATION_STATE()
+            IF g_menu_nav_dirty
+                UPDATE_SCROLL()
+                SAVE_NAVIGATION_STATE()
+                g_menu_nav_dirty = FALSE
+            ENDIF
+            UPDATE_CURRENT_DESCRIPTION()
             // Frame-time probe: the whole draw pass for one frame. The menu
             // redraws every frame it is open, so this is normally a constant
             // cost rather than a hitch source - unless a single page's draw does
@@ -865,6 +916,8 @@ SCRIPT
         ELIF g_instructional_scaleform != NULL
             SET_SCALEFORM_MOVIE_AS_NO_LONGER_NEEDED(g_instructional_scaleform)
             g_instructional_scaleform = NULL
+            g_instructional_buttons_mode = -1
+            g_instructional_cached_lang = -1
         ENDIF
         DRAW_SPEEDOMETER()
         DRAW_AUTO_SAVE_TIMER()

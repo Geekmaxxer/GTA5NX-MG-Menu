@@ -1169,15 +1169,82 @@ FUNC MODEL_NAMES MISC_VEHICLE_MODEL(INT index)
     RETURN ADDER
 ENDFUNC
 
-FUNC MODEL_NAMES CURRENT_SPAWNER_MODEL()
-    IF g_vehicle_spawn_choice >= 89 RETURN MISC_VEHICLE_MODEL(g_vehicle_spawn_choice) ENDIF
-    IF g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6
-        IF GET_NUM_DLC_VEHICLES() > 0 AND g_dlc_vehicle_index >= 0
-            RETURN GET_DLC_VEHICLE_MODEL(g_dlc_vehicle_index)
+FUNC BOOL DLC_CATEGORY_MATCH(INT category, INT index)
+    INT total = GET_NUM_DLC_VEHICLES()
+    MODEL_NAMES model
+    IF index < 0 OR index >= total RETURN FALSE ENDIF
+    model = GET_DLC_VEHICLE_MODEL(index)
+    IF category = 3 RETURN IS_THIS_MODEL_A_CAR(model) ENDIF
+    IF category = 4 RETURN IS_THIS_MODEL_A_BIKE(model) ENDIF
+    IF category = 5 RETURN IS_THIS_MODEL_A_PLANE(model) OR IS_THIS_MODEL_A_HELI(model) ENDIF
+    IF category = 6 RETURN IS_THIS_MODEL_A_BOAT(model) ENDIF
+    RETURN FALSE
+ENDFUNC
+
+FUNC INT FIND_FIRST_DLC_FOR_CATEGORY(INT category)
+    INT index = 0
+    INT total = GET_NUM_DLC_VEHICLES()
+    WHILE index < total
+        IF DLC_CATEGORY_MATCH(category, index) RETURN index ENDIF
+        index = index + 1
+    ENDWHILE
+    RETURN -1
+ENDFUNC
+
+FUNC INT GET_NUM_DLC_VEHICLES_FOR_CATEGORY(INT category)
+    IF category = 3 AND g_dlc_cars_count >= 0 RETURN g_dlc_cars_count ENDIF
+    IF category = 4 AND g_dlc_bikes_count >= 0 RETURN g_dlc_bikes_count ENDIF
+    IF category = 5 AND g_dlc_aircraft_count >= 0 RETURN g_dlc_aircraft_count ENDIF
+    IF category = 6 AND g_dlc_boats_count >= 0 RETURN g_dlc_boats_count ENDIF
+
+    INT total = GET_NUM_DLC_VEHICLES()
+    INT count = 0
+    INT i = 0
+    WHILE i < total
+        IF DLC_CATEGORY_MATCH(category, i)
+            count = count + 1
         ENDIF
-        RETURN ADDER
-    ENDIF
-    SWITCH g_vehicle_spawn_choice
+        i = i + 1
+    ENDWHILE
+
+    IF category = 3 g_dlc_cars_count = count ENDIF
+    IF category = 4 g_dlc_bikes_count = count ENDIF
+    IF category = 5 g_dlc_aircraft_count = count ENDIF
+    IF category = 6 g_dlc_boats_count = count ENDIF
+    RETURN count
+ENDFUNC
+
+FUNC INT GET_DLC_VEHICLE_INDEX_FOR_SLOT(INT category, INT slot)
+    INT total = GET_NUM_DLC_VEHICLES()
+    INT count = 0
+    INT i = 0
+    WHILE i < total
+        IF DLC_CATEGORY_MATCH(category, i)
+            IF count = slot RETURN i ENDIF
+            count = count + 1
+        ENDIF
+        i = i + 1
+    ENDWHILE
+    RETURN -1
+ENDFUNC
+
+FUNC INT GET_SLOT_FOR_DLC_VEHICLE_INDEX(INT category, INT dlcIdx)
+    INT total = GET_NUM_DLC_VEHICLES()
+    INT count = 0
+    INT i = 0
+    WHILE i < total
+        IF DLC_CATEGORY_MATCH(category, i)
+            IF i = dlcIdx RETURN count ENDIF
+            count = count + 1
+        ENDIF
+        i = i + 1
+    ENDWHILE
+    RETURN 0
+ENDFUNC
+
+FUNC MODEL_NAMES GET_VEHICLE_CHOICE_MODEL(INT choice)
+    IF choice >= 89 RETURN MISC_VEHICLE_MODEL(choice) ENDIF
+    SWITCH choice
         CASE 0 RETURN ADDER BREAK
         CASE 1 RETURN BUFFALO BREAK
         CASE 2 RETURN CHEETAH BREAK
@@ -1271,6 +1338,339 @@ FUNC MODEL_NAMES CURRENT_SPAWNER_MODEL()
     RETURN ADDER
 ENDFUNC
 
+FUNC STRING GET_VEHICLE_CHOICE_NAME(INT choice)
+    SWITCH choice
+        CASE 0 RETURN "Adder" BREAK
+        CASE 1 RETURN "Buffalo" BREAK
+        CASE 2 RETURN "Cheetah" BREAK
+        CASE 3 RETURN "Comet" BREAK
+        CASE 4 RETURN "Entity XF" BREAK
+        CASE 5 RETURN "Infernus" BREAK
+        CASE 6 RETURN "Sultan" BREAK
+        CASE 7 RETURN "Rapid GT" BREAK
+        CASE 8 RETURN "Carbonizzare" BREAK
+        CASE 9 RETURN "Feltzer" BREAK
+        CASE 10 RETURN "9F" BREAK
+        CASE 11 RETURN "Dominator" BREAK
+        CASE 12 RETURN "Gauntlet" BREAK
+        CASE 13 RETURN "Elegy" BREAK
+        CASE 14 RETURN "Baller" BREAK
+        CASE 15 RETURN "Granger" BREAK
+        CASE 16 RETURN "Sandking" BREAK
+        CASE 17 RETURN "Mesa" BREAK
+        CASE 18 RETURN "Transport Bus" BREAK
+        CASE 19 RETURN "Bati 801" BREAK
+        CASE 20 RETURN "PCJ-600" BREAK
+        CASE 21 RETURN "Akuma" BREAK
+        CASE 22 RETURN "Sanchez" BREAK
+        CASE 23 RETURN "Faggio" BREAK
+        CASE 24 RETURN "Buzzard" BREAK
+        CASE 25 RETURN "Duster" BREAK
+        CASE 26 RETURN "Cargobob" BREAK
+        CASE 27 RETURN "P-996 Lazer" BREAK
+        CASE 28 RETURN "Blazer Custom" BREAK
+        CASE 29 RETURN "Chimera" BREAK
+        CASE 30 RETURN "Daemon Custom" BREAK
+        CASE 31 RETURN "Defiler" BREAK
+        CASE 32 RETURN "Esskey" BREAK
+        CASE 33 RETURN "Faggio 3" BREAK
+        CASE 34 RETURN "Hakuchou Drag" BREAK
+        CASE 35 RETURN "Manchez" BREAK
+        CASE 36 RETURN "Nightblade" BREAK
+        CASE 37 RETURN "Raptor" BREAK
+        CASE 38 RETURN "Rat Bike" BREAK
+        CASE 39 RETURN "Sanctus" BREAK
+        CASE 40 RETURN "Shotaro" BREAK
+        CASE 41 RETURN "Tornado Custom" BREAK
+        CASE 42 RETURN "Vortex" BREAK
+        CASE 43 RETURN "Wolfsbane" BREAK
+        CASE 44 RETURN "Youga Classic" BREAK
+        CASE 45 RETURN "Zombie A" BREAK
+        CASE 46 RETURN "Zombie B" BREAK
+        CASE 47 RETURN "Jester Racecar" BREAK
+        CASE 48 RETURN "Massacro Racecar" BREAK
+        CASE 49 RETURN "Rat Loader Custom" BREAK
+        CASE 50 RETURN "Slamvan Custom" BREAK
+        CASE 51 RETURN "Barracks Custom" BREAK
+        CASE 52 RETURN "Boxville Armoured" BREAK
+        CASE 53 RETURN "Casco" BREAK
+        CASE 54 RETURN "Dinghy" BREAK
+        CASE 55 RETURN "Enduro" BREAK
+        CASE 56 RETURN "GBurrito" BREAK
+        CASE 57 RETURN "Guardian" BREAK
+        CASE 58 RETURN "Hydra" BREAK
+        CASE 59 RETURN "Insurgent" BREAK
+        CASE 60 RETURN "Insurgent Pick-Up" BREAK
+        CASE 61 RETURN "Kuruma" BREAK
+        CASE 62 RETURN "Kuruma Armoured" BREAK
+        CASE 63 RETURN "Lectro" BREAK
+        CASE 64 RETURN "Mule Custom" BREAK
+        CASE 65 RETURN "Savage" BREAK
+        CASE 66 RETURN "Slamvan" BREAK
+        CASE 67 RETURN "Tanker" BREAK
+        CASE 68 RETURN "Technical" BREAK
+        CASE 69 RETURN "Trashmaster" BREAK
+        CASE 70 RETURN "Valkyrie" BREAK
+        CASE 71 RETURN "Velum" BREAK
+        CASE 72 RETURN "Dinghy" BREAK
+        CASE 73 RETURN "Dinghy 2" BREAK
+        CASE 74 RETURN "Dinghy 3" BREAK
+        CASE 75 RETURN "Jetmax" BREAK
+        CASE 76 RETURN "Marquis" BREAK
+        CASE 77 RETURN "Seashark / Jetski" BREAK
+        CASE 78 RETURN "Seashark Lifeguard" BREAK
+        CASE 79 RETURN "Seashark Custom" BREAK
+        CASE 80 RETURN "Speeder" BREAK
+        CASE 81 RETURN "Speeder 2" BREAK
+        CASE 82 RETURN "Squalo" BREAK
+        CASE 83 RETURN "Submersible" BREAK
+        CASE 84 RETURN "Suntrap" BREAK
+        CASE 85 RETURN "Toro" BREAK
+        CASE 86 RETURN "Toro 2" BREAK
+        CASE 87 RETURN "Tropic" BREAK
+        CASE 88 RETURN "Tug" BREAK
+        CASE 89 RETURN "Avarus" BREAK
+        CASE 90 RETURN "Banshee" BREAK
+        CASE 91 RETURN "Bullet" BREAK
+        CASE 92 RETURN "Coquette" BREAK
+        CASE 93 RETURN "Phoenix" BREAK
+        CASE 94 RETURN "Surano" BREAK
+        CASE 95 RETURN "Vacca" BREAK
+        CASE 96 RETURN "Stinger" BREAK
+        CASE 97 RETURN "Exemplar" BREAK
+        CASE 98 RETURN "Jackal" BREAK
+        CASE 99 RETURN "Oracle" BREAK
+        CASE 100 RETURN "Felon" BREAK
+        CASE 101 RETURN "Schafter 2" BREAK
+        CASE 102 RETURN "Tailgater" BREAK
+        CASE 103 RETURN "Washington" BREAK
+        CASE 104 RETURN "Cognoscenti" BREAK
+        CASE 105 RETURN "Baller 2" BREAK
+        CASE 106 RETURN "Cavalcade" BREAK
+        CASE 107 RETURN "Dubsta" BREAK
+        CASE 108 RETURN "Fq 2" BREAK
+        CASE 109 RETURN "Granger" BREAK
+        CASE 110 RETURN "Gresley" BREAK
+        CASE 111 RETURN "Habanero" BREAK
+        CASE 112 RETURN "Landstalker" BREAK
+        CASE 113 RETURN "Patriot" BREAK
+        CASE 114 RETURN "Radius" BREAK
+        CASE 115 RETURN "Rocoto" BREAK
+        CASE 116 RETURN "Seminole" BREAK
+        CASE 117 RETURN "Serrano" BREAK
+        CASE 118 RETURN "Bison" BREAK
+        CASE 119 RETURN "Bobcat Xl" BREAK
+        CASE 120 RETURN "Bodhi" BREAK
+        CASE 121 RETURN "Duneloader" BREAK
+        CASE 122 RETURN "Rebel" BREAK
+        CASE 123 RETURN "Sadler" BREAK
+        CASE 124 RETURN "Sandking 2" BREAK
+        CASE 125 RETURN "Benson" BREAK
+        CASE 126 RETURN "Biff" BREAK
+        CASE 127 RETURN "Hauler" BREAK
+        CASE 128 RETURN "Mule" BREAK
+        CASE 129 RETURN "Packer" BREAK
+        CASE 130 RETURN "Phantom" BREAK
+        CASE 131 RETURN "Pounder" BREAK
+        CASE 132 RETURN "Stockade" BREAK
+        CASE 133 RETURN "Airbus" BREAK
+        CASE 134 RETURN "Bus" BREAK
+        CASE 135 RETURN "Coach" BREAK
+        CASE 136 RETURN "Rallytruck" BREAK
+        CASE 137 RETURN "Rentalbus" BREAK
+        CASE 138 RETURN "Taxi" BREAK
+        CASE 139 RETURN "Tourbus" BREAK
+        CASE 140 RETURN "Trash" BREAK
+        CASE 141 RETURN "Ambulance" BREAK
+        CASE 142 RETURN "Fbi" BREAK
+        CASE 143 RETURN "Fbi 2" BREAK
+        CASE 144 RETURN "Firetruk" BREAK
+        CASE 145 RETURN "Pbus" BREAK
+        CASE 146 RETURN "Police" BREAK
+        CASE 147 RETURN "Police 2" BREAK
+        CASE 148 RETURN "Police 3" BREAK
+        CASE 149 RETURN "Police 4" BREAK
+        CASE 150 RETURN "Police Old 1" BREAK
+        CASE 151 RETURN "Police Old 2" BREAK
+        CASE 152 RETURN "Policet" BREAK
+        CASE 153 RETURN "Pranger" BREAK
+        CASE 154 RETURN "Predator" BREAK
+        CASE 155 RETURN "Riot" BREAK
+        CASE 156 RETURN "Sheriff" BREAK
+        CASE 157 RETURN "Sheriff 2" BREAK
+        CASE 158 RETURN "Barracks" BREAK
+        CASE 159 RETURN "Barracks 2" BREAK
+        CASE 160 RETURN "Crusader" BREAK
+        CASE 161 RETURN "Rhino" BREAK
+        CASE 162 RETURN "Blazer" BREAK
+        CASE 163 RETURN "Blazer 2" BREAK
+        CASE 164 RETURN "Blazer 3" BREAK
+        CASE 165 RETURN "Bmx" BREAK
+        CASE 166 RETURN "Cruiser" BREAK
+        CASE 167 RETURN "Fixter" BREAK
+        CASE 168 RETURN "Scorcher" BREAK
+        CASE 169 RETURN "Tribike" BREAK
+        CASE 170 RETURN "Tribike 2" BREAK
+        CASE 171 RETURN "Tribike 3" BREAK
+        CASE 172 RETURN "Zhaba" BREAK
+        CASE 173 RETURN "Kosatka" BREAK
+        CASE 174 RETURN "Toreador" BREAK
+        CASE 175 RETURN "Rc Bandito" BREAK
+        CASE 176 RETURN "Astron" BREAK
+        CASE 177 RETURN "Champion" BREAK
+        CASE 178 RETURN "Sultan RS Classic" BREAK
+        CASE 179 RETURN "Vagrant" BREAK
+        CASE 180 RETURN "Clique" BREAK
+        CASE 181 RETURN "Deviant" BREAK
+        CASE 182 RETURN "Schlagen GT" BREAK
+        CASE 183 RETURN "Itali GTO" BREAK
+        CASE 184 RETURN "Toros" BREAK
+        CASE 185 RETURN "Vamos" BREAK
+        CASE 186 RETURN "JB 700W" BREAK
+        CASE 187 RETURN "Trailer Large" BREAK
+        CASE 188 RETURN "Trailer 4" BREAK
+        CASE 189 RETURN "Trailer Small 2" BREAK
+    ENDSWITCH
+    RETURN "Vehicle"
+ENDFUNC
+
+FUNC INT VEHICLE_LIST_TOTAL_ROWS()
+    INT count = 0
+    SWITCH g_vehicle_spawn_category
+        CASE 0 count = 19 BREAK
+        CASE 1 count = 5 BREAK
+        CASE 2 count = 4 BREAK
+        CASE 3 count = GET_NUM_DLC_VEHICLES_FOR_CATEGORY(3) BREAK
+        CASE 4 count = GET_NUM_DLC_VEHICLES_FOR_CATEGORY(4) BREAK
+        CASE 5 count = GET_NUM_DLC_VEHICLES_FOR_CATEGORY(5) BREAK
+        CASE 6 count = GET_NUM_DLC_VEHICLES_FOR_CATEGORY(6) BREAK
+        CASE 7 count = 17 BREAK
+        CASE 8 count = 101 BREAK
+    ENDSWITCH
+    IF count <= 0 RETURN 1 ENDIF
+    RETURN count
+ENDFUNC
+
+FUNC INT GET_VEHICLE_CHOICE_FOR_CATEGORY_SLOT(INT category, INT slot)
+    SWITCH category
+        CASE 0 RETURN slot BREAK
+        CASE 1 RETURN 19 + slot BREAK
+        CASE 2 RETURN 24 + slot BREAK
+        CASE 7 RETURN 72 + slot BREAK
+        CASE 8 RETURN 89 + slot BREAK
+    ENDSWITCH
+    RETURN 0
+ENDFUNC
+
+FUNC MODEL_NAMES GET_VEHICLE_MODEL_FOR_CATEGORY_SLOT(INT category, INT slot)
+    IF category >= 3 AND category <= 6
+        INT dlcIdx = GET_DLC_VEHICLE_INDEX_FOR_SLOT(category, slot)
+        IF dlcIdx >= 0
+            RETURN GET_DLC_VEHICLE_MODEL(dlcIdx)
+        ENDIF
+        RETURN ADDER
+    ENDIF
+    INT choice = GET_VEHICLE_CHOICE_FOR_CATEGORY_SLOT(category, slot)
+    RETURN GET_VEHICLE_CHOICE_MODEL(choice)
+ENDFUNC
+
+FUNC STRING GET_VEHICLE_NAME_FOR_CATEGORY_SLOT(INT category, INT slot)
+    IF category >= 3 AND category <= 6
+        INT dlcIdx = GET_DLC_VEHICLE_INDEX_FOR_SLOT(category, slot)
+        IF dlcIdx >= 0
+            MODEL_NAMES dlcModel = GET_DLC_VEHICLE_MODEL(dlcIdx)
+            STRING dlcName = GET_DISPLAY_NAME_FROM_VEHICLE_MODEL(dlcModel)
+            IF NOT IS_STRING_NULL_OR_EMPTY(dlcName)
+                STRING localizedName = GET_FILENAME_FOR_AUDIO_CONVERSATION(dlcName)
+                IF NOT IS_STRING_NULL_OR_EMPTY(localizedName)
+                    RETURN localizedName
+                ENDIF
+                RETURN dlcName
+            ENDIF
+        ENDIF
+        RETURN "DLC Vehicle"
+    ENDIF
+    INT choice = GET_VEHICLE_CHOICE_FOR_CATEGORY_SLOT(category, slot)
+    RETURN GET_VEHICLE_CHOICE_NAME(choice)
+ENDFUNC
+
+FUNC BOOL IS_VEHICLE_SLOT_CURRENTLY_SELECTED(INT category, INT slot)
+    IF g_saved_veh_selected_index >= 0 RETURN FALSE ENDIF
+    IF category >= 3 AND category <= 6
+        INT dlcIdx = GET_DLC_VEHICLE_INDEX_FOR_SLOT(category, slot)
+        IF dlcIdx >= 0 AND dlcIdx = g_dlc_vehicle_index RETURN TRUE ENDIF
+        RETURN FALSE
+    ENDIF
+    INT choice = GET_VEHICLE_CHOICE_FOR_CATEGORY_SLOT(category, slot)
+    IF choice = g_vehicle_spawn_choice RETURN TRUE ENDIF
+    RETURN FALSE
+ENDFUNC
+
+FUNC INT GET_SLOT_FOR_CURRENT_SELECTION(INT category)
+    IF category >= 3 AND category <= 6
+        IF g_dlc_vehicle_index >= 0
+            RETURN GET_SLOT_FOR_DLC_VEHICLE_INDEX(category, g_dlc_vehicle_index)
+        ENDIF
+        RETURN 0
+    ENDIF
+    SWITCH category
+        CASE 0
+            IF g_vehicle_spawn_choice >= 0 AND g_vehicle_spawn_choice <= 18
+                RETURN g_vehicle_spawn_choice
+            ENDIF
+            RETURN 0
+        CASE 1
+            IF g_vehicle_spawn_choice >= 19 AND g_vehicle_spawn_choice <= 23
+                RETURN g_vehicle_spawn_choice - 19
+            ENDIF
+            RETURN 0
+        CASE 2
+            IF g_vehicle_spawn_choice >= 24 AND g_vehicle_spawn_choice <= 27
+                RETURN g_vehicle_spawn_choice - 24
+            ENDIF
+            RETURN 0
+        CASE 7
+            IF g_vehicle_spawn_choice >= 72 AND g_vehicle_spawn_choice <= 88
+                RETURN g_vehicle_spawn_choice - 72
+            ENDIF
+            RETURN 0
+        CASE 8
+            IF g_vehicle_spawn_choice >= 89 AND g_vehicle_spawn_choice <= 189
+                RETURN g_vehicle_spawn_choice - 89
+            ENDIF
+            RETURN 0
+    ENDSWITCH
+    RETURN 0
+ENDFUNC
+
+PROC APPLY_VEHICLE_LIST_SELECTION(INT slot)
+    g_saved_veh_selected_index = -1
+    IF g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6
+        INT dlcIdx = GET_DLC_VEHICLE_INDEX_FOR_SLOT(g_vehicle_spawn_category, slot)
+        IF dlcIdx >= 0
+            g_dlc_vehicle_index = dlcIdx
+        ENDIF
+    ELSE
+        g_vehicle_spawn_choice = GET_VEHICLE_CHOICE_FOR_CATEGORY_SLOT(g_vehicle_spawn_category, slot)
+    ENDIF
+ENDPROC
+
+FUNC MODEL_NAMES CURRENT_SPAWNER_MODEL()
+    IF g_vehicle_list_open
+        RETURN GET_VEHICLE_MODEL_FOR_CATEGORY_SLOT(g_vehicle_spawn_category, g_item)
+    ENDIF
+    IF g_saved_veh_selected_index >= 0 AND g_saved_veh_selected_index < g_saved_vehicles_count
+        RETURN INT_TO_ENUM(MODEL_NAMES, g_saved_veh_model_hashes[g_saved_veh_selected_index])
+    ENDIF
+    IF g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6
+        IF GET_NUM_DLC_VEHICLES() > 0 AND g_dlc_vehicle_index >= 0
+            RETURN GET_DLC_VEHICLE_MODEL(g_dlc_vehicle_index)
+        ENDIF
+        RETURN ADDER
+    ENDIF
+    RETURN GET_VEHICLE_CHOICE_MODEL(g_vehicle_spawn_choice)
+ENDFUNC
+
 PROC CLEANUP_VEHICLE_PREVIEW()
     IF g_vehicle_preview_vehicle = NULL AND g_vehicle_preview_model = DUMMY_MODEL_FOR_SCRIPT AND g_vehicle_preview_request_time = 0
         EXIT
@@ -1298,7 +1698,7 @@ ENDPROC
 PROC PROCESS_VEHICLE_PREVIEW()
     VECTOR previewPosition = <<0.0, 0.0, 0.0>>
     FLOAT previewHeading = 0.0
-    IF NOT g_vehicle_preview_enabled OR NOT g_open OR g_home OR NOT g_spawner_open
+    IF NOT g_vehicle_preview_enabled OR NOT g_open OR g_home OR NOT g_spawner_open OR NOT g_vehicle_list_open
         CLEANUP_VEHICLE_PREVIEW()
         EXIT
     ENDIF
@@ -1392,6 +1792,8 @@ PROC OPEN_MENU_KEYBOARD(INT target)
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "CUSTOM NSC", "TYPE .NSC FILE NAME", "", "", "", "", 64)
     ELIF target = 17
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "TP DISTANCE", "DISTANCE IN METERS (10-500)", "", "", "", "", 16)
+    ELIF target = 18
+        DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "VEHICLE NAME", "NAME THIS VEHICLE (MAX 24)", "", "", "", "", 24)
     ELSE
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "ENTER VALUE", "NUMBERS ONLY", "", "", "", "", 16)
     ENDIF
@@ -1442,6 +1844,7 @@ PROC PROCESS_MENU_KEYBOARD()
             EXIT
         ENDIF
         IF g_keyboard_target = 3
+            g_ped_search_error = 0
             foundChoice = FIND_PED_CHOICE_BY_NAME(result)
             IF foundChoice >= 0
                 g_ped_search_not_found = FALSE
@@ -1452,7 +1855,7 @@ PROC PROCESS_MENU_KEYBOARD()
                 g_item = foundChoice + 4
                 SAVE_ACTIVE_CHARACTER_PED()
                 REQUEST_PED_CHANGE(PED_MODEL_FOR_CHOICE(foundChoice))
-                IF NOT g_ped_change_pending
+                IF NOT g_ped_change_pending AND g_ped_search_error = 0
                     g_ped_search_not_found = TRUE
                     g_ped_search_has_value = FALSE
                 ENDIF
@@ -1467,7 +1870,7 @@ PROC PROCESS_MENU_KEYBOARD()
                     g_current_ped_label_model = customPedModel
                     SAVE_ACTIVE_CHARACTER_PED()
                     REQUEST_PED_CHANGE(customPedModel)
-                    IF NOT g_ped_change_pending
+                    IF NOT g_ped_change_pending AND g_ped_search_error = 0
                         g_ped_search_not_found = TRUE
                         g_ped_search_has_value = FALSE
                         g_ped_search_is_custom = FALSE
@@ -1606,6 +2009,8 @@ PROC PROCESS_MENU_KEYBOARD()
                 IF parsed > 500 parsed = 500 ENDIF
                 g_bodyguard_tp_distance = parsed
             ENDIF
+        ELIF g_keyboard_target = 18
+            COMMIT_STAGED_VEHICLE_WITH_NAME(result)
         ELIF STRING_TO_INT(result, parsed)
             IF parsed < 0 parsed = 0 ENDIF
             IF g_keyboard_target = 1
@@ -1634,12 +2039,23 @@ PROC PRUNE_SPAWNED_VEHICLE_TRACKING()
     INT writeIndex = 0
     REPEAT g_spawned_custom_vehicle_count readIndex
         IF DOES_ENTITY_EXIST(g_spawned_custom_vehicles[readIndex])
-            g_spawned_custom_vehicles[writeIndex] = g_spawned_custom_vehicles[readIndex]
-            writeIndex = writeIndex + 1
+            IF NOT IS_ENTITY_DEAD(g_spawned_custom_vehicles[readIndex])
+                g_spawned_custom_vehicles[writeIndex] = g_spawned_custom_vehicles[readIndex]
+                writeIndex = writeIndex + 1
+            ELSE
+                SET_VEHICLE_AS_NO_LONGER_NEEDED(g_spawned_custom_vehicles[readIndex])
+            ENDIF
         ENDIF
     ENDREPEAT
     g_spawned_custom_vehicle_count = writeIndex
+    WHILE writeIndex < MAX_TRACKED_CUSTOM_VEHICLES
+        g_spawned_custom_vehicles[writeIndex] = NULL
+        writeIndex = writeIndex + 1
+    ENDWHILE
     IF NOT DOES_ENTITY_EXIST(g_last_spawned_vehicle)
+        g_last_spawned_vehicle = NULL
+    ELIF IS_ENTITY_DEAD(g_last_spawned_vehicle)
+        SET_VEHICLE_AS_NO_LONGER_NEEDED(g_last_spawned_vehicle)
         g_last_spawned_vehicle = NULL
     ENDIF
 ENDPROC

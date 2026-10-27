@@ -1008,6 +1008,10 @@ PROC PROCESS_TOUCH_OPENS_DOORS()
         EXIT
     ENDIF
 
+    IF GET_MISSION_FLAG()
+        EXIT
+    ENDIF
+
     // Pause during "Casing the Jewel Store" (jewelry_setup1) because both Vangelico's
     // front door (P_JEWEL_DOOR_L) and Lester's Sweatshop office door (v_ilev_ss_door02)
     // are driven by PLAY_SYNCHRONIZED_MAP_ENTITY_ANIM / synchronized scenes.
@@ -1141,6 +1145,10 @@ PROC PROCESS_WORLD_MAYHEM()
     DRIVINGMODE crazyMode = DF_SwerveAroundAllCars|DF_SteerAroundStationaryCars|DF_SteerAroundObjects|DF_GoOffRoadWhenAvoiding|DF_DriveIntoOncomingTraffic|DF_ChangeLanesAroundObstructions|DF_UseShortCutLinks|DF_UseSwitchedOffNodes|DF_UseStringPullingAtJunctions|DF_ForceJoinInRoadDirection|DF_UseWanderFallbackInsteadOfStraightLine
 
     IF NOT g_blackout AND NOT g_meteor_shower AND NOT g_riot_mode AND NOT g_crazy_drivers
+        EXIT
+    ENDIF
+
+    IF GET_MISSION_FLAG()
         EXIT
     ENDIF
 

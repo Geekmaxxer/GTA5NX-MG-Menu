@@ -269,343 +269,36 @@ PROC DRAW_VEHICLE_CATEGORY_SELECTOR(FLOAT y, BOOL selected)
     IF g_vehicle_spawn_category = 8 DRAW_OPTION(y, lbl, TR("< Miscellaneous >", "< Varios >", "< 其他 >", "< Sonstiges >", "< その他 >", "< Разное >", "< Diversos >", "< Divers >"), selected, 3) ENDIF
 ENDPROC
 
-PROC DRAW_VEHICLE_SPAWN_SELECTOR(FLOAT y, BOOL selected)
-    STRING vehLbl = TR("Vehicle:", "Vehículo:", "载具:", "Fahrzeug:", "車両:", "Транспорт:", "Veículo:", "Véhicule :")
-    IF g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6
-        IF GET_NUM_DLC_VEHICLES() > 0 AND g_dlc_vehicle_index >= 0 AND DLC_CATEGORY_MATCH(g_vehicle_spawn_category, g_dlc_vehicle_index)
-            MODEL_NAMES dlcModel = GET_DLC_VEHICLE_MODEL(g_dlc_vehicle_index)
-            STRING dlcName = GET_DISPLAY_NAME_FROM_VEHICLE_MODEL(dlcModel)
-            // SanScript has no snprintf / C-string formatting and no int-to-string
-            // native, so a "< %s >" wrapper cannot be assembled at runtime here.
-            // The native display name is drawn verbatim, exactly like every other
-            // dynamic row in this menu (ped search, speedometer vehicle name).
-            DRAW_OPTION(y, TR("DLC Vehicle:", "Vehículo DLC:", "DLC 载具:", "DLC-Fahrzeug:", "DLC車両:", "DLC транспорт:", "Veículo DLC:", "Véhicule DLC :"), dlcName, selected, 3)
-        ELSE
-            DRAW_OPTION(y, TR("DLC Vehicle:", "Vehículo DLC:", "DLC 载具:", "DLC-Fahrzeug:", "DLC車両:", "DLC транспорт:", "Veículo DLC:", "Véhicule DLC :"), TR("NO MATCHING VEHICLES", "SIN VEHÍCULOS", "无匹配载具", "KEINE FAHRZEUGE", "該当車両なし", "НЕТ ТРАНСПОРТА", "SEM VEÍCULOS", "AUCUN VÉHICULE"), selected, 0)
-        ENDIF
-        EXIT
-    ENDIF
-    SWITCH g_vehicle_spawn_choice
-        CASE 0 DRAW_OPTION(y, vehLbl, "< Adder >", selected, 3) BREAK
-        CASE 1 DRAW_OPTION(y, vehLbl, "< Buffalo >", selected, 3) BREAK
-        CASE 2 DRAW_OPTION(y, vehLbl, "< Cheetah >", selected, 3) BREAK
-        CASE 3 DRAW_OPTION(y, vehLbl, "< Comet >", selected, 3) BREAK
-        CASE 4 DRAW_OPTION(y, vehLbl, "< Entity XF >", selected, 3) BREAK
-        CASE 5 DRAW_OPTION(y, vehLbl, "< Infernus >", selected, 3) BREAK
-        CASE 6 DRAW_OPTION(y, vehLbl, "< Sultan >", selected, 3) BREAK
-        CASE 7 DRAW_OPTION(y, vehLbl, "< Rapid GT >", selected, 3) BREAK
-        CASE 8 DRAW_OPTION(y, vehLbl, "< Carbonizzare >", selected, 3) BREAK
-        CASE 9 DRAW_OPTION(y, vehLbl, "< Feltzer >", selected, 3) BREAK
-        CASE 10 DRAW_OPTION(y, vehLbl, "< 9F >", selected, 3) BREAK
-        CASE 11 DRAW_OPTION(y, vehLbl, "< Dominator >", selected, 3) BREAK
-        CASE 12 DRAW_OPTION(y, vehLbl, "< Gauntlet >", selected, 3) BREAK
-        CASE 13 DRAW_OPTION(y, vehLbl, "< Elegy >", selected, 3) BREAK
-        CASE 14 DRAW_OPTION(y, vehLbl, "< Baller >", selected, 3) BREAK
-        CASE 15 DRAW_OPTION(y, vehLbl, "< Granger >", selected, 3) BREAK
-        CASE 16 DRAW_OPTION(y, vehLbl, "< Sandking >", selected, 3) BREAK
-        CASE 17 DRAW_OPTION(y, vehLbl, "< Mesa >", selected, 3) BREAK
-        CASE 18 DRAW_OPTION(y, vehLbl, "< Transport Bus >", selected, 3) BREAK
-        CASE 19 DRAW_OPTION(y, vehLbl, "< Bati 801 >", selected, 3) BREAK
-        CASE 20 DRAW_OPTION(y, vehLbl, "< PCJ-600 >", selected, 3) BREAK
-        CASE 21 DRAW_OPTION(y, vehLbl, "< Akuma >", selected, 3) BREAK
-        CASE 22 DRAW_OPTION(y, vehLbl, "< Sanchez >", selected, 3) BREAK
-        CASE 23 DRAW_OPTION(y, vehLbl, "< Faggio >", selected, 3) BREAK
-        CASE 24 DRAW_OPTION(y, vehLbl, "< Buzzard >", selected, 3) BREAK
-        CASE 25 DRAW_OPTION(y, vehLbl, "< Duster >", selected, 3) BREAK
-        CASE 26 DRAW_OPTION(y, vehLbl, "< Cargobob >", selected, 3) BREAK
-        CASE 27 DRAW_OPTION(y, vehLbl, "< P-996 Lazer >", selected, 3) BREAK
-        CASE 28 DRAW_OPTION(y, vehLbl, "< Blazer Custom >", selected, 3) BREAK
-        CASE 29 DRAW_OPTION(y, vehLbl, "< Chimera >", selected, 3) BREAK
-        CASE 30 DRAW_OPTION(y, vehLbl, "< Daemon Custom >", selected, 3) BREAK
-        CASE 31 DRAW_OPTION(y, vehLbl, "< Defiler >", selected, 3) BREAK
-        CASE 32 DRAW_OPTION(y, vehLbl, "< Esskey >", selected, 3) BREAK
-        CASE 33 DRAW_OPTION(y, vehLbl, "< Faggio 3 >", selected, 3) BREAK
-        CASE 34 DRAW_OPTION(y, vehLbl, "< Hakuchou Drag >", selected, 3) BREAK
-        CASE 35 DRAW_OPTION(y, vehLbl, "< Manchez >", selected, 3) BREAK
-        CASE 36 DRAW_OPTION(y, vehLbl, "< Nightblade >", selected, 3) BREAK
-        CASE 37 DRAW_OPTION(y, vehLbl, "< Raptor >", selected, 3) BREAK
-        CASE 38 DRAW_OPTION(y, vehLbl, "< Rat Bike >", selected, 3) BREAK
-        CASE 39 DRAW_OPTION(y, vehLbl, "< Sanctus >", selected, 3) BREAK
-        CASE 40 DRAW_OPTION(y, vehLbl, "< Shotaro >", selected, 3) BREAK
-        CASE 41 DRAW_OPTION(y, vehLbl, "< Tornado Custom >", selected, 3) BREAK
-        CASE 42 DRAW_OPTION(y, vehLbl, "< Vortex >", selected, 3) BREAK
-        CASE 43 DRAW_OPTION(y, vehLbl, "< Wolfsbane >", selected, 3) BREAK
-        CASE 44 DRAW_OPTION(y, vehLbl, "< Youga Classic >", selected, 3) BREAK
-        CASE 45 DRAW_OPTION(y, vehLbl, "< Zombie A >", selected, 3) BREAK
-        CASE 46 DRAW_OPTION(y, vehLbl, "< Zombie B >", selected, 3) BREAK
-        CASE 47 DRAW_OPTION(y, vehLbl, "< Jester Racecar >", selected, 3) BREAK
-        CASE 48 DRAW_OPTION(y, vehLbl, "< Massacro Racecar >", selected, 3) BREAK
-        CASE 49 DRAW_OPTION(y, vehLbl, "< Rat Loader Custom >", selected, 3) BREAK
-        CASE 50 DRAW_OPTION(y, vehLbl, "< Slamvan Custom >", selected, 3) BREAK
-        CASE 51 DRAW_OPTION(y, vehLbl, "< Barracks Custom >", selected, 3) BREAK
-        CASE 52 DRAW_OPTION(y, vehLbl, "< Boxville Armoured >", selected, 3) BREAK
-        CASE 53 DRAW_OPTION(y, vehLbl, "< Casco >", selected, 3) BREAK
-        CASE 54 DRAW_OPTION(y, vehLbl, "< Dinghy >", selected, 3) BREAK
-        CASE 55 DRAW_OPTION(y, vehLbl, "< Enduro >", selected, 3) BREAK
-        CASE 56 DRAW_OPTION(y, vehLbl, "< GBurrito >", selected, 3) BREAK
-        CASE 57 DRAW_OPTION(y, vehLbl, "< Guardian >", selected, 3) BREAK
-        CASE 58 DRAW_OPTION(y, vehLbl, "< Hydra >", selected, 3) BREAK
-        CASE 59 DRAW_OPTION(y, vehLbl, "< Insurgent >", selected, 3) BREAK
-        CASE 60 DRAW_OPTION(y, vehLbl, "< Insurgent Pick-Up >", selected, 3) BREAK
-        CASE 61 DRAW_OPTION(y, vehLbl, "< Kuruma >", selected, 3) BREAK
-        CASE 62 DRAW_OPTION(y, vehLbl, "< Kuruma Armoured >", selected, 3) BREAK
-        CASE 63 DRAW_OPTION(y, vehLbl, "< Lectro >", selected, 3) BREAK
-        CASE 64 DRAW_OPTION(y, vehLbl, "< Mule Custom >", selected, 3) BREAK
-        CASE 65 DRAW_OPTION(y, vehLbl, "< Savage >", selected, 3) BREAK
-        CASE 66 DRAW_OPTION(y, vehLbl, "< Slamvan >", selected, 3) BREAK
-        CASE 67 DRAW_OPTION(y, vehLbl, "< Tanker >", selected, 3) BREAK
-        CASE 68 DRAW_OPTION(y, vehLbl, "< Technical >", selected, 3) BREAK
-        CASE 69 DRAW_OPTION(y, vehLbl, "< Trashmaster >", selected, 3) BREAK
-        CASE 70 DRAW_OPTION(y, vehLbl, "< Valkyrie >", selected, 3) BREAK
-        CASE 71 DRAW_OPTION(y, vehLbl, "< Velum >", selected, 3) BREAK
-        CASE 72 DRAW_OPTION(y, vehLbl, "< Dinghy >", selected, 3) BREAK
-        CASE 73 DRAW_OPTION(y, vehLbl, "< Dinghy 2 >", selected, 3) BREAK
-        CASE 74 DRAW_OPTION(y, vehLbl, "< Dinghy 3 >", selected, 3) BREAK
-        CASE 75 DRAW_OPTION(y, vehLbl, "< Jetmax >", selected, 3) BREAK
-        CASE 76 DRAW_OPTION(y, vehLbl, "< Marquis >", selected, 3) BREAK
-        CASE 77 DRAW_OPTION(y, vehLbl, "< Seashark / Jetski >", selected, 3) BREAK
-        CASE 78 DRAW_OPTION(y, vehLbl, "< Seashark Lifeguard >", selected, 3) BREAK
-        CASE 79 DRAW_OPTION(y, vehLbl, "< Seashark Custom >", selected, 3) BREAK
-        CASE 80 DRAW_OPTION(y, vehLbl, "< Speeder >", selected, 3) BREAK
-        CASE 81 DRAW_OPTION(y, vehLbl, "< Speeder 2 >", selected, 3) BREAK
-        CASE 82 DRAW_OPTION(y, vehLbl, "< Squalo >", selected, 3) BREAK
-        CASE 83 DRAW_OPTION(y, vehLbl, "< Submersible >", selected, 3) BREAK
-        CASE 84 DRAW_OPTION(y, vehLbl, "< Suntrap >", selected, 3) BREAK
-        CASE 85 DRAW_OPTION(y, vehLbl, "< Toro >", selected, 3) BREAK
-        CASE 86 DRAW_OPTION(y, vehLbl, "< Toro 2 >", selected, 3) BREAK
-        CASE 87 DRAW_OPTION(y, vehLbl, "< Tropic >", selected, 3) BREAK
-        CASE 88 DRAW_OPTION(y, vehLbl, "< Tug >", selected, 3) BREAK
-        CASE 89 DRAW_OPTION(y, vehLbl, "< Avarus >", selected, 3) BREAK
-        CASE 90 DRAW_OPTION(y, vehLbl, "< Banshee >", selected, 3) BREAK
-        CASE 91 DRAW_OPTION(y, vehLbl, "< Bullet >", selected, 3) BREAK
-        CASE 92 DRAW_OPTION(y, vehLbl, "< Coquette >", selected, 3) BREAK
-        CASE 93 DRAW_OPTION(y, vehLbl, "< Phoenix >", selected, 3) BREAK
-        CASE 94 DRAW_OPTION(y, vehLbl, "< Surano >", selected, 3) BREAK
-        CASE 95 DRAW_OPTION(y, vehLbl, "< Vacca >", selected, 3) BREAK
-        CASE 96 DRAW_OPTION(y, vehLbl, "< Stinger >", selected, 3) BREAK
-        CASE 97 DRAW_OPTION(y, vehLbl, "< Exemplar >", selected, 3) BREAK
-        CASE 98 DRAW_OPTION(y, vehLbl, "< Jackal >", selected, 3) BREAK
-        CASE 99 DRAW_OPTION(y, vehLbl, "< Oracle >", selected, 3) BREAK
-        CASE 100 DRAW_OPTION(y, vehLbl, "< Felon >", selected, 3) BREAK
-        CASE 101 DRAW_OPTION(y, vehLbl, "< Schafter 2 >", selected, 3) BREAK
-        CASE 102 DRAW_OPTION(y, vehLbl, "< Tailgater >", selected, 3) BREAK
-        CASE 103 DRAW_OPTION(y, vehLbl, "< Washington >", selected, 3) BREAK
-        CASE 104 DRAW_OPTION(y, vehLbl, "< Cognoscenti >", selected, 3) BREAK
-        CASE 105 DRAW_OPTION(y, vehLbl, "< Baller 2 >", selected, 3) BREAK
-        CASE 106 DRAW_OPTION(y, vehLbl, "< Cavalcade >", selected, 3) BREAK
-        CASE 107 DRAW_OPTION(y, vehLbl, "< Dubsta >", selected, 3) BREAK
-        CASE 108 DRAW_OPTION(y, vehLbl, "< FQ 2 >", selected, 3) BREAK
-        CASE 109 DRAW_OPTION(y, vehLbl, "< Patriot >", selected, 3) BREAK
-        CASE 110 DRAW_OPTION(y, vehLbl, "< Huntley S >", selected, 3) BREAK
-        CASE 111 DRAW_OPTION(y, vehLbl, "< Rocoto >", selected, 3) BREAK
-        CASE 112 DRAW_OPTION(y, vehLbl, "< Seminole >", selected, 3) BREAK
-        CASE 113 DRAW_OPTION(y, vehLbl, "< Landstalker >", selected, 3) BREAK
-        CASE 114 DRAW_OPTION(y, vehLbl, "< Bison >", selected, 3) BREAK
-        CASE 115 DRAW_OPTION(y, vehLbl, "< Bobcat XL >", selected, 3) BREAK
-        CASE 116 DRAW_OPTION(y, vehLbl, "< Sadler >", selected, 3) BREAK
-        CASE 117 DRAW_OPTION(y, vehLbl, "< Primo >", selected, 3) BREAK
-        CASE 118 DRAW_OPTION(y, vehLbl, "< Granger 2 >", selected, 3) BREAK
-        CASE 119 DRAW_OPTION(y, vehLbl, "< Blazer >", selected, 3) BREAK
-        CASE 120 DRAW_OPTION(y, vehLbl, "< Sanchez 2 >", selected, 3) BREAK
-        CASE 121 DRAW_OPTION(y, vehLbl, "< Bagger >", selected, 3) BREAK
-        CASE 122 DRAW_OPTION(y, vehLbl, "< Daemon >", selected, 3) BREAK
-        CASE 123 DRAW_OPTION(y, vehLbl, "< Hexer >", selected, 3) BREAK
-        CASE 124 DRAW_OPTION(y, vehLbl, "< Nemesis >", selected, 3) BREAK
-        CASE 125 DRAW_OPTION(y, vehLbl, "< Ruffian >", selected, 3) BREAK
-        CASE 126 DRAW_OPTION(y, vehLbl, "< Vader >", selected, 3) BREAK
-        CASE 127 DRAW_OPTION(y, vehLbl, "< Thrust >", selected, 3) BREAK
-        CASE 128 DRAW_OPTION(y, vehLbl, "< Vindicator >", selected, 3) BREAK
-        CASE 129 DRAW_OPTION(y, vehLbl, "< Rhino Tank >", selected, 3) BREAK
-        CASE 130 DRAW_OPTION(y, vehLbl, "< Bulldozer >", selected, 3) BREAK
-        CASE 131 DRAW_OPTION(y, vehLbl, "< Forklift >", selected, 3) BREAK
-        CASE 132 DRAW_OPTION(y, vehLbl, "< Mixer >", selected, 3) BREAK
-        CASE 133 DRAW_OPTION(y, vehLbl, "< Hauler >", selected, 3) BREAK
-        CASE 134 DRAW_OPTION(y, vehLbl, "< Packer >", selected, 3) BREAK
-        CASE 135 DRAW_OPTION(y, vehLbl, "< Fire Truck >", selected, 3) BREAK
-        CASE 136 DRAW_OPTION(y, vehLbl, "< Taxi >", selected, 3) BREAK
-        CASE 137 DRAW_OPTION(y, vehLbl, "< Police Cruiser >", selected, 3) BREAK
-        CASE 138 DRAW_OPTION(y, vehLbl, "< Sheriff SUV >", selected, 3) BREAK
-        CASE 139 DRAW_OPTION(y, vehLbl, "< Bus >", selected, 3) BREAK
-        CASE 140 DRAW_OPTION(y, vehLbl, "< Ambulance >", selected, 3) BREAK
-        CASE 141 DRAW_OPTION(y, vehLbl, "< Tow Truck >", selected, 3) BREAK
-        CASE 142 DRAW_OPTION(y, vehLbl, "< Trashmaster >", selected, 3) BREAK
-        CASE 143 DRAW_OPTION(y, vehLbl, "< Dock Tug >", selected, 3) BREAK
-        CASE 144 DRAW_OPTION(y, vehLbl, "< Tractor >", selected, 3) BREAK
-        CASE 145 DRAW_OPTION(y, vehLbl, "< Maverick >", selected, 3) BREAK
-        CASE 146 DRAW_OPTION(y, vehLbl, "< Frogger >", selected, 3) BREAK
-        CASE 147 DRAW_OPTION(y, vehLbl, "< Shamal >", selected, 3) BREAK
-        CASE 148 DRAW_OPTION(y, vehLbl, "< Mammatus >", selected, 3) BREAK
-        CASE 149 DRAW_OPTION(y, vehLbl, "< Dodo >", selected, 3) BREAK
-        CASE 150 DRAW_OPTION(y, vehLbl, "< Mallard Stunt >", selected, 3) BREAK
-        CASE 151 DRAW_OPTION(y, vehLbl, "< Predator Boat >", selected, 3) BREAK
-        CASE 152 DRAW_OPTION(y, vehLbl, "< Feltzer 3 >", selected, 3) BREAK
-        CASE 153 DRAW_OPTION(y, vehLbl, "< Osiris >", selected, 3) BREAK
-        CASE 154 DRAW_OPTION(y, vehLbl, "< Brawler >", selected, 3) BREAK
-        CASE 155 DRAW_OPTION(y, vehLbl, "< T20 >", selected, 3) BREAK
-        CASE 156 DRAW_OPTION(y, vehLbl, "< Moonbeam >", selected, 3) BREAK
-        CASE 157 DRAW_OPTION(y, vehLbl, "< Voodoo >", selected, 3) BREAK
-        CASE 158 DRAW_OPTION(y, vehLbl, "< Sabre GT >", selected, 3) BREAK
-        CASE 159 DRAW_OPTION(y, vehLbl, "< Slamvan 3 >", selected, 3) BREAK
-        CASE 160 DRAW_OPTION(y, vehLbl, "< Brickade >", selected, 3) BREAK
-        CASE 161 DRAW_OPTION(y, vehLbl, "< Freecrawler >", selected, 3) BREAK
-        CASE 162 DRAW_OPTION(y, vehLbl, "< Menacer >", selected, 3) BREAK
-        CASE 163 DRAW_OPTION(y, vehLbl, "< Scramjet >", selected, 3) BREAK
-        CASE 164 DRAW_OPTION(y, vehLbl, "< Terrorbyte >", selected, 3) BREAK
-        CASE 165 DRAW_OPTION(y, vehLbl, "< Oppressor 2 >", selected, 3) BREAK
-        CASE 166 DRAW_OPTION(y, vehLbl, "< Caracara >", selected, 3) BREAK
-        CASE 167 DRAW_OPTION(y, vehLbl, "< Hotring Sabre >", selected, 3) BREAK
-        CASE 168 DRAW_OPTION(y, vehLbl, "< Sea Sparrow >", selected, 3) BREAK
-        CASE 169 DRAW_OPTION(y, vehLbl, "< Tampa Weaponized >", selected, 3) BREAK
-        CASE 170 DRAW_OPTION(y, vehLbl, "< Formula >", selected, 3) BREAK
-        CASE 171 DRAW_OPTION(y, vehLbl, "< Outlaw >", selected, 3) BREAK
-        CASE 172 DRAW_OPTION(y, vehLbl, "< Zhaba >", selected, 3) BREAK
-        CASE 173 DRAW_OPTION(y, vehLbl, "< Kosatka Sub >", selected, 3) BREAK
-        CASE 174 DRAW_OPTION(y, vehLbl, "< Toreador >", selected, 3) BREAK
-        CASE 175 DRAW_OPTION(y, vehLbl, "< RC Bandito >", selected, 3) BREAK
-        CASE 176 DRAW_OPTION(y, vehLbl, "< Astron >", selected, 3) BREAK
-        CASE 177 DRAW_OPTION(y, vehLbl, "< Champion >", selected, 3) BREAK
-        CASE 178 DRAW_OPTION(y, vehLbl, "< Sultan Classic >", selected, 3) BREAK
-        CASE 179 DRAW_OPTION(y, vehLbl, "< Vagrant >", selected, 3) BREAK
-        CASE 180 DRAW_OPTION(y, vehLbl, "< Clique >", selected, 3) BREAK
-        CASE 181 DRAW_OPTION(y, vehLbl, "< Deviant >", selected, 3) BREAK
-        CASE 182 DRAW_OPTION(y, vehLbl, "< Schlagen GT >", selected, 3) BREAK
-        CASE 183 DRAW_OPTION(y, vehLbl, "< Itali GTO >", selected, 3) BREAK
-        CASE 184 DRAW_OPTION(y, vehLbl, "< Toros >", selected, 3) BREAK
-        CASE 185 DRAW_OPTION(y, vehLbl, "< Vamos >", selected, 3) BREAK
-        CASE 186 DRAW_OPTION(y, vehLbl, "< JB 700W >", selected, 3) BREAK
-        CASE 187 DRAW_OPTION(y, vehLbl, "< Trailer Large >", selected, 3) BREAK
-        CASE 188 DRAW_OPTION(y, vehLbl, "< Trailer 4 >", selected, 3) BREAK
-        CASE 189 DRAW_OPTION(y, vehLbl, "< Trailer Small 2 >", selected, 3) BREAK
-    ENDSWITCH
-ENDPROC
-
 PROC START_SELECTED_VEHICLE_SPAWN()
     // A spawn is asynchronous while the model streams.  Never replace its
     // pending model/count with another menu press in the meantime.
     IF g_vehicle_spawn_pending OR g_convert_pending EXIT ENDIF
-    IF g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6
+    IF g_saved_veh_selected_index >= 0 AND g_saved_veh_selected_index < g_saved_vehicles_count
+        g_pending_vehicle_model = INT_TO_ENUM(MODEL_NAMES, g_saved_veh_model_hashes[g_saved_veh_selected_index])
+        g_spawn_is_saved_vehicle = TRUE
+        g_spawn_saved_vehicle_index = g_saved_veh_selected_index
+    ELIF g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6
+        g_spawn_is_saved_vehicle = FALSE
         IF GET_NUM_DLC_VEHICLES() <= 0 EXIT ENDIF
         IF g_dlc_vehicle_index < 0 OR NOT DLC_CATEGORY_MATCH(g_vehicle_spawn_category, g_dlc_vehicle_index) EXIT ENDIF
         g_pending_vehicle_model = GET_DLC_VEHICLE_MODEL(g_dlc_vehicle_index)
     ELSE
-    IF g_vehicle_spawn_choice >= 89
-        g_pending_vehicle_model = MISC_VEHICLE_MODEL(g_vehicle_spawn_choice)
-    ELSE
-    SWITCH g_vehicle_spawn_choice
-        CASE 0 g_pending_vehicle_model = ADDER BREAK
-        CASE 1 g_pending_vehicle_model = BUFFALO BREAK
-        CASE 2 g_pending_vehicle_model = CHEETAH BREAK
-        CASE 3 g_pending_vehicle_model = COMET2 BREAK
-        CASE 4 g_pending_vehicle_model = ENTITYXF BREAK
-        CASE 5 g_pending_vehicle_model = INFERNUS BREAK
-        CASE 6 g_pending_vehicle_model = SULTAN BREAK
-        CASE 7 g_pending_vehicle_model = RAPIDGT BREAK
-        CASE 8 g_pending_vehicle_model = CARBONIZZARE BREAK
-        CASE 9 g_pending_vehicle_model = FELTZER2 BREAK
-        CASE 10 g_pending_vehicle_model = NINEF BREAK
-        CASE 11 g_pending_vehicle_model = DOMINATOR BREAK
-        CASE 12 g_pending_vehicle_model = GAUNTLET BREAK
-        CASE 13 g_pending_vehicle_model = ELEGY2 BREAK
-        CASE 14 g_pending_vehicle_model = BALLER BREAK
-        CASE 15 g_pending_vehicle_model = GRANGER BREAK
-        CASE 16 g_pending_vehicle_model = SANDKING BREAK
-        CASE 17 g_pending_vehicle_model = MESA BREAK
-        CASE 18 g_pending_vehicle_model = AIRBUS BREAK
-        CASE 19 g_pending_vehicle_model = BATI BREAK
-        CASE 20 g_pending_vehicle_model = PCJ BREAK
-        CASE 21 g_pending_vehicle_model = AKUMA BREAK
-        CASE 22 g_pending_vehicle_model = SANCHEZ BREAK
-        CASE 23 g_pending_vehicle_model = FAGGIO BREAK
-        CASE 24 g_pending_vehicle_model = BUZZARD BREAK
-        CASE 25 g_pending_vehicle_model = DUSTER BREAK
-        CASE 26 g_pending_vehicle_model = CARGOBOB BREAK
-        CASE 27 g_pending_vehicle_model = LAZER BREAK
-        CASE 28 g_pending_vehicle_model = BLAZER4 BREAK
-        CASE 29 g_pending_vehicle_model = CHIMERA BREAK
-        CASE 30 g_pending_vehicle_model = DAEMON2 BREAK
-        CASE 31 g_pending_vehicle_model = DEFILER BREAK
-        CASE 32 g_pending_vehicle_model = ESSKEY BREAK
-        CASE 33 g_pending_vehicle_model = FAGGIO3 BREAK
-        CASE 34 g_pending_vehicle_model = HAKUCHOU2 BREAK
-        CASE 35 g_pending_vehicle_model = MANCHEZ BREAK
-        CASE 36 g_pending_vehicle_model = NIGHTBLADE BREAK
-        CASE 37 g_pending_vehicle_model = RAPTOR BREAK
-        CASE 38 g_pending_vehicle_model = RATBIKE BREAK
-        CASE 39 g_pending_vehicle_model = SANCTUS BREAK
-        CASE 40 g_pending_vehicle_model = SHOTARO BREAK
-        CASE 41 g_pending_vehicle_model = TORNADO6 BREAK
-        CASE 42 g_pending_vehicle_model = VORTEX BREAK
-        CASE 43 g_pending_vehicle_model = WOLFSBANE BREAK
-        CASE 44 g_pending_vehicle_model = YOUGA2 BREAK
-        CASE 45 g_pending_vehicle_model = ZOMBIEA BREAK
-        CASE 46 g_pending_vehicle_model = ZOMBIEB BREAK
-        CASE 47 g_pending_vehicle_model = JESTER2 BREAK
-        CASE 48 g_pending_vehicle_model = MASSACRO2 BREAK
-        CASE 49 g_pending_vehicle_model = RATLOADER2 BREAK
-        CASE 50 g_pending_vehicle_model = SLAMVAN BREAK
-        CASE 51 g_pending_vehicle_model = BARRACKS3 BREAK
-        CASE 52 g_pending_vehicle_model = BOXVILLE4 BREAK
-        CASE 53 g_pending_vehicle_model = CASCO BREAK
-        CASE 54 g_pending_vehicle_model = DINGHY BREAK
-        CASE 55 g_pending_vehicle_model = ENDURO BREAK
-        CASE 56 g_pending_vehicle_model = GBURRITO2 BREAK
-        CASE 57 g_pending_vehicle_model = GUARDIAN BREAK
-        CASE 58 g_pending_vehicle_model = HYDRA BREAK
-        CASE 59 g_pending_vehicle_model = INSURGENT BREAK
-        CASE 60 g_pending_vehicle_model = INSURGENT2 BREAK
-        CASE 61 g_pending_vehicle_model = KURUMA BREAK
-        CASE 62 g_pending_vehicle_model = KURUMA2 BREAK
-        CASE 63 g_pending_vehicle_model = LECTRO BREAK
-        CASE 64 g_pending_vehicle_model = MULE3 BREAK
-        CASE 65 g_pending_vehicle_model = SAVAGE BREAK
-        CASE 66 g_pending_vehicle_model = SLAMVAN2 BREAK
-        CASE 67 g_pending_vehicle_model = TANKER2 BREAK
-        CASE 68 g_pending_vehicle_model = TECHNICAL BREAK
-        CASE 69 g_pending_vehicle_model = TRASH2 BREAK
-        CASE 70 g_pending_vehicle_model = VALKYRIE BREAK
-        CASE 71 g_pending_vehicle_model = VELUM2 BREAK
-        CASE 72 g_pending_vehicle_model = DINGHY BREAK
-        CASE 73 g_pending_vehicle_model = DINGHY2 BREAK
-        CASE 74 g_pending_vehicle_model = DINGHY3 BREAK
-        CASE 75 g_pending_vehicle_model = JETMAX BREAK
-        CASE 76 g_pending_vehicle_model = MARQUIS BREAK
-        CASE 77 g_pending_vehicle_model = SEASHARK BREAK
-        CASE 78 g_pending_vehicle_model = SEASHARK2 BREAK
-        CASE 79 g_pending_vehicle_model = SEASHARK3 BREAK
-        CASE 80 g_pending_vehicle_model = SPEEDER BREAK
-        CASE 81 g_pending_vehicle_model = SPEEDER2 BREAK
-        CASE 82 g_pending_vehicle_model = SQUALO BREAK
-        CASE 83 g_pending_vehicle_model = SUBMERSIBLE BREAK
-        CASE 84 g_pending_vehicle_model = SUNTRAP BREAK
-        CASE 85 g_pending_vehicle_model = TORO BREAK
-        CASE 86 g_pending_vehicle_model = TORO2 BREAK
-        CASE 87 g_pending_vehicle_model = TROPIC BREAK
-        CASE 88 g_pending_vehicle_model = TUG BREAK
-    ENDSWITCH
+        g_spawn_is_saved_vehicle = FALSE
+        g_pending_vehicle_model = GET_VEHICLE_CHOICE_MODEL(g_vehicle_spawn_choice)
     ENDIF
+    CLEANUP_VEHICLE_PREVIEW()
+    g_spawn_remaining = g_spawn_count
+    g_active_spawn_count = g_spawn_count
+    g_spawn_index = 0
+    g_spawn_warp_index = -1
+    IF g_spawn_teleport_into_vehicle g_spawn_warp_index = 0 ENDIF
+    g_spawn_heading = GET_ENTITY_HEADING(PLAYER_PED_ID())
+    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_vehicle_model) OR NOT IS_MODEL_VALID(g_pending_vehicle_model)
+        EXIT
     ENDIF
-    IF IS_MODEL_IN_CDIMAGE(g_pending_vehicle_model)
-        IF g_spawn_count < 1 g_spawn_count = 1 ENDIF
-        IF g_spawn_count > 500 g_spawn_count = 500 ENDIF
-        g_spawn_remaining = g_spawn_count
-        g_active_spawn_count = g_spawn_count
-        g_spawn_index = 0
-        g_spawn_warp_index = -1
-        IF g_spawn_teleport_into_vehicle
-            IF g_active_spawn_count = 1
-                g_spawn_warp_index = 0
-            ELSE
-                g_spawn_warp_index = GET_RANDOM_INT_IN_RANGE(0, g_active_spawn_count)
-            ENDIF
-        ENDIF
-        g_spawn_heading = GET_ENTITY_HEADING(PLAYER_PED_ID())
-        IF g_delete_previous_spawned_vehicle
-            DELETE_PREVIOUS_CUSTOM_CAR()
-        ENDIF
-        REQUEST_MODEL(g_pending_vehicle_model)
-        g_vehicle_spawn_pending = TRUE
-        g_vehicle_spawn_request_time = GET_GAME_TIMER()
-    ENDIF
+    REQUEST_MODEL(g_pending_vehicle_model)
+    g_vehicle_spawn_pending = TRUE
+    g_vehicle_spawn_request_time = GET_GAME_TIMER()
 ENDPROC
 
 PROC START_ONE_SELECTED_VEHICLE_SPAWN()
@@ -648,7 +341,9 @@ PROC FINISH_SELECTED_VEHICLE_SPAWN()
     spawnedVehicle = CREATE_VEHICLE(g_pending_vehicle_model, spawnPosition, spawnHeading, FALSE)
     IF DOES_ENTITY_EXIST(spawnedVehicle)
         SET_VEHICLE_ON_GROUND_PROPERLY(spawnedVehicle)
-        IF g_spawn_maxed
+        IF g_spawn_is_saved_vehicle
+            APPLY_SAVED_VEHICLE_CONFIG(spawnedVehicle, g_spawn_saved_vehicle_index)
+        ELIF g_spawn_maxed
             APPLY_LSC_MAX_TO_VEHICLE(spawnedVehicle)
         ENDIF
         PRUNE_SPAWNED_VEHICLE_TRACKING()
@@ -678,6 +373,7 @@ PROC FINISH_SELECTED_VEHICLE_SPAWN()
     IF g_spawn_remaining <= 0
         SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_vehicle_model)
         g_vehicle_spawn_pending = FALSE
+        g_spawn_is_saved_vehicle = FALSE
         g_active_spawn_count = 0
         g_spawn_warp_index = -1
     ENDIF
@@ -715,6 +411,8 @@ PROC MOVE_MENU_CURSOR(INT direction)
     g_item = g_item + direction
     IF g_item < 0 g_item = ACTIVE_ITEM_COUNT() - 1 ENDIF
     IF g_item >= ACTIVE_ITEM_COUNT() g_item = 0 ENDIF
+    g_menu_nav_dirty = TRUE
+    g_description_dirty = TRUE
 ENDPROC
 
 PROC PROCESS_MENU_DIRECTION_INPUT()
@@ -734,6 +432,8 @@ PROC PROCESS_MENU_DIRECTION_INPUT()
     IF jumpToTop
         g_item = 0
         g_scroll = 0
+        g_menu_nav_dirty = TRUE
+        g_description_dirty = TRUE
         SAVE_NAVIGATION_STATE()
         MENU_PLAY_SOUND("NAV_UP_DOWN")
     ENDIF
@@ -785,7 +485,21 @@ PROC PROCESS_MENU_DIRECTION_INPUT()
             UPDATE_SCROLL()
             SAVE_NAVIGATION_STATE()
             MARK_PERSIST_DIRTY()
+            g_menu_nav_dirty = TRUE
+            g_description_dirty = TRUE
             MENU_PLAY_SOUND("BACK")
+        ENDIF
+    ENDIF
+
+    IF NOT g_home AND g_tab = 3 AND g_spawner_open AND g_saved_vehicles_open AND NOT g_saved_veh_confirm_open AND g_item >= 1 AND g_saved_vehicles_count > 0
+        IF CUSTOM_NSC_REMOVE_COMBO_PRESSED()
+            g_saved_veh_delete_target = g_item - 1
+            g_saved_veh_confirm_open = TRUE
+            g_item = 0
+            g_scroll = 0
+            g_menu_nav_dirty = TRUE
+            g_description_dirty = TRUE
+            MENU_PLAY_SOUND("NAV_UP_DOWN")
         ENDIF
     ENDIF
 ENDPROC
@@ -822,6 +536,7 @@ PROC APPLY_SELECTED()
     PED_INDEX playerPed = PLAYER_PED_ID()
     VEHICLE_INDEX playerVehicle
     MODEL_NAMES currentPlayerModel
+    INT savedVehSlot = 0
     IF g_outfit_open
         ADJUST_OUTFIT_TEXTURE()
         EXIT
@@ -1347,16 +1062,71 @@ PROC APPLY_SELECTED()
         BREAK
         CASE 3
             IF g_spawner_open
-                SWITCH g_item
-                    CASE 0 START_SELECTED_VEHICLE_SPAWN() BREAK
-                    CASE 2 START_ONE_SELECTED_VEHICLE_SPAWN() BREAK
-                    CASE 3 OPEN_MENU_KEYBOARD(1) BREAK
-                    CASE 4 g_spawn_maxed = NOT g_spawn_maxed BREAK
-                    CASE 7 g_delete_previous_spawned_vehicle = NOT g_delete_previous_spawned_vehicle BREAK
-                    CASE 8 DELETE_ALL_CUSTOM_CARS() BREAK
-                    CASE 9 g_spawn_teleport_into_vehicle = NOT g_spawn_teleport_into_vehicle BREAK
-                    CASE 10 OPEN_MENU_KEYBOARD(4) BREAK
-                ENDSWITCH
+                IF g_saved_veh_confirm_open
+                    SWITCH g_item
+                        CASE 0
+                            g_saved_veh_confirm_open = FALSE
+                            g_item = g_saved_veh_delete_target + 1
+                            g_scroll = 0
+                            BREAK
+                        CASE 1
+                            DELETE_SAVED_VEHICLE(g_saved_veh_delete_target)
+                            g_saved_veh_confirm_open = FALSE
+                            g_item = 0
+                            g_scroll = 0
+                            BREAK
+                    ENDSWITCH
+                ELIF g_saved_vehicles_open
+                    SWITCH g_item
+                        CASE 0
+                            IF NOT IS_PED_IN_ANY_VEHICLE(playerPed)
+                                g_saved_veh_feedback = 1
+                                g_saved_veh_feedback_until = GET_GAME_TIMER() + 3000
+                            ELSE
+                                IF CAPTURE_CURRENT_VEHICLE_TO_STAGING()
+                                    OPEN_MENU_KEYBOARD(18)
+                                ENDIF
+                            ENDIF
+                            BREAK
+                        DEFAULT
+                            savedVehSlot = g_item - 1
+                            IF g_saved_vehicles_count > 0 AND savedVehSlot >= 0 AND savedVehSlot < g_saved_vehicles_count
+                                IF g_saved_veh_selected_index = savedVehSlot
+                                    g_saved_veh_selected_index = -1
+                                ELSE
+                                    g_saved_veh_selected_index = savedVehSlot
+                                ENDIF
+                            ENDIF
+                            BREAK
+                    ENDSWITCH
+                ELIF g_vehicle_list_open
+                    APPLY_VEHICLE_LIST_SELECTION(g_item)
+                    START_ONE_SELECTED_VEHICLE_SPAWN()
+                ELSE
+                    SWITCH g_item
+                        CASE 0 START_SELECTED_VEHICLE_SPAWN() BREAK
+                        CASE 1
+                            g_saved_vehicles_open = TRUE
+                            g_saved_veh_feedback = 0
+                            g_item = g_saved_vehicles_item
+                            g_scroll = g_saved_vehicles_scroll
+                            BREAK
+                        CASE 2 OPEN_MENU_KEYBOARD(4) BREAK
+                        CASE 4
+                            g_vehicle_list_open = TRUE
+                            g_item = GET_SLOT_FOR_CURRENT_SELECTION(g_vehicle_spawn_category)
+                            g_scroll = 0
+                            IF g_item >= 8
+                                g_scroll = g_item - 7
+                            ENDIF
+                            BREAK
+                        CASE 5 OPEN_MENU_KEYBOARD(1) BREAK
+                        CASE 6 g_spawn_maxed = NOT g_spawn_maxed BREAK
+                        CASE 9 g_delete_previous_spawned_vehicle = NOT g_delete_previous_spawned_vehicle BREAK
+                        CASE 10 DELETE_ALL_CUSTOM_CARS() BREAK
+                        CASE 11 g_spawn_teleport_into_vehicle = NOT g_spawn_teleport_into_vehicle BREAK
+                    ENDSWITCH
+                ENDIF
             ELIF g_hydro_open
                 // Hydraulics page.  Row 5 (Apply All Heights) and row 9
                 // (Apply To Wheel) exist because the slider rows only move a
@@ -2721,24 +2491,61 @@ PROC DRAW_SPAWNER_ROW(INT index, FLOAT y)
     STRING faceLbl = TR("Facing", "Orientación", "朝向", "Blickrichtung", "向き", "Направление", "Direção", "Orientation")
     SWITCH index
         CASE 0 DRAW_OPTION(y, TR("Spawn Selected Vehicle(s)", "Generar vehículo(s)", "生成所选载具", "Ausgewählte(s) Fahrzeug(e) spawnen", "選択した車両をスポーン", "Создать выбранный ТС", "Gerar Veículo(s) Selecionado(s)", "Faire apparaître véhicule(s)"), "APPLY", g_item = index, 2) BREAK
-        CASE 1 DRAW_VEHICLE_CATEGORY_SELECTOR(y, g_item = index) BREAK
-        CASE 2 DRAW_VEHICLE_SPAWN_SELECTOR(y, g_item = index) BREAK
-        CASE 3 DRAW_NUMBER_OPTION(y, TR("Spawn Count", "Cantidad a generar", "生成数量", "Spawn-Anzahl", "スポーン数", "Количество", "Quantidade", "Nombre à générer"), g_spawn_count, g_item = index) BREAK
-        CASE 4 IF g_spawn_maxed DRAW_OPTION(y, TR("Max Available Upgrades", "Mejoras máximas disponibles", "满配可用改装", "Maximale Upgrades", "最大アップグレード", "Макс. улучшения", "Melhorias Máximas", "Améliorations max"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Max Available Upgrades", "Mejoras máximas disponibles", "满配可用改装", "Maximale Upgrades", "最大アップグレード", "Макс. улучшения", "Melhorias Máximas", "Améliorations max"), "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 5 IF g_spawn_alignment = 0 DRAW_OPTION(y, TR("Alignment", "Alineación", "排列方式", "Ausrichtung", "整列方式", "Выравнивание", "Alinhamento", "Alignement"), TR("< Door to Door >", "< Puerta a puerta >", "< 并排排列 >", "< Tür an Tür >", "< 横並び >", "< Борт к борту >", "< Lado a Lado >", "< Côte à côte >"), g_item = index, 3) ELSE DRAW_OPTION(y, TR("Alignment", "Alineación", "排列方式", "Ausrichtung", "整列方式", "Выравнивание", "Alinhamento", "Alignement"), TR("< Bumper to Bumper >", "< Parachoques a parachoques >", "< 前后排列 >", "< Stoßstange an Stoßstange >", "< 縦並び >", "< Бампер к бамперу >", "< Para-choque a Para-choque >", "< Pare-chocs contre pare-chocs >"), g_item = index, 3) ENDIF BREAK
-        CASE 6
+        CASE 1 DRAW_OPTION(y, TR("Saved Vehicles", "Vehículos guardados", "已保存载具", "Gespeicherte Fahrzeuge", "保存済み車両", "Сохраненный транспорт", "Veículos Salvos", "Véhicules sauvegardés"), "OPEN", g_item = index, 2) BREAK
+        CASE 2 DRAW_SPAWNER_VEHICLE_SEARCH(y, g_item = index) BREAK
+        CASE 3 DRAW_VEHICLE_CATEGORY_SELECTOR(y, g_item = index) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Vehicle List", "Lista de vehículos", "载具列表", "Fahrzeugliste", "車両リスト", "Список транспорта", "Lista de Veículos", "Liste des véhicules"), "OPEN", g_item = index, 2) BREAK
+        CASE 5 DRAW_NUMBER_OPTION(y, TR("Spawn Count", "Cantidad a generar", "生成数量", "Spawn-Anzahl", "スポーン数", "Количество", "Quantidade", "Nombre à générer"), g_spawn_count, g_item = index) BREAK
+        CASE 6 IF g_spawn_maxed DRAW_OPTION(y, TR("Max Available Upgrades", "Mejoras máximas disponibles", "满配可用改装", "Maximale Upgrades", "最大アップグレード", "Макс. улучшения", "Melhorias Máximas", "Améliorations max"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Max Available Upgrades", "Mejoras máximas disponibles", "满配可用改装", "Maximale Upgrades", "最大アップグレード", "Макс. улучшения", "Melhorias Máximas", "Améliorations max"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 7 IF g_spawn_alignment = 0 DRAW_OPTION(y, TR("Alignment", "Alineación", "排列方式", "Ausrichtung", "整列方式", "Выравнивание", "Alinhamento", "Alignement"), TR("< Door to Door >", "< Puerta a puerta >", "< 并排排列 >", "< Tür an Tür >", "< 横並び >", "< Борт к борту >", "< Lado a Lado >", "< Côte à côte >"), g_item = index, 3) ELSE DRAW_OPTION(y, TR("Alignment", "Alineación", "排列方式", "Ausrichtung", "整列方式", "Выравнивание", "Alinhamento", "Alignement"), TR("< Bumper to Bumper >", "< Parachoques a parachoques >", "< 前后排列 >", "< Stoßstange an Stoßstange >", "< 縦並び >", "< Бампер к бамперу >", "< Para-choque a Para-choque >", "< Pare-chocs contre pare-chocs >"), g_item = index, 3) ENDIF BREAK
+        CASE 8
             IF g_spawn_facing = 0 DRAW_OPTION(y, faceLbl, TR("< Forward >", "< Adelante >", "< 向前 >", "< Vorwärts >", "< 前方 >", "< Вперед >", "< Frente >", "< Avant >"), g_item = index, 3)
             ELIF g_spawn_facing = 1 DRAW_OPTION(y, faceLbl, TR("< Right >", "< Derecha >", "< 向右 >", "< Rechts >", "< 右 >", "< Вправо >", "< Direita >", "< Droite >"), g_item = index, 3)
             ELIF g_spawn_facing = 2 DRAW_OPTION(y, faceLbl, TR("< Backward >", "< Atrás >", "< 向后 >", "< Rückwärts >", "< 後方 >", "< Назад >", "< Trás >", "< Arrière >"), g_item = index, 3)
             ELSE DRAW_OPTION(y, faceLbl, TR("< Left >", "< Izquierda >", "< 向左 >", "< Links >", "< 左 >", "< Влево >", "< Esquerda >", "< Gauche >"), g_item = index, 3) ENDIF
         BREAK
-        CASE 7 IF g_delete_previous_spawned_vehicle DRAW_OPTION(y, TR("Auto Delete Previous Car", "Borrar coche anterior auto.", "自动删除上一辆车", "Vorheriges Auto autom. löschen", "前の車両を自動削除", "Автоудаление прошлой машины", "Excluir Carro Anterior Auto.", "Suppr. auto voiture précédente"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Auto Delete Previous Car", "Borrar coche anterior auto.", "自动删除上一辆车", "Vorheriges Auto autom. löschen", "前の車両を自動削除", "Автоудаление прошлой машины", "Excluir Carro Anterior Auto.", "Suppr. auto voiture précédente"), "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 8 DRAW_OPTION(y, TR("Delete All Custom Cars", "Borrar todos los coches", "删除所有生成载具", "Alle gespawnten Autos löschen", "生成した全車両を削除", "Удалить все созданные машины", "Excluir Todos os Carros Gerados", "Supprimer voitures générées"), "APPLY", g_item = index, 2) BREAK
-        CASE 9 IF g_spawn_teleport_into_vehicle DRAW_OPTION(y, TR("TP in Spawned Vehicle", "TP dentro del vehículo", "传送进生成的载具", "In gespawntes Fahrzeug TP", "スポーン車両に乗車", "ТП в созданный транспорт", "TP para Dentro do Veículo", "TP dans le véhicule généré"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("TP in Spawned Vehicle", "TP dentro del vehículo", "传送进生成的载具", "In gespawntes Fahrzeug TP", "スポーン車両に乗車", "ТП в созданный транспорт", "TP para Dentro do Veículo", "TP dans le véhicule généré"), "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 10
-            DRAW_SPAWNER_VEHICLE_SEARCH(y, g_item = index)
-        BREAK
+        CASE 9 IF g_delete_previous_spawned_vehicle DRAW_OPTION(y, TR("Auto Delete Previous Car", "Borrar coche anterior auto.", "自动删除上一辆车", "Vorheriges Auto autom. löschen", "前の車両を自動削除", "Автоудаление прошлой машины", "Excluir Carro Anterior Auto.", "Suppr. auto voiture précédente"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Auto Delete Previous Car", "Borrar coche anterior auto.", "自动删除上一辆车", "Vorheriges Auto autom. löschen", "前の車両を自動削除", "Автоудаление прошлой машины", "Excluir Carro Anterior Auto.", "Suppr. auto voiture précédente"), "OFF", g_item = index, 0) ENDIF BREAK
+        CASE 10 DRAW_OPTION(y, TR("Delete All Custom Cars", "Borrar todos los coches", "删除所有生成载具", "Alle gespawnten Autos löschen", "生成した全車両を削除", "Удалить все созданные машины", "Excluir Todos os Carros Gerados", "Supprimer voitures générées"), "APPLY", g_item = index, 2) BREAK
+        CASE 11 IF g_spawn_teleport_into_vehicle DRAW_OPTION(y, TR("TP in Spawned Vehicle", "TP dentro del vehículo", "传送进生成的载具", "In gespawntes Fahrzeug TP", "スポーン車両に乗車", "ТП в созданный транспорт", "TP para Dentro do Veículo", "TP dans le véhicule généré"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("TP in Spawned Vehicle", "TP dentro del vehículo", "传送进生成的载具", "In gespawntes Fahrzeug TP", "スポーン車両に乗車", "ТП в созданный транспорт", "TP para Dentro do Veículo", "TP dans le véhicule généré"), "OFF", g_item = index, 0) ENDIF BREAK
     ENDSWITCH
+ENDPROC
+
+PROC DRAW_VEHICLE_LIST_ROW(INT index, FLOAT y)
+    IF VEHICLE_LIST_TOTAL_ROWS() <= 0 OR (g_vehicle_spawn_category >= 3 AND g_vehicle_spawn_category <= 6 AND GET_NUM_DLC_VEHICLES_FOR_CATEGORY(g_vehicle_spawn_category) <= 0)
+        DRAW_OPTION(y, TR("< No Vehicles Available >", "< Sin vehículos disponibles >", "< 暂无可用载具 >", "< Keine Fahrzeuge verfügbar >", "< 利用可能な車両なし >", "< Нет доступного транспорта >", "< Nenhum Veículo Disponível >", "< Aucun véhicule disponible >"), "", g_item = index, 0)
+        EXIT
+    ENDIF
+    STRING vehName = GET_VEHICLE_NAME_FOR_CATEGORY_SLOT(g_vehicle_spawn_category, index)
+    IF IS_VEHICLE_SLOT_CURRENTLY_SELECTED(g_vehicle_spawn_category, index)
+        DRAW_OPTION(y, vehName, TR("SELECTED", "SELECCIONADO", "已选定", "AUSGEWÄHLT", "選択中", "ВЫБРАНО", "SELECIONADO", "SÉLECTIONNÉ"), g_item = index, 1)
+    ELSE
+        DRAW_OPTION(y, vehName, TR("SELECT", "SELECCIONAR", "选择", "WÄHLEN", "選択", "ВЫБРАТЬ", "SELECIONAR", "SÉLECTIONNER"), g_item = index, 2)
+    ENDIF
+ENDPROC
+
+PROC DRAW_VEHICLE_LIST_PAGE()
+    STRING headerTitle = TR("VEHICLES", "VEHÍCULOS", "载具列表", "FAHRZEUGE", "車両一覧", "ТРАНСПОРТ", "VEÍCULOS", "VÉHICULES")
+    SWITCH g_vehicle_spawn_category
+        CASE 0 headerTitle = TR("CARS", "COCHES", "汽车列表", "AUTOS", "車一覧", "МАШИНЫ", "CARROS", "VOITURES") BREAK
+        CASE 1 headerTitle = TR("BIKES", "MOTOS", "摩托车列表", "MOTORRÄDER", "バイク一覧", "МОТОЦИКЛЫ", "MOTOS", "MOTOS") BREAK
+        CASE 2 headerTitle = TR("AIRCRAFT", "AERONAVES", "飞机列表", "LUFTFAHRZEUGE", "航空機一覧", "АВИАЦИЯ", "AERONAVES", "AÉRONEFS") BREAK
+        CASE 3 headerTitle = TR("DLC CARS", "COCHES DLC", "DLC 汽车", "DLC-AUTOS", "DLC車一覧", "DLC МАШИНЫ", "CARROS DLC", "VOITURES DLC") BREAK
+        CASE 4 headerTitle = TR("DLC BIKES", "MOTOS DLC", "DLC 摩托", "DLC-MOTORRÄDER", "DLCバイク一覧", "DLC МОТОЦИКЛЫ", "MOTOS DLC", "MOTOS DLC") BREAK
+        CASE 5 headerTitle = TR("DLC AIRCRAFTS", "AERONAVES DLC", "DLC 飞机", "DLC-LUFTFAHRZEUGE", "DLC航空機一覧", "DLC АВИАЦИЯ", "AERONAVES DLC", "AÉRONEFS DLC") BREAK
+        CASE 6 headerTitle = TR("DLC WATERCRAFT", "EMBARCACIONES DLC", "DLC 船只", "DLC-BOOTE", "DLC水上艇一覧", "DLC ВОДНЫЙ", "EMBARCAÇÕES DLC", "BATEAUX DLC") BREAK
+        CASE 7 headerTitle = TR("BOATS", "BARCOS", "船只列表", "BOOTE", "ボート一覧", "ЛОДКИ", "BARCOS", "BATEAUX") BREAK
+        CASE 8 headerTitle = TR("MISCELLANEOUS", "VARIOS", "其他载具", "SONSTIGES", "その他一覧", "РАЗНОЕ", "DIVERSOS", "DIVERS") BREAK
+    ENDSWITCH
+    MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, headerTitle)
+    DRAW_MENU_VERSION_TAG()
+    INT totalRows = VEHICLE_LIST_TOTAL_ROWS()
+    INT index = g_scroll
+    INT row = 0
+    WHILE row < 8 AND index < totalRows
+        DRAW_VEHICLE_LIST_ROW(index, 0.268 + (TO_FLOAT(row) * ROW_H))
+        index = index + 1
+        row = row + 1
+    ENDWHILE
 ENDPROC
 
 PROC DRAW_SPAWNER_PAGE()
@@ -2746,7 +2553,7 @@ PROC DRAW_SPAWNER_PAGE()
     DRAW_MENU_VERSION_TAG()
     INT index = g_spawner_scroll
     INT row = 0
-    WHILE row < 8 AND index < 11
+    WHILE row < 8 AND index < 12
         DRAW_SPAWNER_ROW(index, 0.268 + (TO_FLOAT(row) * ROW_H))
         index = index + 1
         row = row + 1
@@ -3307,7 +3114,15 @@ PROC DRAW_PAGE()
                     DRAW_CHAUFFEUR_PAGE()
                 ENDIF
             ELIF g_spawner_open
-                DRAW_SPAWNER_PAGE()
+                IF g_saved_veh_confirm_open
+                    DRAW_SAVED_VEH_CONFIRM_PAGE()
+                ELIF g_saved_vehicles_open
+                    DRAW_SAVED_VEHICLES_PAGE()
+                ELIF g_vehicle_list_open
+                    DRAW_VEHICLE_LIST_PAGE()
+                ELSE
+                    DRAW_SPAWNER_PAGE()
+                ENDIF
             ELIF g_neon_anim_open
                 DRAW_NEON_ANIM_PAGE()
             ELIF g_vehicle_control_open

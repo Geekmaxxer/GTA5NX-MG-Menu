@@ -1788,12 +1788,12 @@ FUNC TEXT_LABEL_63 FORMAT_NSC_PROBE_BADGE()
         RETURN badge
     ENDIF
     IF HAS_ACTIVE_NSC_FEEDBACK(6)
-        badge = TR("TEXT LIMIT (100 MAX)", "LÍMITE TEXTO (100 MÁX)", "字符上限 (最多100)", "TEXTLIMIT (100 MAX)", "文字上限 (最大100)", "ЛИМИТ ТЕКСТА (МАКС 100)", "LIMITE TEXTO (100 MÁX)", "LIMITE TEXTE (100 MAX)")
+        badge = TR("TEXT LIMIT (1000 MAX)", "LÍMITE TEXTO (1000 MÁX)", "字符上限 (最多1000)", "TEXTLIMIT (1000 MAX)", "文字上限 (最大1000)", "ЛИМИТ ТЕКСТА (МАКС 1000)", "LIMITE TEXTO (1000 MÁX)", "LIMITE TEXTE (1000 MAX)")
         RETURN badge
     ENDIF
     badge = TR("INPUT (", "ENTRADA (", "输入 (", "EINGABE (", "入力 (", "ВВОД (", "ENTRADA (", "ENTRÉE (")
     badge += TOTAL_SAVED_CUSTOM_NSC_LETTERS()
-    badge += "/100)"
+    badge += "/1000)"
     RETURN badge
 ENDFUNC
 
