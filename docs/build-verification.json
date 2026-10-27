@@ -1,7 +1,7 @@
 {
   "version": "v1.0.8",
   "date": "2026-10-27",
-  "source_files_identical": 25,
+  "source_files_identical": 23,
   "tool_tests_passed": 62,
   "stock_menu_natives": 489,
   "custom_menu_bindings": 15,

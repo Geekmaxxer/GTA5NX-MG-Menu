@@ -1,6 +1,6 @@
 # Build verification
 
-The v1.0.8 source was synchronized and rebuilt on 2026-10-27. All 25 script source files match the working SDK byte for byte. The existing menu layout and repository structure are preserved.
+The v1.0.8 source was synchronized and rebuilt on 2026-10-27. All 23 menu script/header source files match the working SDK byte for byte. The existing menu layout and repository structure are preserved.
 
 - Both scripts compiled and passed stock-header adaptation, name validation and matched binding checks.
 - Tooling tests: 62 passed, zero failed.

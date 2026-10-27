@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds the v1.0.6 menu/controller and the matching ScriptHookV-NX binding.
+    Builds the v1.0.8 menu/controller and the matching ScriptHookV-NX binding.
 .DESCRIPTION
     Uses the existing SanScript build engine and a separate ScriptHookV-NX SDK
     checkout. Does not modify game archives, install files, or include subsdk5.

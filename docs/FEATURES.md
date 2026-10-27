@@ -20,9 +20,8 @@ an optional frontend to that runtime; NROs can also autoload independently.
 Descriptions use shared localized text rendering, wrapping and cached layout.
 Language selection also supports following the game's language.
 
-Additional SanScript examples included here are `chaosmod.sc` and
-`cardealership.sc`. Build them separately with `Build-Any.ps1`; they are not
-started automatically by the release builder.
+The release builder compiles the menu and its achievement-controller loader.
+Independent scripts can be built separately with `Build-Any.ps1`.
 
 Features depend on the target port's native support and available assets.
 The feature list describes the source; it does not claim every option has
