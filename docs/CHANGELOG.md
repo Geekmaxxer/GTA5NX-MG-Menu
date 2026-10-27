@@ -1,5 +1,21 @@
 # v1.0.6
 
+
+## v1.0.8 runtime bundle refresh - 2026-10-23
+
+- Bundle the console-accepted ScriptHookV-NX v1.4 Preview runtime and matching menu binding.
+- Synchronize the custom-native header and include plugin timing in NSC binding generation.
+- Recompile the menu and achievement loader; both remain byte-identical to the current scripts.
+- Preserve the 15,900-word loader pool, saved settings and current archive contents.
+- Local validation: 62 tool tests; 489 stock native matches and 15 registered custom natives. Updated bundle gameplay testing remains pending.
+
+- Corrected the release runtime pairing: the menu requires the newer manager
+  runtime, and the previous ZIPs incorrectly retained Public Plugin Loader Test 1.
+
+- The achievement controller now launches ragemenu directly in the official
+  8,344-word SCRIPT_XML_STACK_SIZE pool. The previous 5,050-word launch and
+  same-frame fallback have been replaced by one launch request.
+
 - Added ScriptHookV-NX Plugins to Menu Settings, including discovery/rescan,
   per-plugin details, memory/status display and manual Load Now.
 - Added verified Disabled, Manual and Auto startup policies. Saving a startup

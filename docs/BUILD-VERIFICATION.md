@@ -17,3 +17,20 @@ Generated binaries, references, compiler files and build logs are kept outside
 version control. This checkout rebuild has not been run on Switch; the latest
 shared description renderer still needs visual testing. Prior user-confirmed
 manager/persistence restart testing is described in [the changelog](CHANGELOG.md).
+
+## Loader stack repair
+
+The controller was rebuilt after switching its menu launch to the official
+8,344-word pool and removing the second same-frame launch. Header/name checks,
+89/89 native self matches and 89/89 stock matches passed. The compiled menu
+and its binding are unchanged. This loader change still needs a Switch test.
+See [controller verification](loader-stack-verification.json).
+
+## Runtime packaging regression
+
+The previous v1.0.6 ZIPs retained Public Plugin Loader Test 1 (`24fe83d2...`),
+which lacks 12 of the current menu's custom natives. The actual ARM64 repair
+guard reproduces a held menu with that module and permits it with the accepted
+manager runtime (`209bec71...`). All 14 exact menu/plugin integration checks
+pass with the replacement runtime and current binding. The user's failed report
+also identifies Public Plugin Loader Test 1. A new combined console test is pending.

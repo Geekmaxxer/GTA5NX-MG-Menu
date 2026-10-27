@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-16",
+  "compatibility_regression": {
+    "menu_sha256": "b0f0a0a4668f60574284fd2d612993bca92a27b29a8b8569b07db12dc8f5a977",
+    "results": {
+      "old-core": {
+        "module_sha256": "24fe83d2e4c217604972202e0f5c452ff85a0d951330728f860ed96d8bcf93db",
+        "required_custom_natives": 15,
+        "missing_custom_natives": [
+          "0x5348564e58505031",
+          "0x5348564e58504b31",
+          "0x5348564e58504531",
+          "0x5348564e58505032",
+          "0x5348564e5850524c",
+          "0x5348564e58504e31",
+          "0x5348564e58504c31",
+          "0x5348564e58505631",
+          "0x5348564e58505331",
+          "0x5348564e58504331",
+          "0x5348564e58505231",
+          "0x5348564e58505431"
+        ],
+        "repair_allows_menu_tick": false
+      },
+      "accepted-core": {
+        "module_sha256": "209bec71c3f5608f4777c214218ec0a9ccef22a6d794de9f55de311904213ce6",
+        "required_custom_natives": 15,
+        "missing_custom_natives": [],
+        "repair_allows_menu_tick": true
+      }
+    },
+    "switch_runtime_verified": false,
+    "validation": "Real ARM64 runtime and target native registration/repair under Unicorn; OS/gameplay are mocked."
+  },
+  "paired_menu_tests": {
+    "passed": 14,
+    "cases": [
+      "rebuilt menu declares persistence capability guard and manager v3 process controls",
+      "per-menu metadata exactly matches compiled identity entry fingerprint and native indices",
+      "target engine binder resolves every declared bridge hash for the exact new menu",
+      "exact new menu manifest is accepted without a compiled-in menu dependency",
+      "late-bound new menu repairs all custom slots and preserves every stock slot",
+      "three gameplay NROs and sample load while menu custom-native bindings remain valid",
+      "real menu binding and plugin ticks leave no storage scopes or context locks behind",
+      "compiled menu Startup Mode call applies Manual with real VM stack semantics",
+      "compiled menu immediately reads the saved policy and changed filename",
+      "compiled menu can save Auto again without changing running state",
+      "compiled Kill Process native queues only the selected live gameplay plugin",
+      "Kill Process stops HUD output while preserving other plugins and native bindings",
+      "compiled Load Now restarts the stopped plugin without another NRO load",
+      "restarted plugin resumes drawing and reports running through the compiled menu ABI"
+    ],
+    "module_sha256": "209bec71c3f5608f4777c214218ec0a9ccef22a6d794de9f55de311904213ce6",
+    "menu_sha256": "b0f0a0a4668f60574284fd2d612993bca92a27b29a8b8569b07db12dc8f5a977",
+    "binding_sha256": "6092cf327f34959d344e125618f9e00336b3be1f6cb6aa7bb25e669a4a923886",
+    "custom_entries": 15,
+    "mocked_outer_vm_and_gameplay": true,
+    "switch_runtime_verified": false
+  },
+  "user_report_confirms_old_runtime": true,
+  "switch_test_of_repaired_bundle_pending": true
+}

@@ -14,7 +14,7 @@
 //  persistence:
 //    - Saves settings to alternating checksummed files under switch/gtav-megatard/.
 //    - Zero modifications to single-player progression stats or SGTA50000 save files.
-//    - MEGASAVE / MEGALOAD require the matching experimental subsdk5 bridge.
+//    - MEGASAVE / MEGALOAD require the ScriptHookV-NX compatibility bridge in subsdk5.
 //    - Script INTs occupy 8-byte VM slots; the bridge packs their 32-bit values.
 //    - Storage Self-Test uses separate files and cannot overwrite menu settings.
 //

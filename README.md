@@ -20,7 +20,9 @@ See [Features](docs/FEATURES.md) and [v1.0.6 changes](docs/CHANGELOG.md).
   the exact game build you target. `script.rpf` is a different archive.
 - The ScriptHookV-NX SDK or source checkout for its binding generator, and the
   matching runtime installed on the Switch. v1.0.6 uses manager API 3 and custom
-  natives; install the runtime and the matched binding before launching it.
+  natives; install the runtime and the matched binding before launching it. Use
+  Public Preview 1 / Safe Manager Test 2 or a verified later runtime; Public
+  Plugin Loader Test 1 lacks this menu's manager natives.
 - An RPF editor to install the compiled scripts into your own archive.
 
 The current integration targets title `0100b00b51230000`, executable build

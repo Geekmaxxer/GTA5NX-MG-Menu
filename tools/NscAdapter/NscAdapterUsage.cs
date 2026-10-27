@@ -10,6 +10,8 @@ internal static class NscAdapterUsage
         writer.WriteLine("             [--name <Name>] [--dry-run] [--validate] [--verbose]");
         writer.WriteLine("  NscAdapter --info <reference.nsc|folder> [candidate.nsc] [--name <Name>]");
         writer.WriteLine("  NscAdapter --validate-names <file|folder>");
+        writer.WriteLine("  NscAdapter --write-bindings <script.nsc> <script.snb>");
+        writer.WriteLine("  NscAdapter --verify-bindings <script.nsc> <script.snb>");
         writer.WriteLine("  NscAdapter --help | --version");
         writer.WriteLine();
         writer.WriteLine("Only the 8-byte page base at 0x00 and the 4-byte build word at 0x18 are copied.");

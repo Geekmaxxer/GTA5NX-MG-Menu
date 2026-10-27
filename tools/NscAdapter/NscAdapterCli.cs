@@ -52,6 +52,27 @@ public static class NscAdapterCli
             return NscExitCodes.Ok;
         }
 
+        if (Is(first, "--write-bindings") || Is(first, "--verify-bindings"))
+        {
+            if (args.Length != 3) { error.WriteLine("Expected <script.nsc> <script.snb>."); return NscExitCodes.Usage; }
+            byte[] expected = NscNativeBindings.Generate(NscContainer.ReadFile(args[1]).Bytes);
+            if (Is(first, "--verify-bindings"))
+            {
+                if (!File.Exists(args[2]) || !File.ReadAllBytes(args[2]).AsSpan().SequenceEqual(expected))
+                { error.WriteLine("ERROR binding does not match the compiled script; regenerate it before installation."); return NscExitCodes.VerifyFailed; }
+            }
+            else
+            {
+                string destination = Path.GetFullPath(args[2]);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try { File.WriteAllBytes(temporary, expected); File.Move(temporary, destination, true); }
+                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+            }
+            output.WriteLine($"BINDINGS_MATCH {args[1]} -> {args[2]} ({expected.Length} bytes)");
+            return NscExitCodes.Ok;
+        }
+
         if (!NscAdapterOptions.TryParse(args, out NscAdapterOptions options, out string problem))
         {
             error.WriteLine($"ERROR {problem}");

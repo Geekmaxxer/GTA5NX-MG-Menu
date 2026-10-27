@@ -1,4 +1,4 @@
-# BuildCommon.ps1 - the single build engine for the MG-SwitchMenu SDK.
+﻿# BuildCommon.ps1 - the single build engine for the MG-SwitchMenu SDK.
 #
 # Dot-source this file from a thin wrapper (Build-Any.ps1, Build-Menu.ps1,
 # Build-Controller.ps1, Build-Both.ps1). Every wrapper goes through
@@ -329,6 +329,7 @@ function Write-BuildManifest {
             sco   = [ordered]@{ file = [IO.Path]::GetFileName($Artifacts['Sco']);   sha256 = (Get-FileSha256 -Path $Artifacts['Sco']);   bytes = (Get-Item -LiteralPath $Artifacts['Sco']).Length }
             pcNsc = [ordered]@{ file = [IO.Path]::GetFileName($Artifacts['PcNsc']); sha256 = (Get-FileSha256 -Path $Artifacts['PcNsc']); bytes = (Get-Item -LiteralPath $Artifacts['PcNsc']).Length }
             nsc   = [ordered]@{ file = [IO.Path]::GetFileName($Artifacts['Nsc']);   sha256 = (Get-FileSha256 -Path $Artifacts['Nsc']);   bytes = (Get-Item -LiteralPath $Artifacts['Nsc']).Length }
+            nativeBinding = [ordered]@{ file = [IO.Path]::GetFileName($Artifacts['Snb']); sha256 = (Get-FileSha256 -Path $Artifacts['Snb']); bytes = (Get-Item -LiteralPath $Artifacts['Snb']).Length }
         }
         payload = $payload
         tools   = [ordered]@{
@@ -398,6 +399,16 @@ function Invoke-ScriptBuild {
     if ($LASTEXITCODE -ne 0) { throw "Switch header adaptation failed for $Name with exit code $LASTEXITCODE" }
 
     $script:LastBuildArtifacts = @{ Sco = $sco; PcNsc = $pcNsc; Nsc = $switchNsc }
+    if (-not $DryRun) {
+        # Bindings contain code length, native-slot indices and an entry
+        # fingerprint. Never carry them forward from a previous menu build.
+        $nativeBinding = Join-Path $OutputDirectory "$Name.snb"
+        & dotnet $AdapterDll --write-bindings $switchNsc $nativeBinding 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Native binding generation failed for $Name" }
+        & dotnet $AdapterDll --verify-bindings $switchNsc $nativeBinding 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Native binding verification failed for $Name" }
+        $script:LastBuildArtifacts['Snb'] = $nativeBinding
+    }
     if ($DryRun) {
         # Never print BUILT for a file that was not written: this project treats
         # "compiled" as a claim that must stay true.
@@ -446,6 +457,17 @@ function Invoke-BuildSet {
     }
 
     Copy-SourceSnapshot -SourceRoot $sourceRoot -OutputDirectory $OutputDirectory -EntryPoints $entryPoints
+
+    if (-not $DryRun) {
+        $sharedPermissions = Join-Path (Split-Path $toolsRoot -Parent) 'distribution'
+        & (Join-Path $sharedPermissions 'Install-SD-Access.ps1') -OutputDirectory $OutputDirectory
+        foreach ($file in @('Install-SD-Access.ps1','Install-SD-Access.cmd','SD-ACCESS.md')) {
+            Copy-Item -LiteralPath (Join-Path $sharedPermissions $file) -Destination (Join-Path $OutputDirectory $file) -Force
+        }
+        $permissionFile = Join-Path $OutputDirectory 'atmosphere/contents/0100b00b51230000/exefs/main.npdm'
+        [ordered]@{ npdm = 'atmosphere/contents/0100b00b51230000/exefs/main.npdm'; sha256 = (Get-FileHash -LiteralPath $permissionFile -Algorithm SHA256).Hash.ToLowerInvariant(); sdAccessIncluded = $true } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $OutputDirectory 'sd-access.build.json') -Encoding UTF8
+    }
 
     foreach ($entry in $entryPoints) {
         $name = [IO.Path]::GetFileNameWithoutExtension($entry)

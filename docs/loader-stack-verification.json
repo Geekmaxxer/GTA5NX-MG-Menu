@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-16",
+  "version": "v1.0.6",
+  "stack_words": 8344,
+  "pool": "SCRIPT_XML_STACK_SIZE",
+  "source_sha256": "d86722eb78d953e7ba53c726ca1fa5d009abaf48553fd06f94aef87d633d95c5",
+  "source_matches_workspace_controller": true,
+  "controller_sha256": "baffedae2989013373264a60a8ec4b735a3c6e6b64b1ec3800d20380e29c42c9",
+  "controller_bytes": 81920,
+  "compiled": true,
+  "header_adapted": true,
+  "name_validated": true,
+  "native_self_matches": 89,
+  "native_stock_matches": 89,
+  "new_native_hashes": false,
+  "ragemenu_and_binding_changed": false,
+  "switch_runtime_verified": false
+}
