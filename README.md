@@ -1,12 +1,14 @@
-# MEGATARD Menu v1.0.8 for GTA V Nintendo Switch
+# MEGATARD Menu v1.1 for GTA V Nintendo Switch
 
 SanScript source and build tools for MEGATARD's single-player mod menu, with
 [ScriptHookV-NX](https://github.com/Geekmaxxer/ScriptHookV-NX) SD settings and plugin management.
-Created by **MEGATARD / @Geekmaxxer**.
 
 Player, weapon, vehicle, world, teleport and NPC options sit alongside Object
 Spooner, Custom NSC Loader, custom story PEDs, language settings and persistence.
-See [Features](docs/FEATURES.md) and [v1.0.8 changes](docs/CHANGELOG.md).
+See [Features](docs/FEATURES.md) and [v1.1 changes](docs/CHANGELOG.md).
+
+The [v1.1 guide](docs/V1.1.md) describes growing catalogues, rescan status,
+live stack counts, numeric vehicle controls and pending hardware acceptance.
 
 ## Requirements
 

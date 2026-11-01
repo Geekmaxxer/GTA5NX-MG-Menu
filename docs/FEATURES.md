@@ -1,28 +1,30 @@
-# MEGATARD Menu v1.0.8
+# MEGATARD Menu v1.1
 
-The menu covers eight main categories:
+The menu provides eight categories for offline Story Mode. Open with LB + D-Pad
+Down or the saved combination; use A to select, B to return and Left/Right to
+adjust selectors.
 
-| Category | Features |
+| Category | Current features |
 | --- | --- |
-| Player | God mode, health/armour, PED and outfit selection, custom story PEDs, bodyguards, attackers, no-clip/freecam, movement options, cash, portable stock radio and autosave. |
-| Weapons | Weapon catalog, ammo/clip options, upgrades, explosive bullets and eight Special Gun modes. |
-| Wanted | Wanted stars, never wanted, police ignore and dispatch/report controls. |
-| Vehicles | Spawner, preview and saved vehicles, LS Customs and its subpages, vehicle controls, neon, chauffeur and cruise control. |
-| World | Time/weather, IPLs, vision effects, gravity/time scale, door controls and World Mayhem. |
-| Teleport | Waypoint/objective, stores, saved locations, coordinate entry and vehicle-aware teleporting. |
-| Misc | Population/NPC options, HUD/radar controls, cleanup tools and live coordinates. |
-| Menu | Language, Object Spooner, Custom NSC Loader, ScriptHookV-NX Plugins, appearance, positioning, open combo, persistent settings and credits. |
+| Player | Radio with track skip, health/protection, 760-model PED catalogue, story PEDs, outfits, bodyguards, attackers, movement, cash and autosave. |
+| Weapon | Eleven rows including ammunition, upgrades, explosive/fire bullets and eight Special Gun modes. |
+| Wanted | Wanted level, police, dispatch and civilian-report controls. |
+| Vehicle | Twenty-eight rows, spawner/saved cars, LS Customs, neon, seventeen-row Vehicle Control, chauffeur, cruise and numeric strength controls. |
+| World | Time/weather including system-time sync, wind and persistence; IPLs, gravity, doors and world effects. |
+| Teleport | Waypoint/objective, nineteen stores, thirty-five locations, nudge and numeric coordinates. |
+| Misc | Ambient NPC and world controls, cleanup and coordinates. |
+| Menu | Twelve rows, thirteen with RGB; six languages, Spooner, saved NSCs, native plugins, appearance, respawn, settings and credits. |
 
-ScriptHookV-NX provides SD settings persistence and NRO discovery, startup modes,
-manual loading, live status and cooperative process cancellation. The menu is
-an optional frontend to that runtime; NROs can also autoload independently.
+Plugin discovery is independent of resident admission. Rescan completion and
+failure are visible; deleted unmapped entries disappear and resident mappings
+remain valid until GTA exits. Saved NSC names use a paged SD catalogue. The stack
+counter reports currently free stacks of the selected official size.
 
-Descriptions use shared localized text rendering, wrapping and cached layout.
-Language selection also supports following the game's language.
+Acceleration Speed and Tyre Grip Strength offer 0.05 to 999, 0.05 steps, Normal at
+1.00 and five-character keyboard entry. Acceleration keeps high-speed protection;
+grip uses tyre-slip levels below Normal and grounded lateral assistance above it.
+Strength is not a literal multiplier of the tyre handling curve.
 
-The release builder compiles the menu and its achievement-controller loader.
-Independent scripts can be built separately with `Build-Any.ps1`.
-
-Features depend on the target port's native support and available assets.
-The feature list describes the source; it does not claim every option has
-received a full hardware regression test. See [validation](CHANGELOG.md).
+Read [v1.1 implementation and acceptance](V1.1.md) for ownership, migration,
+packaging and hardware-test boundaries. New gameplay effects remain pending
+physical acceptance of the complete matched pair.

@@ -1255,6 +1255,77 @@ PROC APPLY_VEHICLE_DIRT_LEVEL()
     SET_VEHICLE_DIRT_LEVEL(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), DIRT_LEVEL_VALUE(g_vehicle_dirt_level))
 ENDPROC
 
+PROC APPLY_VEHICLE_DOOR_ACTION()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX doorVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF g_vehicle_door_action = 0
+        SET_VEHICLE_DOOR_OPEN(doorVehicle, SC_DOOR_FRONT_LEFT, FALSE, FALSE)
+        SET_VEHICLE_DOOR_OPEN(doorVehicle, SC_DOOR_FRONT_RIGHT, FALSE, FALSE)
+        SET_VEHICLE_DOOR_OPEN(doorVehicle, SC_DOOR_REAR_LEFT, FALSE, FALSE)
+        SET_VEHICLE_DOOR_OPEN(doorVehicle, SC_DOOR_REAR_RIGHT, FALSE, FALSE)
+        SET_VEHICLE_DOOR_OPEN(doorVehicle, SC_DOOR_BONNET, FALSE, FALSE)
+        SET_VEHICLE_DOOR_OPEN(doorVehicle, SC_DOOR_BOOT, FALSE, FALSE)
+    ELSE
+        SET_VEHICLE_DOORS_SHUT(doorVehicle, FALSE)
+    ENDIF
+ENDPROC
+
+PROC APPLY_VEHICLE_SELECTED_DOOR(BOOL openDoor)
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX selectedDoorVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    SC_DOOR_LIST targetDoor = SC_DOOR_FRONT_LEFT
+    IF g_vehicle_door_choice = 0 targetDoor = SC_DOOR_FRONT_LEFT ENDIF
+    IF g_vehicle_door_choice = 1 targetDoor = SC_DOOR_FRONT_RIGHT ENDIF
+    IF g_vehicle_door_choice = 2 targetDoor = SC_DOOR_REAR_LEFT ENDIF
+    IF g_vehicle_door_choice = 3 targetDoor = SC_DOOR_REAR_RIGHT ENDIF
+    IF g_vehicle_door_choice = 4 targetDoor = SC_DOOR_BONNET ENDIF
+    IF g_vehicle_door_choice = 5 targetDoor = SC_DOOR_BOOT ENDIF
+    IF openDoor
+        SET_VEHICLE_DOOR_OPEN(selectedDoorVehicle, targetDoor, FALSE, FALSE)
+    ELSE
+        SET_VEHICLE_DOOR_SHUT(selectedDoorVehicle, targetDoor, FALSE)
+    ENDIF
+ENDPROC
+
+PROC APPLY_VEHICLE_BREAK_SELECTED_DOOR()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX breakDoorVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    SC_DOOR_LIST breakDoor = SC_DOOR_FRONT_LEFT
+    IF g_vehicle_door_choice = 0 breakDoor = SC_DOOR_FRONT_LEFT ENDIF
+    IF g_vehicle_door_choice = 1 breakDoor = SC_DOOR_FRONT_RIGHT ENDIF
+    IF g_vehicle_door_choice = 2 breakDoor = SC_DOOR_REAR_LEFT ENDIF
+    IF g_vehicle_door_choice = 3 breakDoor = SC_DOOR_REAR_RIGHT ENDIF
+    IF g_vehicle_door_choice = 4 breakDoor = SC_DOOR_BONNET ENDIF
+    IF g_vehicle_door_choice = 5 breakDoor = SC_DOOR_BOOT ENDIF
+    SET_VEHICLE_DOOR_BROKEN(breakDoorVehicle, breakDoor, FALSE)
+ENDPROC
+
+PROC APPLY_VEHICLE_POP_WINDSCREEN()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    POP_OUT_VEHICLE_WINDSCREEN(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
+ENDPROC
+
+PROC APPLY_VEHICLE_INTERIOR_LIGHT()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX lightVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    g_vehicle_interior_light = NOT g_vehicle_interior_light
+    SET_VEHICLE_INTERIORLIGHT(lightVehicle, g_vehicle_interior_light)
+    SET_VEHICLE_FORCE_INTERIORLIGHT(lightVehicle, g_vehicle_interior_light)
+ENDPROC
+
+PROC APPLY_VEHICLE_CONVERTIBLE_ROOF_TOGGLE()
+    IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
+    VEHICLE_INDEX roofVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF NOT DOES_ENTITY_EXIST(roofVehicle) OR IS_ENTITY_DEAD(roofVehicle) EXIT ENDIF
+    IF NOT IS_VEHICLE_A_CONVERTIBLE(roofVehicle, FALSE) EXIT ENDIF
+    CONVERTIBLE_ROOF_STATE roofState = GET_CONVERTIBLE_ROOF_STATE(roofVehicle)
+    IF roofState = CRS_LOWERED OR roofState = CRS_LOWERING
+        RAISE_CONVERTIBLE_ROOF(roofVehicle, FALSE)
+    ELSE
+        LOWER_CONVERTIBLE_ROOF(roofVehicle, FALSE)
+    ENDIF
+ENDPROC
+
 PROC APPLY_VEHICLE_WINDOW_ACTION()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
     VEHICLE_INDEX windowVehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
@@ -1588,7 +1659,7 @@ FUNC INT ITEM_COUNT()
         RETURN 6
     ENDIF
     IF g_tab = 0 AND g_outfit_open RETURN 21 ENDIF
-    IF g_tab = 0 AND g_radio_open RETURN 4 ENDIF
+    IF g_tab = 0 AND g_radio_open RETURN 5 ENDIF
     IF g_tab = 0 AND g_ped_open
         IF g_story_ped_picker_open RETURN PED_CHOICE_COUNT() + 2 ENDIF
         IF g_story_peds_open RETURN STORY_CHAR_VISIBLE_COUNT() ENDIF
@@ -1615,7 +1686,7 @@ FUNC INT ITEM_COUNT()
     ENDIF
     IF g_tab = 3 AND g_vehicle_control_open
         IF NOT g_cached_player_in_veh RETURN 1 ENDIF
-        RETURN 9
+        RETURN 17
     ENDIF
     // LSC child pages must be tested BEFORE g_lsc_open: g_lsc_open stays TRUE
     // while a child page is open (its own item/scroll are saved and restored by the
@@ -1650,7 +1721,7 @@ FUNC INT ITEM_COUNT()
     IF g_tab = 1 AND g_weapon_upgrades_open RETURN 7 ENDIF
     IF g_tab = 5 AND g_tp_stores_open RETURN 19 ENDIF
     IF g_tab = 5 AND g_tp_locs_open RETURN 35 ENDIF
-    IF g_tab = 4 AND g_timeweather_open RETURN 6 ENDIF
+    IF g_tab = 4 AND g_timeweather_open RETURN 9 ENDIF
     IF g_tab = 4 AND g_mayhem_open RETURN WORLD_MAYHEM_MENU_ROWS ENDIF
     IF g_tab = 7 AND g_language_open RETURN LANGUAGE_MENU_ROWS ENDIF
     IF g_tab = 7 AND g_spooner_open RETURN SPOONER_MENU_ROWS ENDIF
@@ -1665,7 +1736,7 @@ FUNC INT ITEM_COUNT()
             // while it is switched on).
             IF g_auto_save RETURN 26 ENDIF
             RETURN 25 BREAK
-        CASE 1 RETURN 10 BREAK
+        CASE 1 RETURN 11 BREAK
         CASE 2 RETURN 6 BREAK
         // 25 base rows (0-24) + Chauffeur (25) + Cruise Control (26) + Silent Sirens (27).
         CASE 3 RETURN 28 BREAK
@@ -2628,10 +2699,10 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
         IF g_item = 3 RETURN TRUE ENDIF
         RETURN FALSE
     ENDIF
-    // Vehicle Control submenu selectors: Windows (0), Window (1),
-    // Switch Seat (6) and Dirt Level (7) are Left/Right value rows.
+    // Vehicle Control submenu selectors: Doors (0), Door (1), Windows (5), Window (6),
+    // Switch Seat (14) and Dirt Level (15) are Left/Right value rows.
     IF g_tab = 3 AND g_vehicle_control_open
-        IF g_item = 0 OR g_item = 1 OR g_item = 6 OR g_item = 7 RETURN TRUE ENDIF
+        IF g_item = 0 OR g_item = 1 OR g_item = 5 OR g_item = 6 OR g_item = 14 OR g_item = 15 RETURN TRUE ENDIF
         RETURN FALSE
     ENDIF
     IF g_tab = 0 AND g_ped_open
@@ -2661,7 +2732,7 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
     IF g_tab = 4
         IF g_mayhem_open RETURN FALSE ENDIF
         IF g_timeweather_open
-            IF g_item = 0 OR g_item = 1 OR g_item = 2 OR g_item = 3 OR g_item = 5 RETURN TRUE ENDIF
+            IF g_item = 0 OR g_item = 1 OR g_item = 2 OR g_item = 3 OR g_item = 5 OR g_item = 7 RETURN TRUE ENDIF
             RETURN FALSE
         ELSE
             IF g_item = 3 OR g_item = 4 OR g_item = 5 RETURN TRUE ENDIF
@@ -2669,7 +2740,7 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
         ENDIF
     ENDIF
     IF g_tab = 2 AND g_item = 2 RETURN TRUE ENDIF
-    IF g_tab = 1 AND (g_item = 1 OR g_item = 7) AND NOT g_weapon_upgrades_open RETURN TRUE ENDIF
+    IF g_tab = 1 AND (g_item = 1 OR g_item = 8) AND NOT g_weapon_upgrades_open RETURN TRUE ENDIF
     IF g_tab = 1 AND g_weapon_upgrades_open AND g_item = 6 RETURN TRUE ENDIF
     // ---- LS Customs child pages (v0.9.9) ----
     // Tested BEFORE the g_lsc_open block below: g_lsc_open stays TRUE while a
@@ -2815,25 +2886,34 @@ PROC ADJUST_SELECTOR(INT direction)
         ENDIF
         EXIT
     ENDIF
-    // Vehicle Control submenu: Windows and Dirt Level auto-apply on Left/Right,
-    // Window and Switch Seat only change their selection (A applies those).
+    // Vehicle Control submenu: Doors (0), Windows (5), and Dirt Level (15) auto-apply on Left/Right.
+    // Door (1), Window (6), and Switch Seat (14) cycle selection (A applies).
     IF g_tab = 3 AND g_vehicle_control_open
         IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
         IF g_item = 0
+            g_vehicle_door_action = 1 - g_vehicle_door_action
+            APPLY_VEHICLE_DOOR_ACTION()
+        ENDIF
+        IF g_item = 1
+            g_vehicle_door_choice = g_vehicle_door_choice + direction
+            IF g_vehicle_door_choice < 0 g_vehicle_door_choice = 5 ENDIF
+            IF g_vehicle_door_choice > 5 g_vehicle_door_choice = 0 ENDIF
+        ENDIF
+        IF g_item = 5
             g_vehicle_window_action = 1 - g_vehicle_window_action
             APPLY_VEHICLE_WINDOW_ACTION()
         ENDIF
-        IF g_item = 1
+        IF g_item = 6
             g_vehicle_window_choice = g_vehicle_window_choice + direction
             IF g_vehicle_window_choice < 0 g_vehicle_window_choice = 5 ENDIF
             IF g_vehicle_window_choice > 5 g_vehicle_window_choice = 0 ENDIF
         ENDIF
-        IF g_item = 6
+        IF g_item = 14
             g_vehicle_seat_choice = g_vehicle_seat_choice + direction
             IF g_vehicle_seat_choice < 0 g_vehicle_seat_choice = 3 ENDIF
             IF g_vehicle_seat_choice > 3 g_vehicle_seat_choice = 0 ENDIF
         ENDIF
-        IF g_item = 7
+        IF g_item = 15
             // Clamped, not wrapping: matches the other wide-range sliders
             // (Auto Save Interval, Neon Speed, cash amount).
             g_vehicle_dirt_level = g_vehicle_dirt_level + direction
@@ -2927,6 +3007,12 @@ PROC ADJUST_SELECTOR(INT direction)
                 IF g_weather_choice < 0 g_weather_choice = 16 ENDIF
                 IF g_weather_choice > 16 g_weather_choice = 0 ENDIF
             ENDIF
+            IF g_item = 7
+                g_wind_speed_level = g_wind_speed_level + direction
+                IF g_wind_speed_level < 0 g_wind_speed_level = 4 ENDIF
+                IF g_wind_speed_level > 4 g_wind_speed_level = 0 ENDIF
+                APPLY_WIND_SPEED()
+            ENDIF
             IF g_item = 1
                 g_time_hour = g_time_hour + direction
                 IF g_time_hour < 0 g_time_hour = 23 ENDIF
@@ -2987,7 +3073,7 @@ PROC ADJUST_SELECTOR(INT direction)
         IF g_weapon_choice >= MENU_WEAPON_COUNT() g_weapon_choice = 0 ENDIF
         EXIT
     ENDIF
-    IF g_tab = 1 AND g_item = 7
+    IF g_tab = 1 AND g_item = 8
         RELEASE_GRAVITY_GUN_ENTITY()
         g_special_gun_mode = g_special_gun_mode + direction
         IF g_special_gun_mode < 0 g_special_gun_mode = SPECIAL_GUN_COUNT - 1 ENDIF
@@ -3218,14 +3304,14 @@ PROC ADJUST_SELECTOR(INT direction)
         g_vehicle_speed_unit = 1 - g_vehicle_speed_unit
     ENDIF
     IF g_tab = 3 AND g_item = 8
-        g_vehicle_acceleration_level = g_vehicle_acceleration_level + direction
-        IF g_vehicle_acceleration_level < 0 g_vehicle_acceleration_level = 12 ENDIF
-        IF g_vehicle_acceleration_level > 12 g_vehicle_acceleration_level = 0 ENDIF
+        g_vehicle_acceleration_level = g_vehicle_acceleration_level + direction * 5
+        IF g_vehicle_acceleration_level < 5 g_vehicle_acceleration_level = 5 ENDIF
+        IF g_vehicle_acceleration_level > 99900 g_vehicle_acceleration_level = 99900 ENDIF
     ENDIF
     IF g_tab = 3 AND g_item = 9
-        g_vehicle_grip_level = g_vehicle_grip_level + direction
-        IF g_vehicle_grip_level < -4 g_vehicle_grip_level = 8 ENDIF
-        IF g_vehicle_grip_level > 8 g_vehicle_grip_level = -4 ENDIF
+        g_vehicle_grip_level = g_vehicle_grip_level + direction * 5
+        IF g_vehicle_grip_level < 5 g_vehicle_grip_level = 5 ENDIF
+        IF g_vehicle_grip_level > 99900 g_vehicle_grip_level = 99900 ENDIF
     ENDIF
     IF g_tab = 7
         IF g_language_open
@@ -3415,4 +3501,52 @@ PROC ADJUST_SELECTOR(INT direction)
             ENDIF
         ENDIF
     ENDIF
+ENDPROC
+
+// Correct the former collision-friction control with tyre slip reduction below
+// Normal and a mass-scaled lateral traction assist above Normal. This is an
+// assistance strength, not a rewrite of the vehicle's shared handling data.
+PROC PROCESS_VEHICLE_GRIP(VEHICLE_INDEX vehicle)
+    MODEL_NAMES model = ADDER
+    VECTOR velocity
+    VECTOR force
+    FLOAT multiplier = TO_FLOAT(g_vehicle_grip_level) / 100.0
+    FLOAT delta = GET_FRAME_TIME()
+    FLOAT rate = 0.0
+    INT reduction = 0
+    IF g_grip_vehicle != vehicle OR g_vehicle_grip_level = 100 OR g_chaos_mod_running
+        IF g_grip_applied AND DOES_ENTITY_EXIST(g_grip_vehicle) AND NOT IS_ENTITY_DEAD(g_grip_vehicle) AND NOT g_chaos_mod_running
+            SET_VEHICLE_REDUCE_GRIP(g_grip_vehicle, FALSE)
+            SET_VEHICLE_REDUCE_GRIP_LEVEL(g_grip_vehicle, 0)
+        ENDIF
+        g_grip_vehicle = vehicle
+        g_grip_applied = FALSE
+    ENDIF
+    IF g_chaos_mod_running OR g_vehicle_grip_level = 100 EXIT ENDIF
+    IF NOT DOES_ENTITY_EXIST(vehicle) OR IS_ENTITY_DEAD(vehicle) EXIT ENDIF
+    IF GET_PED_IN_VEHICLE_SEAT(vehicle, VS_DRIVER) != PLAYER_PED_ID() EXIT ENDIF
+    model = GET_ENTITY_MODEL(vehicle)
+    IF NOT IS_THIS_MODEL_A_CAR(model) AND NOT IS_THIS_MODEL_A_BIKE(model) EXIT ENDIF
+    IF multiplier < 1.0
+        IF NOT IS_THIS_MODEL_A_CAR(model) EXIT ENDIF
+        reduction = FLOOR((1.0 - multiplier) * 4.0)
+        IF reduction > 3 reduction = 3 ENDIF
+        SET_VEHICLE_REDUCE_GRIP_LEVEL(vehicle, reduction)
+        SET_VEHICLE_REDUCE_GRIP(vehicle, TRUE)
+        g_grip_applied = TRUE
+        EXIT
+    ENDIF
+    IF g_grip_applied
+        SET_VEHICLE_REDUCE_GRIP(vehicle, FALSE)
+        SET_VEHICLE_REDUCE_GRIP_LEVEL(vehicle, 0)
+        g_grip_applied = FALSE
+    ENDIF
+    IF NOT IS_VEHICLE_ON_ALL_WHEELS(vehicle) EXIT ENDIF
+    IF delta <= 0.0 EXIT ENDIF
+    velocity = GET_ENTITY_SPEED_VECTOR(vehicle, TRUE)
+    rate = (multiplier - 1.0) * 2.0
+    // Avoid reversing lateral motion in one physics step at large strengths.
+    IF rate > 1.0 / delta rate = 1.0 / delta ENDIF
+    force = <<-velocity.x * rate, 0.0, 0.0>>
+    APPLY_FORCE_TO_ENTITY_CENTER_OF_MASS(vehicle, APPLY_TYPE_FORCE, force, 0, TRUE, TRUE)
 ENDPROC

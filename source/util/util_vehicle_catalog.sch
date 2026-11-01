@@ -1792,6 +1792,8 @@ PROC OPEN_MENU_KEYBOARD(INT target)
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "CUSTOM NSC", "TYPE .NSC FILE NAME", "", "", "", "", 64)
     ELIF target = 17
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "TP DISTANCE", "DISTANCE IN METERS (10-500)", "", "", "", "", 16)
+    ELIF target = 19 OR target = 20
+        DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "VEHICLE MULTIPLIER", "0.05 TO 999", "", "", "", "", 5)
     ELIF target = 18
         DISPLAY_ONSCREEN_KEYBOARD(ONSCREEN_KEYBOARD_BASIC_ENGLISH, "VEHICLE NAME", "NAME THIS VEHICLE (MAX 24)", "", "", "", "", 24)
     ELSE
@@ -1803,6 +1805,7 @@ FUNC BOOL PARSE_FLOAT_COORDINATE(STRING value, FLOAT &result)
     INT length = GET_LENGTH_OF_LITERAL_STRING(value)
     INT index = 0
     INT digit = 0
+    INT digits = 0
     BOOL negative = FALSE
     BOOL afterPoint = FALSE
     FLOAT decimalFactor = 0.1
@@ -1812,6 +1815,7 @@ FUNC BOOL PARSE_FLOAT_COORDINATE(STRING value, FLOAT &result)
     WHILE index < length
         character = GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(value, index, index + 1)
         IF STRING_TO_INT(character, digit)
+            digits = digits + 1
             IF afterPoint
                 result = result + (TO_FLOAT(digit) * decimalFactor)
                 decimalFactor = decimalFactor * 0.1
@@ -1828,7 +1832,7 @@ FUNC BOOL PARSE_FLOAT_COORDINATE(STRING value, FLOAT &result)
         index = index + 1
     ENDWHILE
     IF negative result = result * -1.0 ENDIF
-    RETURN TRUE
+    RETURN digits > 0
 ENDFUNC
 
 PROC PROCESS_MENU_KEYBOARD()
@@ -2008,6 +2012,14 @@ PROC PROCESS_MENU_KEYBOARD()
                 IF parsed < 10 parsed = 10 ENDIF
                 IF parsed > 500 parsed = 500 ENDIF
                 g_bodyguard_tp_distance = parsed
+            ENDIF
+        ELIF g_keyboard_target = 19 OR g_keyboard_target = 20
+            IF PARSE_FLOAT_COORDINATE(result, parsedCoordinate)
+                IF parsedCoordinate < 0.05 parsedCoordinate = 0.05 ENDIF
+                IF parsedCoordinate > 999.0 parsedCoordinate = 999.0 ENDIF
+                parsed = FLOOR((parsedCoordinate * 100.0) + 0.5)
+                IF g_keyboard_target = 19 g_vehicle_acceleration_level = parsed ENDIF
+                IF g_keyboard_target = 20 g_vehicle_grip_level = parsed ENDIF
             ENDIF
         ELIF g_keyboard_target = 18
             COMMIT_STAGED_VEHICLE_WITH_NAME(result)

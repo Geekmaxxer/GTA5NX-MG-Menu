@@ -121,8 +121,6 @@ CONST_INT PERSIST_MAX_TIME_CHOICE 3
 CONST_INT PERSIST_MAX_BODYGUARD_WEAPON 4
 CONST_INT PERSIST_MAX_BODYGUARD_FORMATION 2
 CONST_INT PERSIST_MAX_ATTACKER_WEAPON 3
-CONST_INT PERSIST_MAX_VEHICLE_ACCEL 12
-CONST_INT PERSIST_MAX_VEHICLE_GRIP 12
 CONST_INT PERSIST_MAX_VEHICLE_COLOUR 26
 CONST_INT PERSIST_MAX_WHEEL_TYPE 12
 CONST_INT PERSIST_MAX_WINDOW_TINT 6
@@ -242,9 +240,9 @@ FUNC INT PERSIST_GLOBAL_INT(INT slot)
         CASE PERSIST_INT_BODYGUARD_WEAPON RETURN g_bodyguard_weapon_choice BREAK
         CASE PERSIST_INT_BODYGUARD_FORMATION RETURN g_bodyguard_formation_choice BREAK
         CASE PERSIST_INT_ATTACKER_WEAPON RETURN g_attacker_weapon_choice BREAK
-        CASE PERSIST_INT_VEHICLE_ACCEL RETURN g_vehicle_acceleration_level BREAK
+        CASE PERSIST_INT_VEHICLE_ACCEL RETURN g_vehicle_acceleration_level + 100000 BREAK
         CASE PERSIST_INT_VEHICLE_GRIP
-            RETURN g_vehicle_grip_level + 4
+            RETURN g_vehicle_grip_level + 100000
         BREAK
         CASE PERSIST_INT_LSC_PRIMARY RETURN g_lsc_primary_colour BREAK
         CASE PERSIST_INT_LSC_SECONDARY RETURN g_lsc_secondary_colour BREAK
@@ -328,12 +326,54 @@ PROC PERSIST_SET_GLOBAL_INT(INT slot, INT value)
             g_attacker_weapon_choice = value
         BREAK
         CASE PERSIST_INT_VEHICLE_ACCEL
-            IF value > PERSIST_MAX_VEHICLE_ACCEL value = PERSIST_MAX_VEHICLE_ACCEL ENDIF
+            IF value >= 100000
+                value = value - 100000
+            ELSE
+                SWITCH value
+                    CASE 0 value = 100 BREAK
+                    CASE 1 value = 125 BREAK
+                    CASE 2 value = 150 BREAK
+                    CASE 3 value = 200 BREAK
+                    CASE 4 value = 250 BREAK
+                    CASE 5 value = 300 BREAK
+                    CASE 6 value = 400 BREAK
+                    CASE 7 value = 500 BREAK
+                    CASE 8 value = 1000 BREAK
+                    CASE 9 value = 2000 BREAK
+                    CASE 10 value = 5000 BREAK
+                    CASE 11 value = 10000 BREAK
+                    CASE 12 value = 20000 BREAK
+                    DEFAULT value = 100 BREAK
+                ENDSWITCH
+            ENDIF
+            IF value < 5 value = 5 ENDIF
+            IF value > 99900 value = 99900 ENDIF
             g_vehicle_acceleration_level = value
         BREAK
         CASE PERSIST_INT_VEHICLE_GRIP
-            IF value > PERSIST_MAX_VEHICLE_GRIP value = PERSIST_MAX_VEHICLE_GRIP ENDIF
-            g_vehicle_grip_level = value - 4
+            IF value >= 100000
+                value = value - 100000
+            ELSE
+                SWITCH value
+                    CASE 0 value = 15 BREAK
+                    CASE 1 value = 30 BREAK
+                    CASE 2 value = 50 BREAK
+                    CASE 3 value = 75 BREAK
+                    CASE 4 value = 100 BREAK
+                    CASE 5 value = 110 BREAK
+                    CASE 6 value = 125 BREAK
+                    CASE 7 value = 140 BREAK
+                    CASE 8 value = 160 BREAK
+                    CASE 9 value = 180 BREAK
+                    CASE 10 value = 200 BREAK
+                    CASE 11 value = 225 BREAK
+                    CASE 12 value = 250 BREAK
+                    DEFAULT value = 100 BREAK
+                ENDSWITCH
+            ENDIF
+            IF value < 5 value = 5 ENDIF
+            IF value > 99900 value = 99900 ENDIF
+            g_vehicle_grip_level = value
         BREAK
         CASE PERSIST_INT_LSC_PRIMARY
             IF value > PERSIST_MAX_VEHICLE_COLOUR value = PERSIST_MAX_VEHICLE_COLOUR ENDIF
@@ -394,14 +434,15 @@ PROC PERSIST_LOAD_CUSTOM_NSC_LIST()
     INT code = 0
     STRING ch = ""
 
-    g_nsc_discovered_count = 0
+    INIT_NSC_CATALOG()
+    IF g_nsc_catalog_migrated OR g_nsc_catalog_error <> 0 EXIT ENDIF
     WHILE nscIdx < 950
         code = g_persist_sd_data[PERSIST_WORD_NSC_BASE + nscIdx]
         IF code <= 0
             nscIdx = 950
         ELIF code = NSC_PERSIST_SEP_CODE
             IF currentLen > 0
-                TRY_REGISTER_CUSTOM_NSC(currentName)
+                IF NOT TRY_REGISTER_CUSTOM_NSC(currentName) EXIT ENDIF
                 currentName = ""
                 currentLen = 0
             ENDIF
@@ -416,11 +457,13 @@ PROC PERSIST_LOAD_CUSTOM_NSC_LIST()
         ENDIF
     ENDWHILE
     IF currentLen > 0
-        TRY_REGISTER_CUSTOM_NSC(currentName)
+        IF NOT TRY_REGISTER_CUSTOM_NSC(currentName) EXIT ENDIF
     ENDIF
     IF g_nsc_discovered_count > 0
-        g_nsc_last_probed_name = g_nsc_script_names[g_nsc_discovered_count - 1]
+        g_nsc_last_probed_name = NSC_NAME_AT(g_nsc_discovered_count - 1)
     ENDIF
+    g_nsc_catalog_migrated = TRUE
+    IF NOT NSC_COMMIT_COUNT(g_nsc_discovered_count) g_nsc_catalog_migrated = FALSE ENDIF
 ENDPROC
 
 // Refreshes write-shadow baseline from current globals
@@ -445,7 +488,6 @@ ENDPROC
 // Packs live menu globals into g_persist_sd_data buffer
 PROC PERSIST_PACK_ALL_TO_BUFFER()
     INT slot = 0
-    INT nscIdx = 0
 
     g_persist_sd_data[PERSIST_WORD_MAGIC] = PERSIST_MAGIC_HEADER
     g_persist_sd_data[PERSIST_WORD_VERSION] = PERSIST_SCHEMA_VERSION
@@ -468,10 +510,7 @@ PROC PERSIST_PACK_ALL_TO_BUFFER()
 
     g_persist_sd_data[PERSIST_WORD_LANG] = g_menu_language
 
-    WHILE nscIdx < 950
-        g_persist_sd_data[PERSIST_WORD_NSC_BASE + nscIdx] = NSC_PERSIST_CHAR_AT(nscIdx)
-        nscIdx = nscIdx + 1
-    ENDWHILE
+    // Preserve the old filename stream as a migration/recovery source.
 
     g_persist_sd_data[PERSIST_WORD_CHECKSUM] = PERSIST_COMPUTE_SD_CHECKSUM()
 ENDPROC

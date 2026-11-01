@@ -15,17 +15,75 @@ FUNC BOOL PLUGIN_MGR_BRIDGE_READY()
     IF NOT SHVNX_AVAILABLE(1481655601, 1397249614) RETURN FALSE ENDIF
     IF NOT SHVNX_AVAILABLE(1481657137, 1397249614) RETURN FALSE ENDIF
     IF NOT SHVNX_AVAILABLE(1481658929, 1397249614) RETURN FALSE ENDIF
+    IF NOT SHVNX_AVAILABLE(1481659991, 1397249614) RETURN FALSE ENDIF
+    IF NOT SHVNX_AVAILABLE(1481659186, 1397249614) RETURN FALSE ENDIF
     RETURN SHVNX_PLUGIN_MANAGER_VERSION() >= 3
+ENDFUNC
+
+// Only visible rows are read. Runtime catalogue indices are stable owner tokens;
+// visible positions may change after removal, insertion or suffix changes.
+FUNC TEXT_LABEL_63 PLUGIN_MGR_KEY(INT slot)
+    TEXT_LABEL_63 key = SHVNX_GET_PLUGIN_NAME(slot)
+    INT length = GET_LENGTH_OF_LITERAL_STRING(key)
+    IF length > 9
+        IF COMPARE_STRINGS(GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(key, length - 9, length), ".disabled", FALSE, 9) = 0
+            key = GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(key, 0, length - 9)
+            RETURN key
+        ENDIF
+    ENDIF
+    IF length > 7
+        IF COMPARE_STRINGS(GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(key, length - 7, length), ".manual", FALSE, 7) = 0
+            key = GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(key, 0, length - 7)
+            RETURN key
+        ENDIF
+    ENDIF
+    RETURN key
+ENDFUNC
+
+FUNC INT PLUGIN_MGR_RUNTIME_SLOT(INT visible)
+    IF visible >= g_plugin_mgr_window_start AND visible < g_plugin_mgr_window_start + 8
+        RETURN g_plugin_mgr_rows[visible - g_plugin_mgr_window_start]
+    ENDIF
+    INT slot = 0
+    INT row = 0
+    INT count = SHVNX_GET_PLUGIN_COUNT()
+    WHILE slot < count
+        IF SHVNX_IS_PLUGIN_LISTED(slot)
+            IF row = visible RETURN slot ENDIF
+            row = row + 1
+        ENDIF
+        slot = slot + 1
+    ENDWHILE
+    RETURN -1
+ENDFUNC
+
+FUNC INT PLUGIN_MGR_STATE(INT slot)
+    INT state = 2
+    INT memory = 0
+    INT stage = 0
+    SHVNX_GET_PLUGIN_STATUS(slot, state, memory, stage)
+    RETURN state
+ENDFUNC
+
+FUNC INT PLUGIN_MGR_MEMORY(INT slot)
+    INT state = 2
+    INT memory = 0
+    INT stage = 0
+    SHVNX_GET_PLUGIN_STATUS(slot, state, memory, stage)
+    RETURN memory
 ENDFUNC
 
 PROC SYNC_PLUGIN_MGR_LIST()
     INT now = GET_GAME_TIMER()
     INT slot = 0
-    INT status = 0
-    INT memKb = 0
-    INT plugStep = 0
+    INT count = 0
+    INT state = 0
+    INT resolved = -1
+    INT window = g_scroll - 1
+    INT row = 0
+    TEXT_LABEL_63 key = ""
     IF g_plugin_mgr_next_sync > now EXIT ENDIF
-    g_plugin_mgr_next_sync = now + 500
+    g_plugin_mgr_next_sync = now + 250
     g_plugin_mgr_ready = PLUGIN_MGR_BRIDGE_READY()
     IF NOT g_plugin_mgr_ready
         g_plugin_mgr_count = 0
@@ -33,44 +91,53 @@ PROC SYNC_PLUGIN_MGR_LIST()
         g_plugin_mgr_slot = -1
         EXIT
     ENDIF
-    g_plugin_mgr_count = SHVNX_GET_PLUGIN_COUNT()
-    IF g_plugin_mgr_count > PLUGIN_MGR_MAX_PLUGINS g_plugin_mgr_count = PLUGIN_MGR_MAX_PLUGINS ENDIF
-    IF g_plugin_mgr_count < 0 g_plugin_mgr_count = 0 ENDIF
-    WHILE slot < g_plugin_mgr_count
-        g_plugin_mgr_names[slot] = SHVNX_GET_PLUGIN_NAME(slot)
-        status = 0
-        memKb = 0
-        plugStep = 0
-        IF SHVNX_GET_PLUGIN_STATUS(slot, status, memKb, plugStep)
-            g_plugin_mgr_states[slot] = status
-            g_plugin_mgr_memory[slot] = memKb
-        ELSE
-            g_plugin_mgr_states[slot] = 2
-            g_plugin_mgr_memory[slot] = 0
+    SHVNX_GET_PLUGIN_SCAN(g_plugin_mgr_scan_generation, g_plugin_mgr_scan_pending, g_plugin_mgr_scan_error)
+    count = SHVNX_GET_PLUGIN_COUNT()
+    IF window < 0 window = 0 ENDIF
+    g_plugin_mgr_window_start = window
+    WHILE row < 8
+        g_plugin_mgr_rows[row] = -1
+        row = row + 1
+    ENDWHILE
+    g_plugin_mgr_count = 0
+    WHILE slot < count
+        IF SHVNX_IS_PLUGIN_LISTED(slot)
+            IF g_plugin_mgr_count >= window AND g_plugin_mgr_count < window + 8
+                g_plugin_mgr_rows[g_plugin_mgr_count - window] = slot
+            ENDIF
+            g_plugin_mgr_count = g_plugin_mgr_count + 1
+            IF g_plugin_mgr_detail_open
+                key = PLUGIN_MGR_KEY(slot)
+                IF COMPARE_STRINGS(key, g_plugin_mgr_key, FALSE, 63) = 0 resolved = slot ENDIF
+            ENDIF
         ENDIF
-        g_plugin_mgr_policies[slot] = SHVNX_GET_PLUGIN_POLICY(slot)
-        g_plugin_mgr_status_text[slot] = SHVNX_GET_PLUGIN_STATUS_TEXT(slot)
-        g_plugin_mgr_running[slot] = SHVNX_IS_PLUGIN_RUNNING(slot)
         slot = slot + 1
     ENDWHILE
+    IF g_plugin_mgr_scan_requested >= 0 AND g_plugin_mgr_scan_generation != g_plugin_mgr_scan_requested AND g_plugin_mgr_scan_pending = 0
+        g_plugin_mgr_scan_requested = -1
+        IF g_plugin_mgr_scan_error = 0
+            g_plugin_mgr_feedback = 7
+        ELSE
+            g_plugin_mgr_feedback = -1
+            g_plugin_mgr_action_error = g_plugin_mgr_scan_error
+        ENDIF
+    ENDIF
     IF g_plugin_mgr_detail_open
-        IF g_plugin_mgr_slot < 0 OR g_plugin_mgr_slot >= g_plugin_mgr_count
+        g_plugin_mgr_slot = resolved
+        IF resolved < 0
             g_plugin_mgr_detail_open = FALSE
-            g_plugin_mgr_slot = -1
             g_item = g_plugin_mgr_item
             g_scroll = g_plugin_mgr_scroll
-        ELIF g_plugin_mgr_feedback = 1
-            IF g_plugin_mgr_states[g_plugin_mgr_slot] = 1 OR g_plugin_mgr_states[g_plugin_mgr_slot] = 5
-                g_plugin_mgr_feedback = 3
-            ELIF g_plugin_mgr_states[g_plugin_mgr_slot] = 7
-                g_plugin_mgr_feedback = 6
-            ELIF g_plugin_mgr_states[g_plugin_mgr_slot] = 6
-                g_plugin_mgr_feedback = 5
-            ELIF g_plugin_mgr_states[g_plugin_mgr_slot] = 2
-                g_plugin_mgr_feedback = -1
-            ENDIF
-        ELIF g_plugin_mgr_feedback = 4
-            IF NOT g_plugin_mgr_running[g_plugin_mgr_slot]
+        ELSE
+            state = PLUGIN_MGR_STATE(resolved)
+            g_plugin_mgr_detail_state = state
+            g_plugin_mgr_detail_status = SHVNX_GET_PLUGIN_STATUS_TEXT(resolved)
+            IF g_plugin_mgr_feedback = 1
+                IF state = 1 OR state = 5 g_plugin_mgr_feedback = 3 ENDIF
+                IF state = 7 g_plugin_mgr_feedback = 6 ENDIF
+                IF state = 6 g_plugin_mgr_feedback = 5 ENDIF
+                IF state = 2 g_plugin_mgr_feedback = -1 ENDIF
+            ELIF g_plugin_mgr_feedback = 4 AND NOT SHVNX_IS_PLUGIN_RUNNING(resolved)
                 g_plugin_mgr_feedback = 5
             ENDIF
         ENDIF
@@ -104,7 +171,7 @@ FUNC STRING PLUGIN_MGR_STATE_LABEL(INT status)
 ENDFUNC
 
 FUNC TEXT_LABEL_31 PLUGIN_MGR_SHORT_NAME(INT slot)
-    TEXT_LABEL_31 label = g_plugin_mgr_names[slot]
+    TEXT_LABEL_31 label = SHVNX_GET_PLUGIN_NAME(slot)
     IF GET_LENGTH_OF_LITERAL_STRING(label) > 20
         label = GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(label, 0, 18)
         label += ".."
@@ -120,7 +187,7 @@ ENDPROC
 
 PROC DRAW_PLUGIN_MGR_ROW(INT index, FLOAT y)
     BOOL selected = (g_item = index)
-    INT slot = index - 1
+    INT slot = PLUGIN_MGR_RUNTIME_SLOT(index - 1)
     INT colorState = 2
     TEXT_LABEL_31 value = ""
     TEXT_LABEL_31 label = ""
@@ -134,7 +201,7 @@ PROC DRAW_PLUGIN_MGR_ROW(INT index, FLOAT y)
     ENDIF
     IF g_plugin_mgr_detail_open
         slot = g_plugin_mgr_slot
-        IF slot < 0 OR slot >= g_plugin_mgr_count EXIT ENDIF
+        IF slot < 0 OR slot >= SHVNX_GET_PLUGIN_COUNT() EXIT ENDIF
         SWITCH index
             CASE 0
                 DRAW_OPTION(y, TR("Load Now", "Cargar ahora", "立即加载", "Jetzt laden", "今すぐ読込", "Загрузить сейчас", "Carregar agora", "Charger maintenant"), "APPLY", selected, 2)
@@ -143,14 +210,14 @@ PROC DRAW_PLUGIN_MGR_ROW(INT index, FLOAT y)
                 value = "< "
                 value += PLUGIN_MGR_POLICY_LABEL(g_plugin_mgr_policy_choice)
                 value += " >"
-                IF g_plugin_mgr_policy_choice != g_plugin_mgr_policies[slot] value += " *" ENDIF
+                IF g_plugin_mgr_policy_choice != SHVNX_GET_PLUGIN_POLICY(slot) value += " *" ENDIF
                 DRAW_OPTION(y, TR("Startup Mode", "Modo de inicio", "启动模式", "Startmodus", "起動モード", "Режим запуска", "Modo de início", "Mode de démarrage"), value, selected, 2)
                 BREAK
             CASE 2
-                DRAW_OPTION(y, TR("Runtime", "Estado actual", "运行状态", "Laufzeit", "現在の状態", "Состояние", "Estado atual", "État actuel"), PLUGIN_MGR_STATE_LABEL(g_plugin_mgr_states[slot]), selected, 2)
+                DRAW_OPTION(y, TR("Runtime", "Estado actual", "运行状态", "Laufzeit", "現在の状態", "Состояние", "Estado atual", "État actuel"), PLUGIN_MGR_STATE_LABEL(PLUGIN_MGR_STATE(slot)), selected, 2)
                 BREAK
             CASE 3
-                DRAW_NUMBER_OPTION(y, TR("Mapped Memory (KiB)", "Memoria asignada (KiB)", "映射内存 (KiB)", "Belegter Speicher (KiB)", "割当メモリ (KiB)", "Память (КиБ)", "Memória alocada (KiB)", "Mémoire allouée (Kio)"), g_plugin_mgr_memory[slot], selected)
+                DRAW_NUMBER_OPTION(y, TR("Mapped Memory (KiB)", "Memoria asignada (KiB)", "映射内存 (KiB)", "Belegter Speicher (KiB)", "割当メモリ (KiB)", "Память (КиБ)", "Memória alocada (KiB)", "Mémoire allouée (Kio)"), PLUGIN_MGR_MEMORY(slot), selected)
                 BREAK
             CASE 4
                 value = "--"
@@ -168,25 +235,29 @@ PROC DRAW_PLUGIN_MGR_ROW(INT index, FLOAT y)
                 BREAK
             CASE 6
                 value = TR("INACTIVE", "INACTIVO", "未运行", "INAKTIV", "非実行", "НЕАКТИВЕН", "INATIVO", "INACTIF")
-                IF g_plugin_mgr_running[slot] value = "APPLY" ENDIF
+                IF SHVNX_IS_PLUGIN_RUNNING(slot) value = "APPLY" ENDIF
                 DRAW_OPTION(y, TR("Kill Process", "Detener proceso", "终止进程", "Prozess stoppen", "プロセス停止", "Остановить процесс", "Parar processo", "Arrêter le processus"), value, selected, 2)
                 BREAK
         ENDSWITCH
         EXIT
     ENDIF
     IF index = 0
-        DRAW_OPTION(y, TR("Rescan Plugins", "Buscar plugins", "重新扫描插件", "Plugins suchen", "プラグインを再走査", "Поиск плагинов", "Buscar plugins", "Analyser les plugins"), "APPLY", selected, 2)
+        value = "APPLY"
+        IF g_plugin_mgr_scan_requested >= 0 value = "SCANNING..." ENDIF
+        IF g_plugin_mgr_feedback = 7 value = "SYNCED" ENDIF
+        IF g_plugin_mgr_feedback < 0 value = "ERROR" ENDIF
+        DRAW_OPTION(y, TR("Rescan Plugins", "Buscar plugins", "重新扫描插件", "Plugins suchen", "プラグインを再走査", "Поиск плагинов", "Buscar plugins", "Analyser les plugins"), value, selected, 2)
         EXIT
     ENDIF
     IF g_plugin_mgr_count <= 0
         DRAW_OPTION(y, TR("No plugins installed", "No hay plugins", "未安装插件", "Keine Plugins installiert", "プラグインなし", "Плагины не установлены", "Nenhum plugin instalado", "Aucun plugin installé"), "EMPTY", selected, 2)
         EXIT
     ENDIF
-    IF slot >= 0 AND slot < g_plugin_mgr_count
-        IF g_plugin_mgr_states[slot] = 1 colorState = 1 ENDIF
-        IF g_plugin_mgr_states[slot] = 2 colorState = 0 ENDIF
+    IF slot >= 0 AND slot < SHVNX_GET_PLUGIN_COUNT()
+        IF PLUGIN_MGR_STATE(slot) = 1 colorState = 1 ENDIF
+        IF PLUGIN_MGR_STATE(slot) = 2 colorState = 0 ENDIF
         label = PLUGIN_MGR_SHORT_NAME(slot)
-        DRAW_OPTION(y, label, PLUGIN_MGR_STATE_LABEL(g_plugin_mgr_states[slot]), selected, colorState)
+        DRAW_OPTION(y, label, PLUGIN_MGR_STATE_LABEL(PLUGIN_MGR_STATE(slot)), selected, colorState)
     ENDIF
 ENDPROC
 
@@ -195,8 +266,11 @@ PROC DRAW_PLUGIN_MGR_PAGE()
     INT row = 0
     INT totalRows = 0
     TEXT_LABEL_31 title = "SCRIPTHOOKV-NX PLUGINS"
+    INT window = g_scroll - 1
+    IF window < 0 window = 0 ENDIF
+    IF NOT g_plugin_mgr_detail_open AND window != g_plugin_mgr_window_start g_plugin_mgr_next_sync = 0 ENDIF
     SYNC_PLUGIN_MGR_LIST()
-    IF g_plugin_mgr_detail_open AND g_plugin_mgr_slot >= 0 AND g_plugin_mgr_slot < g_plugin_mgr_count
+    IF g_plugin_mgr_detail_open AND g_plugin_mgr_slot >= 0 AND g_plugin_mgr_slot < SHVNX_GET_PLUGIN_COUNT()
         title = PLUGIN_MGR_SHORT_NAME(g_plugin_mgr_slot)
     ENDIF
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, title)
@@ -227,11 +301,12 @@ PROC HANDLE_PLUGIN_MGR_APPLY(INT item)
     INT slot = 0
     INT requestedPolicy = 0
     INT confirmedPolicy = -1
+    g_plugin_mgr_next_sync = 0
     SYNC_PLUGIN_MGR_LIST()
     IF NOT g_plugin_mgr_ready EXIT ENDIF
     IF g_plugin_mgr_detail_open
         slot = g_plugin_mgr_slot
-        IF slot < 0 OR slot >= g_plugin_mgr_count EXIT ENDIF
+        IF slot < 0 OR slot >= SHVNX_GET_PLUGIN_COUNT() EXIT ENDIF
         IF item = 0
             accepted = SHVNX_LOAD_PLUGIN(slot)
             IF accepted
@@ -249,7 +324,7 @@ PROC HANDLE_PLUGIN_MGR_APPLY(INT item)
             // Never announce success solely from the action's boolean result.
             g_plugin_mgr_next_sync = 0
             SYNC_PLUGIN_MGR_LIST()
-            IF accepted AND confirmedPolicy = requestedPolicy AND g_plugin_mgr_policies[slot] = requestedPolicy
+            IF accepted AND confirmedPolicy = requestedPolicy AND SHVNX_GET_PLUGIN_POLICY(slot) = requestedPolicy
                 g_plugin_mgr_feedback = 2
                 g_plugin_mgr_policy_choice = confirmedPolicy
                 PLUGIN_MGR_ANNOUNCE(TR("Startup mode saved and confirmed. Runtime changes only with Load Now or Kill Process.", "Inicio guardado y confirmado. Usa Cargar ahora o Detener proceso para cambiar la ejecución.", "启动模式已保存并确认。当前运行仅由立即加载或终止进程改变。", "Startmodus gespeichert und bestätigt. Laufzeit nur mit Jetzt laden oder Prozess stoppen ändern.", "起動モードを保存・確認。現在の実行は今すぐ読込かプロセス停止で変更します。", "Режим запуска сохранён и проверен. Для текущего запуска используйте загрузку или остановку.", "Modo salvo e confirmado. Use Carregar agora ou Parar processo para mudar a execução.", "Mode enregistré et vérifié. Utilisez Charger maintenant ou Arrêter le processus pour l'exécution."))
@@ -280,20 +355,24 @@ PROC HANDLE_PLUGIN_MGR_APPLY(INT item)
         ENDIF
     ELSE
         IF item = 0
+            IF g_plugin_mgr_scan_requested >= 0 EXIT ENDIF
+            SHVNX_GET_PLUGIN_SCAN(g_plugin_mgr_scan_generation, g_plugin_mgr_scan_pending, g_plugin_mgr_scan_error)
             accepted = SHVNX_RELOAD_PLUGINS()
             IF accepted
                 g_plugin_mgr_feedback = 1
+                g_plugin_mgr_scan_requested = g_plugin_mgr_scan_generation
                 PLUGIN_MGR_ANNOUNCE(TR("Rescan requested. Running plugins are kept.", "Búsqueda solicitada. Se conservan los plugins activos.", "已请求重新扫描，保留运行中的插件。", "Suche angefragt. Laufende Plugins bleiben erhalten.", "再走査を要求。実行中のプラグインは保持されます。", "Поиск запрошен. Работающие плагины сохранены.", "Busca solicitada. Plugins ativos são mantidos.", "Analyse demandée. Les plugins actifs sont conservés."))
             ELSE
                 g_plugin_mgr_feedback = -1
             ENDIF
         ELSE
-            slot = item - 1
-            IF slot >= 0 AND slot < g_plugin_mgr_count
+            slot = PLUGIN_MGR_RUNTIME_SLOT(item - 1)
+            IF slot >= 0 AND slot < SHVNX_GET_PLUGIN_COUNT()
                 g_plugin_mgr_item = g_item
                 g_plugin_mgr_scroll = g_scroll
                 g_plugin_mgr_slot = slot
-                g_plugin_mgr_policy_choice = g_plugin_mgr_policies[slot]
+                g_plugin_mgr_key = PLUGIN_MGR_KEY(slot)
+                g_plugin_mgr_policy_choice = SHVNX_GET_PLUGIN_POLICY(slot)
                 IF g_plugin_mgr_policy_choice < 0 OR g_plugin_mgr_policy_choice > 2 g_plugin_mgr_policy_choice = 0 ENDIF
                 g_plugin_mgr_detail_open = TRUE
                 g_plugin_mgr_feedback = 0

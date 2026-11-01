@@ -1,0 +1,13 @@
+* text=auto
+*.md text eol=lf
+*.txt text eol=lf
+*.sc text eol=lf
+*.sch text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.ps1 text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.nsc binary
+*.snb binary
+*.rpf binary

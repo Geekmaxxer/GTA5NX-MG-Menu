@@ -1,6 +1,6 @@
 # Developing safely
 
-The v1.0.8 menu bundle uses ScriptHookV-NX v1.4 Preview and its matched NSC/SNB pair. The loader retains the official 15,900-word stack pool. The v1.4 timing native is included in binding generation.
+The v1.1 bundle uses ScriptHookV-NX v1.4.1 Preview catalogue revision 1 and a matched NSC/SNB pair. See [v1.1 implementation and acceptance](V1.1.md) for the current catalogue, stack-counter and vehicle-control contracts. The achievement controller retains its official 15,900-word menu stack pool.
 
 Every build now writes matching `<Name>.snb` metadata and records its hash in
 `<Name>.build.json`. Install a menu's new binding with its new NSC. ScriptHookV-NX

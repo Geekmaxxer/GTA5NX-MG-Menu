@@ -262,8 +262,6 @@ CONST_INT PERSIST_VEH_VERSION 1
 // scripts and ragemenu.nsc), menu persistence across launches, active THREADID
 // Header rows are dynamically returned by FUNC INT NSC_LOADER_HEADER_ROWS()
 // in util_nsc_loader.sch (4 when >= 1 custom script is active, 3 when none).
-CONST_INT NSC_MAX_CUSTOM_SCRIPTS 64
-CONST_INT NSC_MAX_SAVED_LETTERS 1000
 CONST_INT NSC_PERSIST_SLOTS_PER_CHAR 44
 CONST_INT NSC_PERSIST_CHAR_SLOTS 950
 CONST_INT NSC_PERSIST_EXT_SLOTS 950
@@ -301,6 +299,6 @@ CONST_INT STORY_CS_MAX 8
 CONST_INT STORY_PROXY_MAX 4
 
 // ScriptHookV-NX Plugins Manager (Menu Settings tab Row 3, util_plugin_manager.sch).
-CONST_INT PLUGIN_MGR_MAX_PLUGINS 16
+// Plugin rows are queried from the runtime; no independent menu catalogue cap.
 
 

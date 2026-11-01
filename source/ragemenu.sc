@@ -58,6 +58,7 @@ SCRIPT
     INIT_CHAUFFEUR_DEFAULTS()
     INIT_STORY_PEDS_DEFAULTS()
     PERSIST_LOAD_SAVED_VEHICLES()
+    INIT_NSC_CATALOG()
     g_menu_start_time = GET_GAME_TIMER()
 
     WHILE TRUE
@@ -159,6 +160,7 @@ SCRIPT
             ENDIF
         ENDIF
         IF g_explosive_ammo SET_EXPLOSIVE_AMMO_THIS_FRAME(g_cached_player_id) ENDIF
+        IF g_fire_ammo SET_FIRE_AMMO_THIS_FRAME(g_cached_player_id) ENDIF
         IF g_explosive_melee SET_EXPLOSIVE_MELEE_THIS_FRAME(g_cached_player_id) ENDIF
         IF g_unlimited_oxygen APPLY_UNLIMITED_OXYGEN() ENDIF
         IF g_unlimited_ability APPLY_UNLIMITED_ABILITY() ENDIF
@@ -415,7 +417,7 @@ SCRIPT
         IF NOT g_player_in_vehicle
             g_vehicle_always_max_applied_vehicle = NULL
             IF g_accel_applied g_accel_applied = FALSE ENDIF
-            IF g_grip_applied g_grip_applied = FALSE ENDIF
+            PROCESS_VEHICLE_GRIP(NULL)
             IF g_bulletproof_tyres_applied g_bulletproof_tyres_applied = FALSE ENDIF
         ENDIF
         IF g_player_in_vehicle AND DOES_ENTITY_EXIST(g_cached_player_veh) AND NOT IS_ENTITY_DEAD(g_cached_player_veh)
@@ -440,7 +442,7 @@ SCRIPT
                 g_vehicle_always_max_applied_vehicle = NULL
             ENDIF
             IF IS_PED_IN_ANY_TRAIN(g_cached_player_ped)
-                IF g_vehicle_acceleration_level > 0
+                IF g_vehicle_acceleration_level != 100
                     SET_TRAIN_SPEED(currentVehicle, TRAIN_ACCELERATION_SPEED(g_vehicle_acceleration_level))
                     SET_TRAIN_CRUISE_SPEED(currentVehicle, TRAIN_ACCELERATION_SPEED(g_vehicle_acceleration_level))
                 ELSE
@@ -454,20 +456,14 @@ SCRIPT
                 // adding torque before that boundary; otherwise the engine snaps
                 // the vehicle velocity back to zero. Normal vehicle physics remain
                 // active, and the selected multiplier resumes when speed drops.
-                IF g_vehicle_acceleration_level > 0 AND currentVehicleSpeed < 72.0
-                    SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, VEHICLE_MULTIPLIER_VALUE(g_vehicle_acceleration_level))
+                IF g_vehicle_acceleration_level != 100 AND currentVehicleSpeed < 72.0
+                    SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, TO_FLOAT(g_vehicle_acceleration_level) / 100.0)
                     g_accel_applied = TRUE
                 ELIF g_accel_applied AND NOT g_chaos_mod_running
                     SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, 1.0)
                     g_accel_applied = FALSE
                 ENDIF
-                IF g_vehicle_grip_level != 0
-                    SET_VEHICLE_FRICTION_OVERRIDE(currentVehicle, VEHICLE_GRIP_VALUE(g_vehicle_grip_level))
-                    g_grip_applied = TRUE
-                ELIF g_grip_applied AND NOT g_chaos_mod_running
-                    SET_VEHICLE_FRICTION_OVERRIDE(currentVehicle, -1.0)
-                    g_grip_applied = FALSE
-                ENDIF
+                PROCESS_VEHICLE_GRIP(currentVehicle)
                 // Force the tyres unburstable only while this toggle is ON, and
                 // restore bursting once on the falling edge.  The old ELSE wrote
                 // TRUE every single frame, which silently undid the Wheels & Tyres

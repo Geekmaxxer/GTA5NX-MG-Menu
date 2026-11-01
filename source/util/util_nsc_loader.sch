@@ -1130,14 +1130,15 @@ FUNC BOOL IS_STOCK_OR_CORE_NSC_HASH(INT scriptHash)
 ENDFUNC
 
 // --- BEGIN HAND-WRITTEN NSC LOADER LOGIC ---
+USING "commands_scripthook_nx.sch"
 
 // Feedback codes for status display in Custom NSC Loader rows:
-//   1 = SAVED LIST CLEARED
+//   1 = SAVED ENTRY REMOVED
 //   2 = BLOCKED (STOCK/CORE)
 //   3 = NOT IN SCRIPT_REL
 //   4 = SAVED CUSTOM NSC
 //   5 = NSC LOADED
-//   6 = NSC RELOADED
+//   6 = CATALOGUE STORAGE ERROR
 //   7 = THREAD POOL FULL
 //   8 = LOAD TIMEOUT
 //   9 = ALL CUSTOM STOPPED
@@ -1159,13 +1160,14 @@ FUNC INT NSC_STACK_SIZE_FROM_CHOICE(INT choice)
     RETURN 1424
 ENDFUNC
 
-FUNC STRING NSC_STACK_LABEL_FROM_CHOICE(INT choice)
-    SWITCH choice
-        CASE 0 RETURN TR("< 1424 (Default) >", "< 1424 (Por defecto) >", "< 1424 (默认) >", "< 1424 (Standard) >", "< 1424 (デフォルト) >", "< 1424 (Стандарт) >", "< 1424 (Padrão) >", "< 1424 (Défaut) >") BREAK
-        CASE 1 RETURN TR("< 5050 (Medium) >", "< 5050 (Medio) >", "< 5050 (中等) >", "< 5050 (Mittel) >", "< 5050 (中) >", "< 5050 (Средний) >", "< 5050 (Médio) >", "< 5050 (Moyen) >") BREAK
-        CASE 2 RETURN TR("< 8344 (Large) >", "< 8344 (Grande) >", "< 8344 (大型) >", "< 8344 (Groß) >", "< 8344 (大) >", "< 8344 (Большой) >", "< 8344 (Grande) >", "< 8344 (Grand) >") BREAK
-    ENDSWITCH
-    RETURN TR("< 1424 (Default) >", "< 1424 (Por defecto) >", "< 1424 (默认) >", "< 1424 (Standard) >", "< 1424 (デフォルト) >", "< 1424 (Стандарт) >", "< 1424 (Padrão) >", "< 1424 (Défaut) >")
+FUNC TEXT_LABEL_63 NSC_STACK_LABEL_FROM_CHOICE(INT choice)
+    TEXT_LABEL_63 label = "< "
+    INT size = NSC_STACK_SIZE_FROM_CHOICE(choice)
+    label += size
+    label += " | "
+    label += GET_NUMBER_OF_FREE_STACKS_OF_THIS_SIZE(size)
+    label += TR(" left >", " libres >", " 空闲 >", " frei >", " 空き >", " своб. >", " livres >", " libres >")
+    RETURN label
 ENDFUNC
 
 // Maps a single character (case-insensitive) to a 6-bit persistence code (1..39).
@@ -1289,51 +1291,155 @@ FUNC TEXT_LABEL_31 NORMALIZE_NSC_SCRIPT_NAME(STRING rawName)
     RETURN cleaned
 ENDFUNC
 
-// Returns the 6-bit character code at position charIndex (0 .. NSC_PERSIST_CHAR_SLOTS - 1)
-// in the serialized stream of saved custom .nsc filenames.
-// Multiple saved .nsc names are separated by NSC_PERSIST_SEP_CODE (62), and unused
-// trailing positions return 0.
-FUNC INT NSC_PERSIST_CHAR_AT(INT charIndex)
-    IF charIndex < 0 OR charIndex >= NSC_PERSIST_CHAR_SLOTS
-        RETURN 0
-    ENDIF
-    IF g_nsc_discovered_count <= 0
-        RETURN 0
-    ENDIF
-
-    INT cursor = 0
-    INT slot = 0
-    WHILE slot < g_nsc_discovered_count
-        INT nameLen = GET_LENGTH_OF_LITERAL_STRING(g_nsc_script_names[slot])
-        IF nameLen > 0
-            // If this isn't the first script in the stream, emit a separator before it
-            IF cursor > 0
-                // Only include this script if it fits in the remaining persistence slots
-                IF cursor + 1 + nameLen > NSC_PERSIST_CHAR_SLOTS
-                    RETURN 0
-                ENDIF
-                IF cursor = charIndex
-                    RETURN NSC_PERSIST_SEP_CODE
-                ENDIF
-                cursor = cursor + 1
-            ENDIF
-
-            IF charIndex >= cursor AND charIndex < cursor + nameLen
-                INT offsetInName = charIndex - cursor
-                STRING ch = GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(g_nsc_script_names[slot], offsetInName, offsetInName + 1)
-                RETURN NSC_CHAR_TO_CODE(ch)
-            ENDIF
-            cursor = cursor + nameLen
+// The catalogue is independent of the fixed menu-settings record. Each page
+// holds eight 31-character names. Copy-on-write page banks are published by one
+// root generation so an interrupted add/remove retains the committed list.
+PROC INIT_NSC_CATALOG()
+    IF g_nsc_catalog_loaded EXIT ENDIF
+    g_nsc_catalog_loaded = TRUE
+    IF SHVNX_LOAD(g_nsc_catalog_root[0], 6, 1599999999) = 6
+        IF g_nsc_catalog_root[0] = 1296519985 AND g_nsc_catalog_root[1] = 1 AND g_nsc_catalog_root[2] > 0 AND g_nsc_catalog_root[3] >= 0 AND g_nsc_catalog_root[3] < 2147483639
+            g_nsc_catalog_migrated = g_nsc_catalog_root[4] = 1
+            g_nsc_catalog_generation = g_nsc_catalog_root[2]
+            g_nsc_discovered_count = g_nsc_catalog_root[3]
+        ELSE
+            g_nsc_catalog_error = 1
         ENDIF
-        slot = slot + 1
+    ENDIF
+ENDPROC
+
+FUNC BOOL NSC_READ_PAGE(INT page)
+    INT i = 0
+    INT aGen = 0
+    INT bGen = 0
+    INIT_NSC_CATALOG()
+    IF g_nsc_catalog_page = page RETURN TRUE ENDIF
+    IF g_nsc_catalog_cached_page = page
+        WHILE i < 260
+            g_nsc_catalog_other[i] = g_nsc_catalog_data[i]
+            g_nsc_catalog_data[i] = g_nsc_catalog_cached_data[i]
+            g_nsc_catalog_cached_data[i] = g_nsc_catalog_other[i]
+            i = i + 1
+        ENDWHILE
+        g_nsc_catalog_cached_page = g_nsc_catalog_page
+        g_nsc_catalog_page = page
+        i = g_nsc_catalog_bank
+        g_nsc_catalog_bank = g_nsc_catalog_cached_bank
+        g_nsc_catalog_cached_bank = i
+        RETURN TRUE
+    ENDIF
+    g_nsc_catalog_cached_page = g_nsc_catalog_page
+    g_nsc_catalog_cached_bank = g_nsc_catalog_bank
+    WHILE i < 260
+        g_nsc_catalog_cached_data[i] = g_nsc_catalog_data[i]
+        i = i + 1
     ENDWHILE
-    RETURN 0
+    i = 0
+    g_nsc_catalog_page = -1
+    IF SHVNX_LOAD(g_nsc_catalog_data[0], 260, 1600000000 + page * 2) = 260
+        IF g_nsc_catalog_data[0] = 1296519985 AND g_nsc_catalog_data[2] = page AND g_nsc_catalog_data[1] > 0 AND g_nsc_catalog_data[1] <= g_nsc_catalog_generation
+            aGen = g_nsc_catalog_data[1]
+        ENDIF
+    ENDIF
+    IF SHVNX_LOAD(g_nsc_catalog_other[0], 260, 1600000001 + page * 2) = 260
+        IF g_nsc_catalog_other[0] = 1296519985 AND g_nsc_catalog_other[2] = page AND g_nsc_catalog_other[1] > 0 AND g_nsc_catalog_other[1] <= g_nsc_catalog_generation
+            bGen = g_nsc_catalog_other[1]
+        ENDIF
+    ENDIF
+    g_nsc_catalog_bank = 0
+    IF bGen > aGen
+        WHILE i < 260
+            g_nsc_catalog_data[i] = g_nsc_catalog_other[i]
+            i = i + 1
+        ENDWHILE
+        g_nsc_catalog_bank = 1
+    ENDIF
+    IF aGen = 0 AND bGen = 0
+        IF page * 8 < g_nsc_discovered_count
+            g_nsc_catalog_error = 1
+            RETURN FALSE
+        ENDIF
+        i = 0
+        WHILE i < 260
+            g_nsc_catalog_data[i] = 0
+            i = i + 1
+        ENDWHILE
+    ENDIF
+    g_nsc_catalog_page = page
+    RETURN TRUE
 ENDFUNC
 
-// Marks menu persistence dirty from inside util_nsc_loader.sch (which is included
-// before util_persistence.sch, while the persistence globals live in core_globals.sch)
-// and requests an immediate stat write + disk save (when "Save To Disk After Change"
-// is enabled) without waiting for the 1.5s quiet window or 60s disk-save debounce.
+FUNC TEXT_LABEL_31 NSC_NAME_AT(INT slot)
+    TEXT_LABEL_31 name = ""
+    INT i = 0
+    INT code = 0
+    INT offset = 4 + ((slot % 8) * 32)
+    IF slot < 0 OR slot >= g_nsc_discovered_count RETURN name ENDIF
+    IF NOT NSC_READ_PAGE(slot / 8) RETURN name ENDIF
+    WHILE i < 31
+        code = g_nsc_catalog_data[offset + i]
+        IF code = 0 RETURN name ENDIF
+        IF code < 2 OR code > 40
+            g_nsc_catalog_error = 1
+            name = ""
+            RETURN name
+        ENDIF
+        name += NSC_CODE_TO_CHAR(code)
+        i = i + 1
+    ENDWHILE
+    RETURN name
+ENDFUNC
+
+PROC NSC_WRITE_CACHED_NAME(INT slot, STRING name)
+    INT i = 0
+    INT length = GET_LENGTH_OF_LITERAL_STRING(name)
+    INT offset = 4 + ((slot % 8) * 32)
+    WHILE i < 32
+        g_nsc_catalog_data[offset + i] = 0
+        IF i < length AND i < 31
+            g_nsc_catalog_data[offset + i] = NSC_CHAR_TO_CODE(GET_CHARACTER_FROM_AUDIO_CONVERSATION_FILENAME(name, i, i + 1))
+        ENDIF
+        i = i + 1
+    ENDWHILE
+ENDPROC
+
+FUNC BOOL NSC_PREPARE_PAGE()
+    g_nsc_catalog_data[0] = 1296519985
+    g_nsc_catalog_data[1] = g_nsc_catalog_generation + 1
+    g_nsc_catalog_data[2] = g_nsc_catalog_page
+    BOOL saved = SHVNX_SAVE(g_nsc_catalog_data[0], 260, 1600000000 + g_nsc_catalog_page * 2 + (1 - g_nsc_catalog_bank))
+    // Prepared pages must never be rendered as committed data after a later
+    // page/root write fails, including a two-page swap-delete operation.
+    g_nsc_catalog_page = -1
+    g_nsc_catalog_cached_page = -1
+    IF saved RETURN TRUE ENDIF
+    g_nsc_catalog_error = 1
+    g_nsc_catalog_page = -1
+    g_nsc_catalog_cached_page = -1
+    RETURN FALSE
+ENDFUNC
+
+FUNC BOOL NSC_COMMIT_COUNT(INT count)
+    g_nsc_catalog_root[0] = 1296519985
+    g_nsc_catalog_root[1] = 1
+    g_nsc_catalog_root[2] = g_nsc_catalog_generation + 1
+    g_nsc_catalog_root[3] = count
+    g_nsc_catalog_root[4] = 0
+    IF g_nsc_catalog_migrated g_nsc_catalog_root[4] = 1 ENDIF
+    g_nsc_catalog_root[5] = 0
+    g_nsc_catalog_page = -1
+    g_nsc_catalog_cached_page = -1
+    IF NOT SHVNX_SAVE(g_nsc_catalog_root[0], 6, 1599999999)
+        g_nsc_catalog_error = 1
+        RETURN FALSE
+    ENDIF
+    g_nsc_catalog_generation = g_nsc_catalog_generation + 1
+    g_nsc_discovered_count = count
+    g_nsc_catalog_error = 0
+    RETURN TRUE
+ENDFUNC
+
+// Legacy settings writes no longer serialize or truncate the saved catalogue.
 PROC TOUCH_NSC_PERSISTENCE()
     IF NOT g_persist_enabled EXIT ENDIF
     g_persist_dirty_since = GET_GAME_TIMER()
@@ -1342,41 +1448,36 @@ PROC TOUCH_NSC_PERSISTENCE()
 ENDPROC
 
 FUNC INT FIND_CUSTOM_NSC_SLOT_BY_HASH(INT scriptHash)
-    IF scriptHash = 0 RETURN -1 ENDIF
-    INT i = 0
-    WHILE i < g_nsc_discovered_count
-        IF g_nsc_script_hashes[i] = scriptHash
-            RETURN i
-        ENDIF
-        i = i + 1
+    INT slot = 0
+    TEXT_LABEL_31 name = ""
+    WHILE slot < g_nsc_discovered_count
+        name = NSC_NAME_AT(slot)
+        IF GET_HASH_KEY(name) = scriptHash RETURN slot ENDIF
+        slot = slot + 1
+        // Large catalogue searches yield once per page, never once per frame
+        // for the full catalogue. Rendering accesses only the visible window.
+        IF slot % 8 = 0 WAIT(0) ENDIF
     ENDWHILE
     RETURN -1
 ENDFUNC
 
-// Synchronizes g_nsc_is_active[] with actual RAGE VM thread state so scripts
-// that self-terminate via TERMINATE_THIS_THREAD() update their UI status.
+FUNC BOOL IS_CUSTOM_NSC_THREAD(THREADID thread)
+    IF NOT IS_THREAD_ACTIVE(thread) RETURN FALSE ENDIF
+    STRING name = GET_NAME_OF_SCRIPT_WITH_THIS_ID(thread)
+    IF IS_STRING_NULL_OR_EMPTY(name) RETURN FALSE ENDIF
+    RETURN NOT IS_STOCK_OR_CORE_NSC_HASH(GET_HASH_KEY(name))
+ENDFUNC
+
 PROC SYNC_CUSTOM_NSC_THREAD_STATES()
-    INT activeCount = 0
-    INT i = 0
-    WHILE i < g_nsc_discovered_count
-        BOOL activeNow = FALSE
-        IF NATIVE_TO_INT(g_nsc_thread_ids[i]) <> 0
-            IF IS_THREAD_ACTIVE(g_nsc_thread_ids[i])
-                activeNow = TRUE
-            ELSE
-                g_nsc_thread_ids[i] = INT_TO_NATIVE(THREADID, 0)
-            ENDIF
-        ENDIF
-        IF NOT activeNow
-            IF GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(g_nsc_script_hashes[i]) > 0
-                activeNow = TRUE
-            ENDIF
-        ENDIF
-        g_nsc_is_active[i] = activeNow
-        IF activeNow activeCount = activeCount + 1 ENDIF
-        i = i + 1
+    IF GET_GAME_TIMER() < g_nsc_next_thread_sync EXIT ENDIF
+    g_nsc_next_thread_sync = GET_GAME_TIMER() + 250
+    g_nsc_active_count = 0
+    SCRIPT_THREAD_ITERATOR_RESET()
+    THREADID thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
+    WHILE NATIVE_TO_INT(thread) <> 0
+        IF IS_CUSTOM_NSC_THREAD(thread) g_nsc_active_count = g_nsc_active_count + 1 ENDIF
+        thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
     ENDWHILE
-    g_nsc_active_count = activeCount
 ENDPROC
 
 FUNC INT COUNT_ACTIVE_CUSTOM_NSC_SCRIPTS()
@@ -1385,129 +1486,61 @@ FUNC INT COUNT_ACTIVE_CUSTOM_NSC_SCRIPTS()
 ENDFUNC
 
 FUNC INT NSC_LOADER_HEADER_ROWS()
-    IF COUNT_ACTIVE_CUSTOM_NSC_SCRIPTS() > 0
-        RETURN 4
-    ENDIF
+    IF COUNT_ACTIVE_CUSTOM_NSC_SCRIPTS() > 0 RETURN 4 ENDIF
     RETURN 3
 ENDFUNC
 
-FUNC INT NSC_GET_ACTIVE_SLOT_FOR_INDEX(INT activeIndex)
-    INT i = 0
-    INT count = 0
-    WHILE i < g_nsc_discovered_count
-        IF g_nsc_is_active[i]
-            IF count = activeIndex
-                RETURN i
+FUNC TEXT_LABEL_31 NSC_GET_ACTIVE_NAME_FOR_INDEX(INT index)
+    TEXT_LABEL_31 name = ""
+    INT row = 0
+    SCRIPT_THREAD_ITERATOR_RESET()
+    THREADID thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
+    WHILE NATIVE_TO_INT(thread) <> 0
+        IF IS_CUSTOM_NSC_THREAD(thread)
+            IF row = index
+                name = GET_NAME_OF_SCRIPT_WITH_THIS_ID(thread)
+                RETURN name
             ENDIF
-            count = count + 1
+            row = row + 1
         ENDIF
-        i = i + 1
+        thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
     ENDWHILE
-    RETURN -1
+    RETURN name
 ENDFUNC
 
-// Sums the total letter count of all currently saved custom .nsc filenames.
-FUNC INT TOTAL_SAVED_CUSTOM_NSC_LETTERS()
-    INT totalLetters = 0
-    INT i = 0
-    WHILE i < g_nsc_discovered_count
-        totalLetters = totalLetters + GET_LENGTH_OF_LITERAL_STRING(g_nsc_script_names[i])
-        i = i + 1
-    ENDWHILE
-    RETURN totalLetters
-ENDFUNC
-
-// Posts a yellowy-orange (~o~) notification above the radar/map when the next
-// .nsc filename would cross the 100-letter persistence limit.
-PROC ANNOUNCE_NSC_TEXT_LIMIT_REACHED()
-    BEGIN_TEXT_COMMAND_THEFEED_POST("STRING")
-        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME(TR("~o~C-NSC text limit reached, use LB + RB + X to delete and make space.~s~", "~o~Límite de texto C-NSC alcanzado, usa LB + RB + X para borrar y liberar espacio.~s~", "~o~已达C-NSC字符上限，按 LB + RB + X 删除以腾出空间。~s~", "~o~C-NSC-Textlimit erreicht, nutze LB + RB + X zum Löschen.~s~", "~o~C-NSC文字数上限に達しました。LB + RB + Xで削除して空きを作ってください。~s~", "~o~Лимит текста C-NSC достигнут, нажмите LB + RB + X для удаления.~s~", "~o~Limite de texto C-NSC atingido, use LB + RB + X para excluir e liberar espaço.~s~", "~o~Limite de texte C-NSC atteinte, utilisez LB + RB + X pour supprimer.~s~"))
-    END_TEXT_COMMAND_THEFEED_POST_TICKER(TRUE, FALSE)
-ENDPROC
-
-// Registers a custom .nsc filename into g_nsc_script_names[] if it passes the
-// 1,026 stock .nsc + ragemenu.nsc exclusion filter, is not already registered,
-// and does not exceed the 100-letter limit.
 FUNC BOOL TRY_REGISTER_CUSTOM_NSC(STRING candidateName)
-    IF IS_STRING_NULL_OR_EMPTY(candidateName)
-        RETURN FALSE
-    ENDIF
-
-    TEXT_LABEL_31 cleanName = NORMALIZE_NSC_SCRIPT_NAME(candidateName)
-    IF IS_STRING_NULL_OR_EMPTY(cleanName)
-        RETURN FALSE
-    ENDIF
-
-    INT scriptHash = GET_HASH_KEY(cleanName)
-
-    // CRITICAL FILTER: Explicitly ignore the 1,026 stock base-game .nsc files
-    // and the menu's own ragemenu.nsc core file.
-    IF IS_STOCK_OR_CORE_NSC_HASH(scriptHash)
-        RETURN FALSE
-    ENDIF
-
-    INT existingSlot = FIND_CUSTOM_NSC_SLOT_BY_HASH(scriptHash)
-    IF existingSlot >= 0
-        RETURN TRUE
-    ENDIF
-
-    IF g_nsc_discovered_count >= NSC_MAX_CUSTOM_SCRIPTS
-        RETURN FALSE
-    ENDIF
-
-    INT newNameLen = GET_LENGTH_OF_LITERAL_STRING(cleanName)
-    IF TOTAL_SAVED_CUSTOM_NSC_LETTERS() + newNameLen > NSC_MAX_SAVED_LETTERS
-        RETURN FALSE
-    ENDIF
-
-    INT slot = g_nsc_discovered_count
-    g_nsc_script_names[slot] = cleanName
-    g_nsc_script_hashes[slot] = scriptHash
-    g_nsc_thread_ids[slot] = INT_TO_NATIVE(THREADID, 0)
-    g_nsc_is_active[slot] = (GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(scriptHash) > 0)
-    g_nsc_discovered_count = g_nsc_discovered_count + 1
-    RETURN TRUE
+    TEXT_LABEL_31 name = NORMALIZE_NSC_SCRIPT_NAME(candidateName)
+    INIT_NSC_CATALOG()
+    IF IS_STRING_NULL_OR_EMPTY(name) RETURN FALSE ENDIF
+    INT scriptHash = GET_HASH_KEY(name)
+    IF IS_STOCK_OR_CORE_NSC_HASH(scriptHash) RETURN FALSE ENDIF
+    IF FIND_CUSTOM_NSC_SLOT_BY_HASH(scriptHash) >= 0 RETURN TRUE ENDIF
+    IF g_nsc_catalog_error <> 0 RETURN FALSE ENDIF
+    IF g_nsc_catalog_generation = 2147483647 OR g_nsc_discovered_count >= 2147483639 RETURN FALSE ENDIF
+    IF NOT NSC_READ_PAGE(g_nsc_discovered_count / 8) RETURN FALSE ENDIF
+    NSC_WRITE_CACHED_NAME(g_nsc_discovered_count, name)
+    IF NOT NSC_PREPARE_PAGE() RETURN FALSE ENDIF
+    RETURN NSC_COMMIT_COUNT(g_nsc_discovered_count + 1)
 ENDFUNC
 
-// Called when the user types a .nsc filename into the Switch keyboard (OSK target 15).
-// Validates that it is not a stock/core script and does not cross the 100-letter limit,
-// adds it to the Custom NSC Loader list, and saves it to menu persistence.
 PROC PROBE_CUSTOM_NSC_FROM_KEYBOARD(STRING rawInput)
-    TEXT_LABEL_31 cleanName = NORMALIZE_NSC_SCRIPT_NAME(rawInput)
-    IF IS_STRING_NULL_OR_EMPTY(cleanName)
-        EXIT
-    ENDIF
-    INT scriptHash = GET_HASH_KEY(cleanName)
-
-    IF IS_STOCK_OR_CORE_NSC_HASH(scriptHash)
+    TEXT_LABEL_31 name = NORMALIZE_NSC_SCRIPT_NAME(rawInput)
+    IF IS_STRING_NULL_OR_EMPTY(name) EXIT ENDIF
+    IF IS_STOCK_OR_CORE_NSC_HASH(GET_HASH_KEY(name))
         SET_NSC_FEEDBACK(2)
         EXIT
     ENDIF
-
-    INT existingSlot = FIND_CUSTOM_NSC_SLOT_BY_HASH(scriptHash)
-    IF existingSlot < 0
-        INT newNameLen = GET_LENGTH_OF_LITERAL_STRING(cleanName)
-        IF TOTAL_SAVED_CUSTOM_NSC_LETTERS() + newNameLen > NSC_MAX_SAVED_LETTERS
-            SET_NSC_FEEDBACK(6)
-            ANNOUNCE_NSC_TEXT_LIMIT_REACHED()
-            EXIT
-        ENDIF
-    ENDIF
-
-    IF TRY_REGISTER_CUSTOM_NSC(cleanName)
-        g_nsc_last_probed_name = cleanName
+    IF TRY_REGISTER_CUSTOM_NSC(name)
+        g_nsc_last_probed_name = name
         SET_NSC_FEEDBACK(4)
-        TOUCH_NSC_PERSISTENCE()
-        INT slot = FIND_CUSTOM_NSC_SLOT_BY_HASH(scriptHash)
+        INT slot = FIND_CUSTOM_NSC_SLOT_BY_HASH(GET_HASH_KEY(name))
         IF slot >= 0 AND g_nsc_loader_open
             g_item = NSC_LOADER_HEADER_ROWS() + slot
-            IF g_item < g_scroll
-                g_scroll = g_item
-            ENDIF
-            IF g_item >= g_scroll + 8
-                g_scroll = g_item - 7
-            ENDIF
+            IF g_item < g_scroll g_scroll = g_item ENDIF
+            IF g_item >= g_scroll + 8 g_scroll = g_item - 7 ENDIF
         ENDIF
+    ELSE
+        SET_NSC_FEEDBACK(6)
     ENDIF
 ENDPROC
 
@@ -1541,7 +1574,7 @@ PROC RESTORE_ENGINE_STATE_AFTER_CUSTOM_NSC_UNLOAD()
             IF DOES_ENTITY_EXIST(playerVeh)
                 SET_VEHICLE_HANDBRAKE(playerVeh, FALSE)
                 SET_VEHICLE_STEER_BIAS(playerVeh, 0.0)
-                IF g_vehicle_grip_level = 0
+                IF g_vehicle_grip_level = 100
                     SET_VEHICLE_FRICTION_OVERRIDE(playerVeh, 1.0)
                     SET_VEHICLE_FRICTION_OVERRIDE(playerVeh, -1.0)
                 ENDIF
@@ -1550,96 +1583,73 @@ PROC RESTORE_ENGINE_STATE_AFTER_CUSTOM_NSC_UNLOAD()
     ENDIF
 ENDPROC
 
-// Terminates all running instances of a custom .nsc slot and decrements its
-// streaming reference count so the Switch heap can reclaim its bytecode.
-PROC TERMINATE_AND_UNLOAD_CUSTOM_NSC_SLOT(INT slot)
-    IF slot < 0 OR slot >= g_nsc_discovered_count EXIT ENDIF
-
-    // 1. Terminate tracked THREADID handle
-    IF NATIVE_TO_INT(g_nsc_thread_ids[slot]) <> 0
-        IF IS_THREAD_ACTIVE(g_nsc_thread_ids[slot])
-            TERMINATE_THREAD(g_nsc_thread_ids[slot])
-        ENDIF
-        g_nsc_thread_ids[slot] = INT_TO_NATIVE(THREADID, 0)
-    ENDIF
-
-    // 2. Sweep VM thread pool to catch any duplicate or externally started instances
-    INT targetHash = g_nsc_script_hashes[slot]
+// The engine iterator is bounded by actual VM threads, independent of the
+// number of saved names. Core and stock scripts remain excluded.
+PROC TERMINATE_AND_UNLOAD_CUSTOM_NSC_NAME(STRING name)
+    IF IS_STRING_NULL_OR_EMPTY(name) EXIT ENDIF
+    INT targetHash = GET_HASH_KEY(name)
+    IF IS_STOCK_OR_CORE_NSC_HASH(targetHash) EXIT ENDIF
     SCRIPT_THREAD_ITERATOR_RESET()
-    THREADID tid = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
-    WHILE NATIVE_TO_INT(tid) <> 0
-        IF IS_THREAD_ACTIVE(tid)
-            STRING tName = GET_NAME_OF_SCRIPT_WITH_THIS_ID(tid)
-            IF NOT IS_STRING_NULL_OR_EMPTY(tName)
-                TEXT_LABEL_31 cleanTName = NORMALIZE_NSC_SCRIPT_NAME(tName)
-                IF GET_HASH_KEY(cleanTName) = targetHash
-                    TERMINATE_THREAD(tid)
-                ENDIF
-            ENDIF
+    THREADID thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
+    WHILE NATIVE_TO_INT(thread) <> 0
+        IF IS_THREAD_ACTIVE(thread)
+            IF GET_HASH_KEY(GET_NAME_OF_SCRIPT_WITH_THIS_ID(thread)) = targetHash TERMINATE_THREAD(thread) ENDIF
         ENDIF
-        tid = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
+        thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
     ENDWHILE
-
-    // 3. Release script bytecode reference from RAGE streaming heap
-    SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_script_names[slot])
-    g_nsc_is_active[slot] = FALSE
+    SET_SCRIPT_AS_NO_LONGER_NEEDED(name)
+    g_nsc_next_thread_sync = 0
     RESTORE_ENGINE_STATE_AFTER_CUSTOM_NSC_UNLOAD()
 ENDPROC
 
-// Terminates all tracked custom .nsc threads and releases their script handles.
 PROC STOP_ALL_CUSTOM_NSC_SCRIPTS()
-    IF g_nsc_async_stage <> NSC_STAGE_IDLE AND g_nsc_async_slot >= 0 AND g_nsc_async_slot < g_nsc_discovered_count
-        SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_script_names[g_nsc_async_slot])
-    ENDIF
+    IF g_nsc_async_stage <> NSC_STAGE_IDLE SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_async_name) ENDIF
     g_nsc_async_stage = NSC_STAGE_IDLE
     g_nsc_async_slot = -1
-
-    INT i = 0
-    WHILE i < g_nsc_discovered_count
-        TERMINATE_AND_UNLOAD_CUSTOM_NSC_SLOT(i)
-        i = i + 1
+    SCRIPT_THREAD_ITERATOR_RESET()
+    THREADID thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
+    WHILE NATIVE_TO_INT(thread) <> 0
+        IF IS_CUSTOM_NSC_THREAD(thread)
+            TEXT_LABEL_31 name = GET_NAME_OF_SCRIPT_WITH_THIS_ID(thread)
+            TERMINATE_THREAD(thread)
+            SET_SCRIPT_AS_NO_LONGER_NEEDED(name)
+        ENDIF
+        thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
     ENDWHILE
+    g_nsc_next_thread_sync = 0
+    RESTORE_ENGINE_STATE_AFTER_CUSTOM_NSC_UNLOAD()
     SET_NSC_FEEDBACK(9)
 ENDPROC
 
-// Terminates a single saved custom .nsc script (if running) and removes it from
-// the saved list and menu persistence, shifting subsequent saved scripts up.
 PROC REMOVE_SAVED_CUSTOM_NSC_AT_SLOT(INT slot)
     IF slot < 0 OR slot >= g_nsc_discovered_count EXIT ENDIF
-
-    // If an async load/reload is in flight on this slot, cancel and release its handle;
-    // if it's on a later slot, shift its index down by 1.
-    IF g_nsc_async_stage <> NSC_STAGE_IDLE
-        IF g_nsc_async_slot = slot
-            SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_script_names[slot])
-            g_nsc_async_stage = NSC_STAGE_IDLE
-            g_nsc_async_slot = -1
-        ELIF g_nsc_async_slot > slot
-            g_nsc_async_slot = g_nsc_async_slot - 1
-        ENDIF
+    IF g_nsc_catalog_generation = 2147483647 EXIT ENDIF
+    TEXT_LABEL_31 removedName = NSC_NAME_AT(slot)
+    TEXT_LABEL_31 lastName = NSC_NAME_AT(g_nsc_discovered_count - 1)
+    IF IS_STRING_NULL_OR_EMPTY(removedName) OR IS_STRING_NULL_OR_EMPTY(lastName) EXIT ENDIF
+    INT lastSlot = g_nsc_discovered_count - 1
+    IF NOT NSC_READ_PAGE(slot / 8) EXIT ENDIF
+    NSC_WRITE_CACHED_NAME(slot, lastName)
+    IF slot / 8 = lastSlot / 8
+        NSC_WRITE_CACHED_NAME(lastSlot, "")
+        IF NOT NSC_PREPARE_PAGE() EXIT ENDIF
+    ELSE
+        IF NOT NSC_PREPARE_PAGE() EXIT ENDIF
+        IF NOT NSC_READ_PAGE(lastSlot / 8) EXIT ENDIF
+        NSC_WRITE_CACHED_NAME(lastSlot, "")
+        IF NOT NSC_PREPARE_PAGE() EXIT ENDIF
     ENDIF
-
-    TERMINATE_AND_UNLOAD_CUSTOM_NSC_SLOT(slot)
-    g_nsc_last_probed_name = g_nsc_script_names[slot]
-
-    INT i = slot
-    WHILE i < g_nsc_discovered_count - 1
-        g_nsc_script_names[i] = g_nsc_script_names[i + 1]
-        g_nsc_script_hashes[i] = g_nsc_script_hashes[i + 1]
-        g_nsc_thread_ids[i] = g_nsc_thread_ids[i + 1]
-        g_nsc_is_active[i] = g_nsc_is_active[i + 1]
-        i = i + 1
-    ENDWHILE
-
-    INT lastIdx = g_nsc_discovered_count - 1
-    g_nsc_script_names[lastIdx] = ""
-    g_nsc_script_hashes[lastIdx] = 0
-    g_nsc_thread_ids[lastIdx] = INT_TO_NATIVE(THREADID, 0)
-    g_nsc_is_active[lastIdx] = FALSE
-    g_nsc_discovered_count = g_nsc_discovered_count - 1
-
+    IF NOT NSC_COMMIT_COUNT(lastSlot) EXIT ENDIF
+    IF g_nsc_async_stage <> NSC_STAGE_IDLE AND ARE_STRINGS_EQUAL(g_nsc_async_name, removedName)
+        SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_async_name)
+        g_nsc_async_stage = NSC_STAGE_IDLE
+        g_nsc_async_slot = -1
+    ELIF g_nsc_async_stage <> NSC_STAGE_IDLE AND g_nsc_async_slot = lastSlot
+        g_nsc_async_slot = slot
+    ENDIF
+    TERMINATE_AND_UNLOAD_CUSTOM_NSC_NAME(removedName)
+    g_nsc_last_probed_name = removedName
     SET_NSC_FEEDBACK(1)
-    TOUCH_NSC_PERSISTENCE()
 ENDPROC
 
 // Deliberate 3-button combo (Hold LB + RB and press X) to remove the highlighted
@@ -1664,97 +1674,56 @@ FUNC BOOL CUSTOM_NSC_REMOVE_COMBO_PRESSED()
     RETURN FALSE
 ENDFUNC
 
-// Action Trigger when pressing 'A' on a saved custom .nsc row.
-// - If already flagged as active: executes a complete script reload sequence
-//   (terminate & unload existing instance first, then freshly re-request & inject).
-// - If inactive: requests and loads the .nsc file.
+// Copy the requested identity before starting asynchronous work. Catalogue
+// deletion can replace a row without redirecting an in-flight request.
 PROC TRIGGER_LOAD_OR_RELOAD_CUSTOM_NSC(INT slot)
-    IF slot < 0 OR slot >= g_nsc_discovered_count EXIT ENDIF
-
-    SYNC_CUSTOM_NSC_THREAD_STATES()
-
-    // Cancel any in-flight request on a previous slot and release its handle
-    IF g_nsc_async_stage <> NSC_STAGE_IDLE AND g_nsc_async_slot >= 0 AND g_nsc_async_slot < g_nsc_discovered_count
-        SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_script_names[g_nsc_async_slot])
-        g_nsc_async_stage = NSC_STAGE_IDLE
-    ENDIF
-
-    IF NOT DOES_SCRIPT_EXIST(g_nsc_script_names[slot])
+    TEXT_LABEL_31 name = NSC_NAME_AT(slot)
+    IF IS_STRING_NULL_OR_EMPTY(name) EXIT ENDIF
+    IF NOT DOES_SCRIPT_EXIST(name)
         SET_NSC_FEEDBACK(3)
-        g_nsc_async_slot = -1
         EXIT
     ENDIF
-
+    IF g_nsc_async_stage <> NSC_STAGE_IDLE SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_async_name) ENDIF
+    g_nsc_async_name = name
     g_nsc_async_slot = slot
-
-    IF g_nsc_is_active[slot]
-        // Full reload sequence: terminate & unload existing running instance first
-        TERMINATE_AND_UNLOAD_CUSTOM_NSC_SLOT(slot)
+    IF GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(GET_HASH_KEY(name)) > 0
+        TERMINATE_AND_UNLOAD_CUSTOM_NSC_NAME(name)
         g_nsc_async_stage = NSC_STAGE_TERMINATING
         g_nsc_async_deadline = GET_GAME_TIMER() + NSC_TERMINATE_TIMEOUT_MS
     ELSE
-        // Fresh load sequence: request .nsc into RAGE streaming heap
-        REQUEST_SCRIPT(g_nsc_script_names[slot])
+        REQUEST_SCRIPT(name)
         g_nsc_async_stage = NSC_STAGE_LOADING
         g_nsc_async_deadline = GET_GAME_TIMER() + NSC_LOAD_TIMEOUT_MS
     ENDIF
 ENDPROC
 
-// Non-blocking per-frame state machine called in ragemenu.sc main loop.
 PROC PROCESS_CUSTOM_NSC_LOADER()
     IF g_nsc_async_stage = NSC_STAGE_IDLE EXIT ENDIF
-
-    INT slot = g_nsc_async_slot
-    IF slot < 0 OR slot >= g_nsc_discovered_count
-        g_nsc_async_stage = NSC_STAGE_IDLE
-        g_nsc_async_slot = -1
-        EXIT
-    ENDIF
-
-    // STAGE 1 (RELOAD): Wait for old script thread to fully exit VM before re-requesting
     IF g_nsc_async_stage = NSC_STAGE_TERMINATING
-        INT runningCount = GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(g_nsc_script_hashes[slot])
-        IF runningCount = 0
-            REQUEST_SCRIPT(g_nsc_script_names[slot])
+        IF GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(GET_HASH_KEY(g_nsc_async_name)) = 0
+            REQUEST_SCRIPT(g_nsc_async_name)
             g_nsc_async_stage = NSC_STAGE_LOADING
             g_nsc_async_deadline = GET_GAME_TIMER() + NSC_LOAD_TIMEOUT_MS
-        ELIF GET_GAME_TIMER() > g_nsc_async_deadline
-            g_nsc_async_stage = NSC_STAGE_IDLE
-            g_nsc_async_slot = -1
-            SET_NSC_FEEDBACK(8)
         ENDIF
+    ELIF HAS_SCRIPT_LOADED(g_nsc_async_name)
+        INT size = NSC_STACK_SIZE_FROM_CHOICE(g_nsc_stack_choice)
+        IF GET_NUMBER_OF_FREE_STACKS_OF_THIS_SIZE(size) > 0
+            THREADID thread = START_NEW_SCRIPT(g_nsc_async_name, size)
+            IF NATIVE_TO_INT(thread) <> 0 SET_NSC_FEEDBACK(5) ELSE SET_NSC_FEEDBACK(7) ENDIF
+        ELSE
+            SET_NSC_FEEDBACK(7)
+        ENDIF
+        SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_async_name)
+        g_nsc_async_stage = NSC_STAGE_IDLE
+        g_nsc_async_slot = -1
+        g_nsc_next_thread_sync = 0
         EXIT
     ENDIF
-
-    // STAGE 2 (LOAD / RE-INJECT): Wait for HAS_SCRIPT_LOADED then START_NEW_SCRIPT
-    IF g_nsc_async_stage = NSC_STAGE_LOADING
-        IF HAS_SCRIPT_LOADED(g_nsc_script_names[slot])
-            INT stackSize = NSC_STACK_SIZE_FROM_CHOICE(g_nsc_stack_choice)
-            THREADID newThread = START_NEW_SCRIPT(g_nsc_script_names[slot], stackSize)
-
-            // Strictly release streaming handle immediately after START_NEW_SCRIPT
-            // so the Switch heap never leaks script program references.
-            SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_script_names[slot])
-
-            g_nsc_thread_ids[slot] = newThread
-            g_nsc_is_active[slot] = (NATIVE_TO_INT(newThread) <> 0)
-            g_nsc_async_stage = NSC_STAGE_IDLE
-            g_nsc_async_slot = -1
-
-            IF g_nsc_is_active[slot]
-                SET_NSC_FEEDBACK(5)
-            ELSE
-                SET_NSC_FEEDBACK(7)
-            ENDIF
-            EXIT
-        ENDIF
-
-        IF GET_GAME_TIMER() > g_nsc_async_deadline
-            SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_script_names[slot])
-            g_nsc_async_stage = NSC_STAGE_IDLE
-            g_nsc_async_slot = -1
-            SET_NSC_FEEDBACK(8)
-        ENDIF
+    IF GET_GAME_TIMER() > g_nsc_async_deadline
+        SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_async_name)
+        g_nsc_async_stage = NSC_STAGE_IDLE
+        g_nsc_async_slot = -1
+        SET_NSC_FEEDBACK(8)
     ENDIF
 ENDPROC
 
@@ -1788,12 +1757,10 @@ FUNC TEXT_LABEL_63 FORMAT_NSC_PROBE_BADGE()
         RETURN badge
     ENDIF
     IF HAS_ACTIVE_NSC_FEEDBACK(6)
-        badge = TR("TEXT LIMIT (1000 MAX)", "LÍMITE TEXTO (1000 MÁX)", "字符上限 (最多1000)", "TEXTLIMIT (1000 MAX)", "文字上限 (最大1000)", "ЛИМИТ ТЕКСТА (МАКС 1000)", "LIMITE TEXTO (1000 MÁX)", "LIMITE TEXTE (1000 MAX)")
+        badge = TR("SD ERROR", "ERROR SD", "SD 错误", "SD-FEHLER", "SDエラー", "ОШИБКА SD", "ERRO SD", "ERREUR SD")
         RETURN badge
     ENDIF
-    badge = TR("INPUT (", "ENTRADA (", "输入 (", "EINGABE (", "入力 (", "ВВОД (", "ENTRADA (", "ENTRÉE (")
-    badge += TOTAL_SAVED_CUSTOM_NSC_LETTERS()
-    badge += "/1000)"
+    badge = "INPUT"
     RETURN badge
 ENDFUNC
 
@@ -1816,7 +1783,7 @@ FUNC TEXT_LABEL_63 FORMAT_CUSTOM_NSC_ROW_LABEL(INT slot)
         label = TR("No Saved .nsc Scripts", "Sin scripts .nsc guardados", "无已保存的 .nsc 脚本", "Keine gespeicherten .nsc-Skripte", "保存された .nsc スクリプトなし", "Нет сохран. скриптов .nsc", "Sem scripts .nsc salvos", "Aucun script .nsc enregistré")
         RETURN label
     ENDIF
-    label = g_nsc_script_names[slot]
+    label = NSC_NAME_AT(slot)
     label += ".nsc"
     RETURN label
 ENDFUNC
@@ -1847,7 +1814,8 @@ FUNC TEXT_LABEL_63 FORMAT_CUSTOM_NSC_ROW_BADGE(INT slot, INT &outState)
         RETURN badge
     ENDIF
 
-    IF g_nsc_is_active[slot]
+    TEXT_LABEL_31 name = NSC_NAME_AT(slot)
+    IF GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(GET_HASH_KEY(name)) > 0
         badge = TR("ACTIVE [A: RELOAD]", "ACTIVO [A: RECARGAR]", "运行中 [A: 重载]", "AKTIV [A: NEU LADEN]", "稼働中 [A: 再読込]", "АКТИВЕН [A: ПЕРЕЗАГР.]", "ATIVO [A: RECARREGAR]", "ACTIF [A: RECHARGER]")
         outState = 1
     ELSE

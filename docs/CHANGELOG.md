@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1 - 2026-11-01
+
+- Remove the fixed plugin display cap and use completed-scan status and stable selection identities.
+- Move saved NSC names to a paged SD catalogue and show free stacks for the selected official pool.
+- Add numeric acceleration and grip controls with 0.05 steps, Normal and five-character entry.
+- Retain high-speed acceleration protection and replace collision friction with tyre-slip/lateral assistance.
+- Include the v1.0.9 vehicle, weather, radio and incendiary-ammunition additions in current source.
+- Verify bindings, stock/custom native coverage and local regressions; physical v1.1 acceptance remains pending.
+
+
 ## v1.0.8 source synchronization - 2026-10-27
 
 - Synchronize all 23 menu script/header source files with the current working SDK, including saved vehicles and the current loader.

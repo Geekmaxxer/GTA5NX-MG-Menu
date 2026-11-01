@@ -15,6 +15,8 @@ INT g_lsc_item = 0
 INT g_lsc_scroll = 0
 INT g_time_choice = 1
 INT g_weather_choice = 0
+INT g_wind_speed_level = 0
+BOOL g_freeze_weather = FALSE
 BOOL g_god = FALSE
 BOOL g_invisible = FALSE
 BOOL g_no_ragdoll = FALSE
@@ -25,6 +27,7 @@ BOOL g_drunk = FALSE
 BOOL g_infinite_ammo = FALSE
 BOOL g_infinite_clip = FALSE
 BOOL g_explosive_ammo = FALSE
+BOOL g_fire_ammo = FALSE
 BOOL g_weapon_upgrades_open = FALSE
 INT g_weapon_upgrades_item = 0
 INT g_weapon_upgrades_scroll = 0
@@ -90,13 +93,14 @@ BOOL g_vehicle_quick_entry_exit = FALSE
 BOOL g_vehicle_horn_boost = FALSE
 FLOAT g_horn_boost_speed = 10.0
 BOOL g_vehicle_turbo = FALSE
-INT g_vehicle_acceleration_level = 0
+// Vehicle strength controls store hundredths (100 = Normal, 99900 = 999x).
+INT g_vehicle_acceleration_level = 100
 // g_npc_vehicle_speed_level and its tracking state (g_npc_speed_next_update,
 // g_npc_speed_applied, g_npc_speed_tracked[64], g_npc_speed_tracked_count) were
 // removed in batch38 with the NPC Vehicle Speed row.
 BOOL g_godmode_tow_hook = FALSE
 VEHICLE_INDEX g_tow_hook_towed = NULL
-INT g_vehicle_grip_level = 0
+INT g_vehicle_grip_level = 100
 BOOL g_vehicle_bulletproof_tyres = FALSE
 // Tracks whether the bulletproof-tyres toggle is currently forcing the tyres
 // unburstable, so the main loop can restore bursting exactly once on the falling
@@ -406,6 +410,9 @@ INT g_neon_saved_colour = 0
 BOOL g_vehicle_control_open = FALSE
 INT g_vehicle_control_item = 0
 INT g_vehicle_control_scroll = 0
+INT g_vehicle_door_action = 0
+INT g_vehicle_door_choice = 0
+BOOL g_vehicle_interior_light = FALSE
 INT g_vehicle_window_action = 0
 INT g_vehicle_window_choice = 0
 INT g_vehicle_seat_choice = 0
@@ -472,7 +479,7 @@ TEXT_LABEL_63 g_live_coords_cached_line_z = ""
 FLOAT g_live_coords_cached_coord_x = 0.850
 
 // Single source of truth for the menu version (version tag + welcome message).
-STRING g_menu_version = "v1.0.8"
+STRING g_menu_version = "v1.1"
 INT g_menu_language = 0
 BOOL g_language_open = FALSE
 INT g_language_item = 0
@@ -744,10 +751,21 @@ INT g_nsc_unload_scroll = 0
 INT g_nsc_active_count = 0
 
 INT g_nsc_discovered_count = 0
-TEXT_LABEL_31 g_nsc_script_names[NSC_MAX_CUSTOM_SCRIPTS]
-INT g_nsc_script_hashes[NSC_MAX_CUSTOM_SCRIPTS]
-THREADID g_nsc_thread_ids[NSC_MAX_CUSTOM_SCRIPTS]
-BOOL g_nsc_is_active[NSC_MAX_CUSTOM_SCRIPTS]
+// Eight names per storage page; two cached pages cover the visible window.
+INT g_nsc_catalog_generation = 0
+INT g_nsc_catalog_page = -1
+INT g_nsc_catalog_bank = 0
+INT g_nsc_catalog_cached_page = -1
+INT g_nsc_catalog_cached_bank = 0
+INT g_nsc_catalog_cached_data[260]
+INT g_nsc_catalog_error = 0
+BOOL g_nsc_catalog_loaded = FALSE
+BOOL g_nsc_catalog_migrated = FALSE
+INT g_nsc_catalog_root[6]
+INT g_nsc_catalog_data[260]
+INT g_nsc_catalog_other[260]
+TEXT_LABEL_31 g_nsc_async_name = ""
+INT g_nsc_next_thread_sync = 0
 
 INT g_nsc_stack_choice = 0
 INT g_nsc_async_stage = 0
@@ -771,12 +789,16 @@ INT g_plugin_mgr_policy_choice = 0
 INT g_plugin_mgr_next_sync = 0
 INT g_plugin_mgr_feedback = 0
 INT g_plugin_mgr_action_error = 0
-TEXT_LABEL_63 g_plugin_mgr_names[PLUGIN_MGR_MAX_PLUGINS]
-STRING g_plugin_mgr_status_text[PLUGIN_MGR_MAX_PLUGINS]
-INT g_plugin_mgr_states[PLUGIN_MGR_MAX_PLUGINS]
-INT g_plugin_mgr_memory[PLUGIN_MGR_MAX_PLUGINS]
-INT g_plugin_mgr_policies[PLUGIN_MGR_MAX_PLUGINS]
-BOOL g_plugin_mgr_running[PLUGIN_MGR_MAX_PLUGINS]
+TEXT_LABEL_63 g_plugin_mgr_key = ""
+INT g_plugin_mgr_detail_state = 0
+STRING g_plugin_mgr_detail_status = ""
+INT g_plugin_mgr_scan_generation = 0
+INT g_plugin_mgr_scan_requested = -1
+INT g_plugin_mgr_scan_error = 0
+INT g_plugin_mgr_scan_pending = 0
+// Cache only the eight visible row indices; catalogue size belongs to runtime.
+INT g_plugin_mgr_window_start = -1
+INT g_plugin_mgr_rows[8]
 
 // ---------------------------------------------------------------------------
 // Credits submenu (Menu Settings tab bottom row).
@@ -873,6 +895,7 @@ BOOL g_radar_hidden_applied = FALSE
 BOOL g_seatbelt_applied = FALSE
 BOOL g_accel_applied = FALSE
 BOOL g_grip_applied = FALSE
+VEHICLE_INDEX g_grip_vehicle = NULL
 BOOL g_was_menu_open = FALSE
 
 // ---------------------------------------------------------------------------

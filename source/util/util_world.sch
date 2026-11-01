@@ -436,6 +436,30 @@ PROC APPLY_TIME_CHOICE()
     ENDSWITCH
 ENDPROC
 
+PROC APPLY_SYNC_SYSTEM_TIME()
+    INT locYear = 0
+    INT locMonth = 0
+    INT locDay = 0
+    INT locHour = 0
+    INT locMin = 0
+    INT locSec = 0
+    GET_LOCAL_TIME(locYear, locMonth, locDay, locHour, locMin, locSec)
+    SET_CLOCK_TIME(locHour, locMin, locSec)
+    g_time_hour = locHour
+    g_time_minute = locMin
+    g_time_second = locSec
+ENDPROC
+
+PROC APPLY_WIND_SPEED()
+    SWITCH g_wind_speed_level
+        CASE 0 SET_WIND_SPEED(0.0) SET_WIND(0.0) BREAK
+        CASE 1 SET_WIND_SPEED(4.0) SET_WIND(0.2) BREAK
+        CASE 2 SET_WIND_SPEED(12.0) SET_WIND(0.5) BREAK
+        CASE 3 SET_WIND_SPEED(28.0) SET_WIND(0.8) BREAK
+        CASE 4 SET_WIND_SPEED(60.0) SET_WIND(1.0) BREAK
+    ENDSWITCH
+ENDPROC
+
 PROC APPLY_TIME_SCALE()
     FLOAT scale = 1.0
     IF g_time_scale_level = 0 scale = 0.0 ENDIF
@@ -486,6 +510,14 @@ PROC APPLY_WEATHER_CHOICE()
         CASE 15 SET_WEATHER_TYPE_NOW_PERSIST("RAIN_HALLOWEEN") BREAK
         CASE 16 SET_WEATHER_TYPE_NOW_PERSIST("SNOW_HALLOWEEN") BREAK
     ENDSWITCH
+ENDPROC
+
+PROC APPLY_FREEZE_WEATHER()
+    IF g_freeze_weather
+        APPLY_WEATHER_CHOICE()
+    ELSE
+        CLEAR_WEATHER_TYPE_PERSIST()
+    ENDIF
 ENDPROC
 
 PROC DISABLE_PORTABLE_RADIO()

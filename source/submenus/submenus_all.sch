@@ -166,6 +166,15 @@ PROC DRAW_WORLD_ROW(INT index, FLOAT y)
     ENDSWITCH
 ENDPROC
 
+PROC DRAW_WIND_SPEED_SELECTOR(FLOAT y, BOOL selected)
+    STRING lbl = TR("Wind Speed", "Velocidad del viento", "风速", "Windgeschwindigkeit", "風速", "Скорость ветра", "Velocidade do Vento", "Vitesse du vent")
+    IF g_wind_speed_level = 0 DRAW_OPTION(y, lbl, TR("< Calm (0) >", "< Calma (0) >", "< 无风 (0) >", "< Windstill (0) >", "< 静穏 (0) >", "< Штиль (0) >", "< Calmo (0) >", "< Calme (0) >"), selected, 3) ENDIF
+    IF g_wind_speed_level = 1 DRAW_OPTION(y, lbl, TR("< Light (4) >", "< Ligero (4) >", "< 微风 (4) >", "< Leicht (4) >", "< 軽風 (4) >", "< Слабый (4) >", "< Leve (4) >", "< Léger (4) >"), selected, 3) ENDIF
+    IF g_wind_speed_level = 2 DRAW_OPTION(y, lbl, TR("< Moderate (12) >", "< Moderado (12) >", "< 中风 (12) >", "< Mäßig (12) >", "< 和音 (12) >", "< Умеренный (12) >", "< Moderado (12) >", "< Modéré (12) >"), selected, 3) ENDIF
+    IF g_wind_speed_level = 3 DRAW_OPTION(y, lbl, TR("< Strong (28) >", "< Fuerte (28) >", "< 大风 (28) >", "< Stark (28) >", "< 強風 (28) >", "< Сильный (28) >", "< Forte (28) >", "< Fort (28) >"), selected, 3) ENDIF
+    IF g_wind_speed_level = 4 DRAW_OPTION(y, lbl, TR("< Gale (60) >", "< Vendaval (60) >", "< 狂风 (60) >", "< Sturm (60) >", "< 暴風 (60) >", "< Шторм (60) >", "< Ventania (60) >", "< Bourrasque (60) >"), selected, 3) ENDIF
+ENDPROC
+
 PROC DRAW_TIMEWEATHER_ROW(INT index, FLOAT y)
     SWITCH index
         CASE 0 DRAW_TIME_SELECTOR(y, g_item = index) BREAK
@@ -174,6 +183,9 @@ PROC DRAW_TIMEWEATHER_ROW(INT index, FLOAT y)
         CASE 3 DRAW_NUMBER_OPTION(y, TR("Second", "Segundo", "秒", "Sekunde", "秒", "Секунда", "Segundo", "Seconde"), g_time_second, g_item = index) BREAK
         CASE 4 IF g_pause_time DRAW_OPTION(y, TR("Freeze / Pause Time", "Congelar / Pausar tiempo", "冻结 / 暂停时间", "Zeit einfrieren / pausieren", "時間停止 / 一時停止", "Заморозить / Пауза времени", "Congelar / Pausar Tempo", "Figer / Pause temps"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Freeze / Pause Time", "Congelar / Pausar tiempo", "冻结 / 暂停时间", "Zeit einfrieren / pausieren", "時間停止 / 一時停止", "Заморозить / Пауза времени", "Congelar / Pausar Tempo", "Figer / Pause temps"), "OFF", g_item = index, 0) ENDIF BREAK
         CASE 5 DRAW_WEATHER_SELECTOR(y, g_item = index) BREAK
+        CASE 6 DRAW_OPTION(y, TR("Sync with System Time", "Sincronizar con hora del sistema", "与系统时间同步", "Mit Systemzeit synchronisieren", "システム時間と同期", "Синхронизировать со временем системы", "Sincronizar com Horário do Sistema", "Synchroniser avec l'heure système"), "APPLY", g_item = index, 2) BREAK
+        CASE 7 DRAW_WIND_SPEED_SELECTOR(y, g_item = index) BREAK
+        CASE 8 IF g_freeze_weather DRAW_OPTION(y, TR("Freeze Weather", "Congelar clima", "冻结天气", "Wetter einfrieren", "天候を固定", "Заморозить погоду", "Congelar Clima", "Figer la météo"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Freeze Weather", "Congelar clima", "冻结天气", "Wetter einfrieren", "天候を固定", "Заморозить погоду", "Congelar Clima", "Figer la météo"), "OFF", g_item = index, 0) ENDIF BREAK
     ENDSWITCH
 ENDPROC
 
@@ -182,7 +194,7 @@ PROC DRAW_TIMEWEATHER_PAGE()
     DRAW_MENU_VERSION_TAG()
     INT index = g_timeweather_scroll
     INT row = 0
-    WHILE row < 8 AND index < 6
+    WHILE row < 8 AND index < 9
         DRAW_TIMEWEATHER_ROW(index, 0.268 + (TO_FLOAT(row) * ROW_H))
         index = index + 1
         row = row + 1
@@ -507,9 +519,9 @@ ENDPROC
 PROC HANDLE_NSC_UNLOAD_APPLY()
     INT activeCount = COUNT_ACTIVE_CUSTOM_NSC_SCRIPTS()
     IF activeCount > 0 AND g_item < activeCount
-        INT unloadSlot = NSC_GET_ACTIVE_SLOT_FOR_INDEX(g_item)
-        IF unloadSlot >= 0
-            TERMINATE_AND_UNLOAD_CUSTOM_NSC_SLOT(unloadSlot)
+        TEXT_LABEL_31 unloadName = NSC_GET_ACTIVE_NAME_FOR_INDEX(g_item)
+        IF NOT IS_STRING_NULL_OR_EMPTY(unloadName)
+            TERMINATE_AND_UNLOAD_CUSTOM_NSC_NAME(unloadName)
             MENU_PLAY_SOUND("SELECT")
             INT remainCount = COUNT_ACTIVE_CUSTOM_NSC_SCRIPTS()
             IF remainCount <= 0
@@ -573,6 +585,9 @@ PROC APPLY_SELECTED()
                     SET_RADIO_TO_STATION_INDEX(RADIO_STATION_WHEEL_INDEX(g_radio_station_index))
                     SET_RADIO_TO_STATION_NAME(RADIO_STATION_CODE(g_radio_station_index))
                 ENDIF
+                BREAK
+            CASE 4
+                SKIP_RADIO_FORWARD()
                 BREAK
         ENDSWITCH
         EXIT
@@ -826,20 +841,26 @@ PROC APPLY_SELECTED()
         EXIT
     ENDIF
     IF g_vehicle_control_open
-        // Windows (0) and Dirt Level (7) auto-apply on Left/Right and the
-        // Window picker (1) is a selection only, so A acts on the remainder.
         IF NOT IS_PED_IN_ANY_VEHICLE(playerPed) EXIT ENDIF
         SWITCH g_item
-            CASE 2 APPLY_VEHICLE_SELECTED_WINDOW(TRUE) BREAK
-            CASE 3 APPLY_VEHICLE_SELECTED_WINDOW(FALSE) BREAK
-            CASE 4 APPLY_VEHICLE_ENGINE_TOGGLE() BREAK
-            CASE 5
+            CASE 0 APPLY_VEHICLE_DOOR_ACTION() BREAK
+            CASE 2 APPLY_VEHICLE_SELECTED_DOOR(TRUE) BREAK
+            CASE 3 APPLY_VEHICLE_SELECTED_DOOR(FALSE) BREAK
+            CASE 4 APPLY_VEHICLE_BREAK_SELECTED_DOOR() BREAK
+            CASE 5 APPLY_VEHICLE_WINDOW_ACTION() BREAK
+            CASE 7 APPLY_VEHICLE_SELECTED_WINDOW(TRUE) BREAK
+            CASE 8 APPLY_VEHICLE_SELECTED_WINDOW(FALSE) BREAK
+            CASE 9 APPLY_VEHICLE_POP_WINDSCREEN() BREAK
+            CASE 10 APPLY_VEHICLE_ENGINE_TOGGLE() BREAK
+            CASE 11 APPLY_VEHICLE_INTERIOR_LIGHT() BREAK
+            CASE 12
                 g_vehicle_hazards = NOT g_vehicle_hazards
                 g_vehicle_hazards_tick = 0
                 APPLY_VEHICLE_HAZARDS_STATE()
             BREAK
-            CASE 6 APPLY_VEHICLE_SEAT_SWITCH() BREAK
-            CASE 8 APPLY_VEHICLE_WASH() BREAK
+            CASE 13 APPLY_VEHICLE_CONVERTIBLE_ROOF_TOGGLE() BREAK
+            CASE 14 APPLY_VEHICLE_SEAT_SWITCH() BREAK
+            CASE 16 APPLY_VEHICLE_WASH() BREAK
         ENDSWITCH
         EXIT
     ENDIF
@@ -1017,14 +1038,17 @@ PROC APPLY_SELECTED()
                         g_explosive_ammo = NOT g_explosive_ammo
                     BREAK
                     CASE 7
+                        g_fire_ammo = NOT g_fire_ammo
+                    BREAK
+                    CASE 8
                         RELEASE_GRAVITY_GUN_ENTITY()
                         g_special_gun_mode = g_special_gun_mode + 1
                         IF g_special_gun_mode >= SPECIAL_GUN_COUNT g_special_gun_mode = 0 ENDIF
                     BREAK
-                    CASE 8
+                    CASE 9
                         REMOVE_WEAPON_FROM_PED(playerPed, GET_SELECTED_PED_WEAPON(playerPed))
                     BREAK
-                    CASE 9
+                    CASE 10
                         REMOVE_ALL_PED_WEAPONS(playerPed)
                     BREAK
                 ENDSWITCH
@@ -1388,6 +1412,10 @@ PROC APPLY_SELECTED()
                     g_item = g_vehicle_control_item
                     g_scroll = g_vehicle_control_scroll
                 ENDIF
+            ELIF g_item = 8
+                OPEN_MENU_KEYBOARD(19)
+            ELIF g_item = 9
+                OPEN_MENU_KEYBOARD(20)
             ELIF g_item = 7
                 g_vehicle_always_max = NOT g_vehicle_always_max
             ELIF g_item = 14
@@ -1510,6 +1538,12 @@ PROC APPLY_SELECTED()
                         PAUSE_CLOCK(g_pause_time)
                     BREAK
                     CASE 5 APPLY_WEATHER_CHOICE() BREAK
+                    CASE 6 APPLY_SYNC_SYSTEM_TIME() BREAK
+                    CASE 7 APPLY_WIND_SPEED() BREAK
+                    CASE 8
+                        g_freeze_weather = NOT g_freeze_weather
+                        APPLY_FREEZE_WEATHER()
+                    BREAK
                 ENDSWITCH
             ELIF g_mayhem_open
                 SWITCH g_item
@@ -2124,6 +2158,7 @@ PROC DRAW_RADIO_ROW(INT index, FLOAT y)
         CASE 1 IF g_mobile_radio DRAW_OPTION(y, TR("Portable Radio", "Radio portátil", "随身电台", "Tragbares Radio", "ポータブルラジオ", "Портативное радио", "Rádio Portátil", "Radio portable"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Portable Radio", "Radio portátil", "随身电台", "Tragbares Radio", "ポータブルラジオ", "Портативное радио", "Rádio Portátil", "Radio portable"), "OFF", g_item = index, 0) ENDIF BREAK
         CASE 2 DRAW_OPTION(y, TR("Previous Station", "Emisora anterior", "上一电台", "Vorheriger Sender", "前の局", "Предыдущая станция", "Estação Anterior", "Station précédente"), RADIO_STATION_NAME(GET_PREV_RADIO_STATION_INDEX(g_radio_station_index)), g_item = index, 2) BREAK
         CASE 3 DRAW_OPTION(y, TR("Next Station", "Siguiente emisora", "下一电台", "Nächster Sender", "次の局", "Следующая станция", "Próxima Estação", "Station suivante"), RADIO_STATION_NAME(GET_NEXT_RADIO_STATION_INDEX(g_radio_station_index)), g_item = index, 2) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Skip Track", "Saltar pista", "跳过曲目", "Titel überspringen", "トラックをスキップ", "Пропустить трек", "Pular Faixa", "Passer la piste"), "APPLY", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -2133,101 +2168,33 @@ PROC DRAW_RADIO_PAGE()
     SYNC_RADIO_STATION_INDEX()
     INT index = g_radio_scroll
     INT row = 0
-    WHILE row < 8 AND index < 4
+    WHILE row < 8 AND index < 5
         DRAW_RADIO_ROW(index, 0.268 + (TO_FLOAT(row) * ROW_H))
         index = index + 1
         row = row + 1
     ENDWHILE
 ENDPROC
 
-PROC DRAW_VEHICLE_MULTIPLIER(FLOAT y, STRING label, INT level, BOOL selected)
-    IF level = 0
-        DRAW_OPTION(y, label, "< OFF >", selected, 0)
-    ELIF level = 1
-        DRAW_OPTION(y, label, "< 1.25x >", selected, 3)
-    ELIF level = 2
-        DRAW_OPTION(y, label, "< 1.5x >", selected, 3)
-    ELIF level = 3
-        DRAW_OPTION(y, label, "< 2x >", selected, 3)
-    ELIF level = 4
-        DRAW_OPTION(y, label, "< 2.5x >", selected, 3)
-    ELIF level = 5
-        DRAW_OPTION(y, label, "< 3x >", selected, 3)
-    ELIF level = 6
-        DRAW_OPTION(y, label, "< 4x >", selected, 3)
-    ELIF level = 7
-        DRAW_OPTION(y, label, "< 5x >", selected, 3)
-    ELIF level = 8
-        DRAW_OPTION(y, label, "< 10x >", selected, 3)
-    ELIF level = 9
-        DRAW_OPTION(y, label, "< 20x >", selected, 3)
-    ELIF level = 10
-        DRAW_OPTION(y, label, "< 50x >", selected, 3)
-    ELIF level = 11
-        DRAW_OPTION(y, label, "< 100x >", selected, 3)
-    ELSE
-        DRAW_OPTION(y, label, "< 200x >", selected, 3)
-    ENDIF
-ENDPROC
-
-FUNC FLOAT VEHICLE_MULTIPLIER_VALUE(INT level)
-    IF level = 1 RETURN 1.25 ENDIF
-    IF level = 2 RETURN 1.5 ENDIF
-    IF level = 3 RETURN 2.0 ENDIF
-    IF level = 4 RETURN 2.5 ENDIF
-    IF level = 5 RETURN 3.0 ENDIF
-    IF level = 6 RETURN 4.0 ENDIF
-    IF level = 7 RETURN 5.0 ENDIF
-    IF level = 8 RETURN 10.0 ENDIF
-    IF level = 9 RETURN 20.0 ENDIF
-    IF level = 10 RETURN 50.0 ENDIF
-    IF level = 11 RETURN 100.0 ENDIF
-    IF level = 12 RETURN 200.0 ENDIF
-    RETURN 0.0
-ENDFUNC
-
-FUNC FLOAT TRAIN_ACCELERATION_SPEED(INT level)
-    FLOAT speed = VEHICLE_MULTIPLIER_VALUE(level) * 15.0
+FUNC FLOAT TRAIN_ACCELERATION_SPEED(INT cents)
+    FLOAT speed = (TO_FLOAT(cents) / 100.0) * 15.0
     IF speed > 120.0 RETURN 120.0 ENDIF
-    IF speed < 15.0 RETURN 15.0 ENDIF
     RETURN speed
 ENDFUNC
 
-// Friction override uses a positive coefficient. The negative selections are
-// deliberately represented as fractions below the stock 1.0 coefficient,
-// rather than passing a negative native value (which resets/invalidates the
-// override on some vehicle classes).
-FUNC FLOAT VEHICLE_GRIP_VALUE(INT level)
-    IF level = -4 RETURN 0.15 ENDIF
-    IF level = -3 RETURN 0.30 ENDIF
-    IF level = -2 RETURN 0.50 ENDIF
-    IF level = -1 RETURN 0.75 ENDIF
-    IF level = 1 RETURN 1.10 ENDIF
-    IF level = 2 RETURN 1.25 ENDIF
-    IF level = 3 RETURN 1.40 ENDIF
-    IF level = 4 RETURN 1.60 ENDIF
-    IF level = 5 RETURN 1.80 ENDIF
-    IF level = 6 RETURN 2.00 ENDIF
-    IF level = 7 RETURN 2.25 ENDIF
-    IF level = 8 RETURN 2.50 ENDIF
-    RETURN -1.0
-ENDFUNC
-
-PROC DRAW_VEHICLE_GRIP_SELECTOR(FLOAT y, BOOL selected)
-    STRING lbl = TR("Grip Strength", "Fuerza de agarre", "抓地力强度", "Haftung", "グリップ強度", "Сцепление с дорогой", "Força de Aderência", "Adhérence")
-    IF g_vehicle_grip_level = -4 DRAW_OPTION(y, lbl, "< -85% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = -3 DRAW_OPTION(y, lbl, "< -70% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = -2 DRAW_OPTION(y, lbl, "< -50% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = -1 DRAW_OPTION(y, lbl, "< -25% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 0 DRAW_OPTION(y, lbl, "< OFF >", selected, 0) ENDIF
-    IF g_vehicle_grip_level = 1 DRAW_OPTION(y, lbl, "< +10% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 2 DRAW_OPTION(y, lbl, "< +25% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 3 DRAW_OPTION(y, lbl, "< +40% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 4 DRAW_OPTION(y, lbl, "< +60% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 5 DRAW_OPTION(y, lbl, "< +80% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 6 DRAW_OPTION(y, lbl, "< +100% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 7 DRAW_OPTION(y, lbl, "< +125% >", selected, 3) ENDIF
-    IF g_vehicle_grip_level = 8 DRAW_OPTION(y, lbl, "< +150% >", selected, 3) ENDIF
+// Numeric values are assembled by HUD components, without a preset table.
+PROC DRAW_VEHICLE_STRENGTH(FLOAT y, STRING label, INT cents, BOOL selected)
+    IF cents = 100
+        DRAW_OPTION(y, label, TR("Normal", "Normal", "正常", "Normal", "通常", "Обычно", "Normal", "Normal"), selected, 2)
+        EXIT
+    ENDIF
+    TEXT_LABEL_31 value = ""
+    INT fraction = cents % 100
+    value += cents / 100
+    value += "."
+    IF fraction < 10 value += "0" ENDIF
+    value += fraction
+    value += "x"
+    DRAW_OPTION(y, label, value, selected, 2)
 ENDPROC
 
 PROC DRAW_NEON_MODE_SELECTOR(FLOAT y, BOOL selected)
@@ -2390,14 +2357,29 @@ PROC DRAW_VEHICLE_CONTROL_ENTRY(FLOAT y, BOOL selected)
 ENDPROC
 
 PROC DRAW_VEHICLE_CONTROL_ROW(INT index, FLOAT y)
+    STRING doorLbl = TR("Door", "Puerta", "车门选择", "Tür", "ドア選択", "Дверь", "Porta", "Portière")
     STRING winLbl = TR("Window", "Ventanilla", "单侧车窗", "Fenster", "窓選択", "Окно", "Janela", "Vitre")
     STRING seatLbl = TR("Switch Seat", "Cambiar de asiento", "切换座位", "Sitz wechseln", "座席変更", "Сменить место", "Trocar Assento", "Changer de siège")
     STRING engLbl = TR("Engine", "Motor", "引擎", "Motor", "エンジン", "Двигатель", "Motor", "Moteur")
     SWITCH index
         CASE 0
-            IF g_vehicle_window_action = 0 DRAW_OPTION(y, TR("Windows", "Ventanillas", "车窗", "Fenster", "ウィンドウ", "Окна", "Janelas", "Vitres"), TR("< All Down >", "< Bajar todas >", "< 全部降下 >", "< Alle runter >", "< すべて開ける >", "< Опустить все >", "< Abaixar Todas >", "< Tout baisser >"), g_item = index, 3) ELSE DRAW_OPTION(y, TR("Windows", "Ventanillas", "车窗", "Fenster", "ウィンドウ", "Окна", "Janelas", "Vitres"), TR("< All Up >", "< Subir todas >", "< 全部升起 >", "< Alle hoch >", "< すべて閉める >", "< Поднять все >", "< Levantar Todas >", "< Tout monter >"), g_item = index, 3) ENDIF
+            IF g_vehicle_door_action = 0 DRAW_OPTION(y, TR("Doors", "Puertas", "车门", "Türen", "ドア", "Двери", "Portas", "Portières"), TR("< All Open >", "< Abrir todas >", "< 全部打开 >", "< Alle öffnen >", "< すべて開ける >", "< Открыть все >", "< Abrir Todas >", "< Tout ouvrir >"), g_item = index, 3) ELSE DRAW_OPTION(y, TR("Doors", "Puertas", "车门", "Türen", "ドア", "Двери", "Portas", "Portières"), TR("< All Closed >", "< Cerrar todas >", "< 全部关闭 >", "< Alle schließen >", "< すべて閉める >", "< Закрыть все >", "< Fechar Todas >", "< Tout fermer >"), g_item = index, 3) ENDIF
         BREAK
         CASE 1
+            IF g_vehicle_door_choice = 0 DRAW_OPTION(y, doorLbl, TR("< Front Left >", "< Delantera izq. >", "< 左前门 >", "< Vorne links >", "< 前方左 >", "< Передняя левая >", "< Dianteira Esq. >", "< Avant gauche >"), g_item = index, 3) ENDIF
+            IF g_vehicle_door_choice = 1 DRAW_OPTION(y, doorLbl, TR("< Front Right >", "< Delantera der. >", "< 右前门 >", "< Vorne rechts >", "< 前方右 >", "< Передняя правая >", "< Dianteira Dir. >", "< Avant droite >"), g_item = index, 3) ENDIF
+            IF g_vehicle_door_choice = 2 DRAW_OPTION(y, doorLbl, TR("< Rear Left >", "< Trasera izq. >", "< 左后门 >", "< Hinten links >", "< 後方左 >", "< Задняя левая >", "< Traseira Esq. >", "< Arrière gauche >"), g_item = index, 3) ENDIF
+            IF g_vehicle_door_choice = 3 DRAW_OPTION(y, doorLbl, TR("< Rear Right >", "< Trasera der. >", "< 右后门 >", "< Hinten rechts >", "< 後方右 >", "< Задняя правая >", "< Traseira Dir. >", "< Arrière droite >"), g_item = index, 3) ENDIF
+            IF g_vehicle_door_choice = 4 DRAW_OPTION(y, doorLbl, TR("< Hood >", "< Capó >", "< 引擎盖 >", "< Motorhaube >", "< ボンネット >", "< Капот >", "< Capô >", "< Capot >"), g_item = index, 3) ENDIF
+            IF g_vehicle_door_choice = 5 DRAW_OPTION(y, doorLbl, TR("< Trunk >", "< Maletero >", "< 后备箱 >", "< Kofferraum >", "< トランク >", "< Багажник >", "< Porta-malas >", "< Coffre >"), g_item = index, 3) ENDIF
+        BREAK
+        CASE 2 DRAW_OPTION(y, TR("Open Selected Door", "Abrir puerta selecc.", "打开所选车门", "Gewählte Tür öffnen", "選択したドアを開ける", "Открыть выбранную дверь", "Abrir Porta Selecionada", "Ouvrir porte sélectionnée"), "APPLY", g_item = index, 2) BREAK
+        CASE 3 DRAW_OPTION(y, TR("Close Selected Door", "Cerrar puerta selecc.", "关闭所选车门", "Gewählte Tür schließen", "選択したドアを閉める", "Закрыть выбранную дверь", "Fechar Porta Selecionada", "Fermer porte sélectionnée"), "APPLY", g_item = index, 2) BREAK
+        CASE 4 DRAW_OPTION(y, TR("Break Selected Door", "Romper puerta selecc.", "破坏所选车门", "Gewählte Tür abreißen", "選択したドアを破壊", "Сломать выбранную дверь", "Quebrar Porta Selec.", "Arracher porte sélectionnée"), "APPLY", g_item = index, 2) BREAK
+        CASE 5
+            IF g_vehicle_window_action = 0 DRAW_OPTION(y, TR("Windows", "Ventanillas", "车窗", "Fenster", "ウィンドウ", "Окна", "Janelas", "Vitres"), TR("< All Down >", "< Bajar todas >", "< 全部降下 >", "< Alle runter >", "< すべて開ける >", "< Опустить все >", "< Abaixar Todas >", "< Tout baisser >"), g_item = index, 3) ELSE DRAW_OPTION(y, TR("Windows", "Ventanillas", "车窗", "Fenster", "ウィンドウ", "Окна", "Janelas", "Vitres"), TR("< All Up >", "< Subir todas >", "< 全部升起 >", "< Alle hoch >", "< すべて閉める >", "< Поднять все >", "< Levantar Todas >", "< Tout monter >"), g_item = index, 3) ENDIF
+        BREAK
+        CASE 6
             IF g_vehicle_window_choice = 0 DRAW_OPTION(y, winLbl, TR("< Front Left >", "< Delantera izq. >", "< 左前 >", "< Vorne links >", "< 前方左 >", "< Переднее левое >", "< Dianteira Esq. >", "< Avant gauche >"), g_item = index, 3) ENDIF
             IF g_vehicle_window_choice = 1 DRAW_OPTION(y, winLbl, TR("< Front Right >", "< Delantera der. >", "< 右前 >", "< Vorne rechts >", "< 前方右 >", "< Переднее правое >", "< Dianteira Dir. >", "< Avant droite >"), g_item = index, 3) ENDIF
             IF g_vehicle_window_choice = 2 DRAW_OPTION(y, winLbl, TR("< Rear Left >", "< Trasera izq. >", "< 左后 >", "< Hinten links >", "< 後方左 >", "< Заднее левое >", "< Traseira Esq. >", "< Arrière gauche >"), g_item = index, 3) ENDIF
@@ -2405,28 +2387,31 @@ PROC DRAW_VEHICLE_CONTROL_ROW(INT index, FLOAT y)
             IF g_vehicle_window_choice = 4 DRAW_OPTION(y, winLbl, TR("< Middle Left >", "< Central izq. >", "< 中左 >", "< Mitte links >", "< 中央左 >", "< Среднее левое >", "< Central Esq. >", "< Milieu gauche >"), g_item = index, 3) ENDIF
             IF g_vehicle_window_choice = 5 DRAW_OPTION(y, winLbl, TR("< Middle Right >", "< Central der. >", "< 中右 >", "< Mitte rechts >", "< 中央右 >", "< Среднее правое >", "< Central Dir. >", "< Milieu droite >"), g_item = index, 3) ENDIF
         BREAK
-        CASE 2 DRAW_OPTION(y, TR("Roll Selected Down", "Bajar seleccionada", "降下所选车窗", "Ausgewähltes runter", "選択した窓を開ける", "Опустить выбранное", "Abaixar Selecionada", "Baisser la vitre"), "APPLY", g_item = index, 2) BREAK
-        CASE 3 DRAW_OPTION(y, TR("Roll Selected Up", "Subir seleccionada", "升起所选车窗", "Ausgewähltes hoch", "選択した窓を閉める", "Поднять выбранное", "Levantar Selecionada", "Monter la vitre"), "APPLY", g_item = index, 2) BREAK
-        CASE 4
-            // Engine reads the live state, so the row tracks stalls and
-            // restarts instead of the last thing the menu set.
+        CASE 7 DRAW_OPTION(y, TR("Roll Selected Down", "Bajar seleccionada", "降下所选车窗", "Ausgewähltes runter", "選択した窓を開ける", "Опустить выбранное", "Abaixar Selecionada", "Baisser la vitre"), "APPLY", g_item = index, 2) BREAK
+        CASE 8 DRAW_OPTION(y, TR("Roll Selected Up", "Subir seleccionada", "升起所选车窗", "Ausgewähltes hoch", "選択した窓を閉める", "Поднять выбранное", "Levantar Selecionada", "Monter la vitre"), "APPLY", g_item = index, 2) BREAK
+        CASE 9 DRAW_OPTION(y, TR("Pop Front Windscreen", "Quitar parabrisas del.", "击破前挡风玻璃", "Windschutzscheibe absprengen", "フロントガラスを外す", "Выбить лобовое стекло", "Remover Para-brisa Diant.", "Faire sauter pare-brise"), "APPLY", g_item = index, 2) BREAK
+        CASE 10
             IF IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID())
                 IF GET_IS_VEHICLE_ENGINE_RUNNING(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())) DRAW_OPTION(y, engLbl, "ON", g_item = index, 1) ELSE DRAW_OPTION(y, engLbl, "OFF", g_item = index, 0) ENDIF
             ELSE
                 DRAW_OPTION(y, engLbl, "No Vehicle", g_item = index, 0)
             ENDIF
         BREAK
-        CASE 5
+        CASE 11
+            IF g_vehicle_interior_light DRAW_OPTION(y, TR("Interior Light", "Luz interior", "车内照明灯", "Innenraumbeleuchtung", "車内ライト", "Свет в салоне", "Luz Interna", "Lumière intérieure"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Interior Light", "Luz interior", "车内照明灯", "Innenraumbeleuchtung", "車内ライト", "Свет в салоне", "Luz Interna", "Lumière intérieure"), "OFF", g_item = index, 0) ENDIF
+        BREAK
+        CASE 12
             IF g_vehicle_hazards DRAW_OPTION(y, TR("Hazard Lights", "Luces de emergencia", "双闪警示灯", "Warnblinker", "ハザードランプ", "Аварийка", "Pisca-alerta", "Feux de détresse"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Hazard Lights", "Luces de emergencia", "双闪警示灯", "Warnblinker", "ハザードランプ", "Аварийка", "Pisca-alerta", "Feux de détresse"), "OFF", g_item = index, 0) ENDIF
         BREAK
-        CASE 6
+        CASE 13 DRAW_OPTION(y, TR("Toggle Convertible Roof", "Alternar techo descap.", "切换敞篷车顶", "Cabrioverdeck umschalten", "コンバーチブル屋根切替", "Сложить/поднять крышу", "Alternar Teto Conversível", "Toit décapotable"), "APPLY", g_item = index, 2) BREAK
+        CASE 14
             IF g_vehicle_seat_choice = 0 DRAW_OPTION(y, seatLbl, TR("< Driver >", "< Conductor >", "< 驾驶座 >", "< Fahrer >", "< 運転席 >", "< Водитель >", "< Motorista >", "< Conducteur >"), g_item = index, 3) ENDIF
             IF g_vehicle_seat_choice = 1 DRAW_OPTION(y, seatLbl, TR("< Front Right >", "< Copiloto >", "< 副驾驶 >", "< Beifahrer >", "< 助手席 >", "< Переднее правое >", "< Passageiro >", "< Passager avant >"), g_item = index, 3) ENDIF
             IF g_vehicle_seat_choice = 2 DRAW_OPTION(y, seatLbl, TR("< Back Left >", "< Trasero izq. >", "< 左后座 >", "< Hinten links >", "< 後部左 >", "< Заднее левое >", "< Traseiro Esq. >", "< Arrière gauche >"), g_item = index, 3) ENDIF
             IF g_vehicle_seat_choice = 3 DRAW_OPTION(y, seatLbl, TR("< Back Right >", "< Trasero der. >", "< 右后座 >", "< Hinten rechts >", "< 後部右 >", "< Заднее правое >", "< Traseiro Dir. >", "< Arrière droite >"), g_item = index, 3) ENDIF
         BREAK
-        CASE 7 DRAW_OPTION(y, TR("Dirt Level", "Nivel de suciedad", "污垢程度", "Schmutzgrad", "汚れ具合", "Уровень грязи", "Nível de Sujeira", "Niveau de saleté"), DIRT_LEVEL_VALUE_LABEL(g_vehicle_dirt_level), g_item = index, 3) BREAK
-        CASE 8 DRAW_OPTION(y, TR("Wash Vehicle", "Lavar vehículo", "清洗载具", "Fahrzeug waschen", "洗車する", "Помыть транспорт", "Lavar Veículo", "Laver le véhicule"), "APPLY", g_item = index, 2) BREAK
+        CASE 15 DRAW_OPTION(y, TR("Dirt Level", "Nivel de suciedad", "污垢程度", "Schmutzgrad", "汚れ具合", "Уровень грязи", "Nível de Sujeira", "Niveau de saleté"), DIRT_LEVEL_VALUE_LABEL(g_vehicle_dirt_level), g_item = index, 3) BREAK
+        CASE 16 DRAW_OPTION(y, TR("Wash Vehicle", "Lavar vehículo", "清洗载具", "Fahrzeug waschen", "洗車する", "Помыть транспорт", "Lavar Veículo", "Laver le véhicule"), "APPLY", g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 
@@ -2435,7 +2420,7 @@ PROC DRAW_VEHICLE_CONTROL_PAGE()
     DRAW_MENU_VERSION_TAG()
     INT index = g_vehicle_control_scroll
     INT row = 0
-    INT total = 9
+    INT total = 17
     WHILE row < 8 AND index < total
         DRAW_VEHICLE_CONTROL_ROW(index, 0.268 + (TO_FLOAT(row) * ROW_H))
         index = index + 1
@@ -2453,8 +2438,8 @@ PROC DRAW_VEHICLE_ROW(INT index, FLOAT y)
         CASE 5 DRAW_OPTION(y, TR("Repair Vehicle", "Reparar vehículo", "修复载具", "Fahrzeug reparieren", "車両を修理", "Починить транспорт", "Reparar Veículo", "Réparer le véhicule"), "APPLY", g_item = index, 2) BREAK
         CASE 6 DRAW_OPTION(y, TR("Max Vehicle Upgrades", "Mejorar vehículo al máximo", "满配载具改装", "Maximale Upgrades", "フル改造", "Макс. улучшения ТС", "Melhorar ao Máximo", "Améliorations max"), "APPLY", g_item = index, 2) BREAK
         CASE 7 IF g_vehicle_always_max DRAW_OPTION(y, TR("Always Max Upgrades", "Mejorar siempre al máximo", "始终满配改装", "Immer max. Upgrades", "常にフル改造", "Всегда макс. тюнинг", "Sempre no Máximo", "Toujours au max"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Always Max Upgrades", "Mejorar siempre al máximo", "始终满配改装", "Immer max. Upgrades", "常にフル改造", "Всегда макс. тюнинг", "Sempre no Máximo", "Toujours au max"), "OFF", g_item = index, 0) ENDIF BREAK
-        CASE 8 DRAW_VEHICLE_MULTIPLIER(y, TR("Acceleration Boost", "Impulso de aceleración", "加速倍率", "Beschleunigungs-Boost", "加速ブースト", "Ускорение", "Impulso de Aceleração", "Boost d'accélération"), g_vehicle_acceleration_level, g_item = index) BREAK
-        CASE 9 DRAW_VEHICLE_GRIP_SELECTOR(y, g_item = index) BREAK
+        CASE 8 DRAW_VEHICLE_STRENGTH(y, TR("Acceleration Speed", "Impulso de aceleración", "加速倍率", "Beschleunigungs-Boost", "加速ブースト", "Ускорение", "Impulso de Aceleração", "Boost d'accélération"), g_vehicle_acceleration_level, g_item = index) BREAK
+        CASE 9 DRAW_VEHICLE_STRENGTH(y, TR("Tyre Grip Strength", "Agarre de neumáticos", "轮胎抓地力", "Reifenhaftung", "タイヤグリップ", "Сцепление шин", "Aderência dos pneus", "Adhérence des pneus"), g_vehicle_grip_level, g_item = index) BREAK
         CASE 10 IF g_godmode_tow_hook DRAW_OPTION(y, TR("God Mode Tow-Hook", "Gancho de grúa invencible", "拖车钩无敌", "Unzerstörbarer Abschlepphaken", "牽引フック無敵", "Неуязвимый крюк тягача", "Guincho Invencível", "Crochet de remorquage invincible"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("God Mode Tow-Hook", "Gancho de grúa invencible", "拖车钩无敌", "Unzerstörbarer Abschlepphaken", "牽引フック無敵", "Неуязвимый крюк тягача", "Guincho Invencível", "Crochet de remorquage invincible"), "OFF", g_item = index, 0) ENDIF BREAK
         CASE 11 IF g_vehicle_turbo DRAW_OPTION(y, TR("Turbo Mod", "Modificación Turbo", "涡轮增压", "Turbo-Mod", "ターボチューン", "Турбо-наддув", "Mod Turbo", "Mod Turbo"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Turbo Mod", "Modificación Turbo", "涡轮增压", "Turbo-Mod", "ターボチューン", "Турбо-наддув", "Mod Turbo", "Mod Turbo"), "OFF", g_item = index, 0) ENDIF BREAK
         CASE 12 IF g_vehicle_bulletproof_tyres DRAW_OPTION(y, TR("Bulletproof Tyres", "Neumáticos antibalas", "防弹轮胎", "Kugelsichere Reifen", "防弾タイヤ", "Пулестойкие шины", "Pneus à Prova de Balas", "Pneus à l'épreuve des balles"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Bulletproof Tyres", "Neumáticos antibalas", "防弹轮胎", "Kugelsichere Reifen", "防弾タイヤ", "Пулестойкие шины", "Pneus à Prova de Balas", "Pneus à l'épreuve des balles"), "OFF", g_item = index, 0) ENDIF BREAK
@@ -2725,7 +2710,7 @@ PROC DRAW_WEAPON_PAGE()
     ENDIF
     INT weaponIndex = g_scroll
     INT weaponRow = 0
-    WHILE weaponRow < 8 AND weaponIndex < 10
+    WHILE weaponRow < 8 AND weaponIndex < 11
         FLOAT y = 0.268 + (TO_FLOAT(weaponRow) * ROW_H)
         IF weaponIndex = 0 DRAW_OPTION(y, TR("Give All Weapons", "Dar todas las armas", "获取所有武器", "Alle Waffen geben", "全武器を入手", "Выдать всё оружие", "Dar Todas as Armas", "Donner toutes les armes"), "APPLY", g_item = weaponIndex, 2) ENDIF
         IF weaponIndex = 1 DRAW_MENU_WEAPON_SELECTOR(y, g_item = weaponIndex) ENDIF
@@ -2740,9 +2725,12 @@ PROC DRAW_WEAPON_PAGE()
         IF weaponIndex = 6
             IF g_explosive_ammo DRAW_OPTION(y, TR("Explosive Bullets", "Balas explosivas", "爆炸子弹", "Explosive Munition", "爆発弾", "Взрывные пули", "Balas Explosivas", "Balles explosives"), "ON", g_item = weaponIndex, 1) ELSE DRAW_OPTION(y, TR("Explosive Bullets", "Balas explosivas", "爆炸子弹", "Explosive Munition", "爆発弾", "Взрывные пули", "Balas Explosivas", "Balles explosives"), "OFF", g_item = weaponIndex, 0) ENDIF
         ENDIF
-        IF weaponIndex = 7 DRAW_SPECIAL_GUN_SELECTOR(y, g_item = weaponIndex) ENDIF
-        IF weaponIndex = 8 DRAW_OPTION(y, TR("Remove Current Weapon", "Quitar arma actual", "移除当前武器", "Aktuelle Waffe entfernen", "現在の武器を削除", "Убрать текущее оружие", "Remover Arma Atual", "Retirer l'arme actuelle"), "APPLY", g_item = weaponIndex, 0) ENDIF
-        IF weaponIndex = 9 DRAW_OPTION(y, TR("Remove All Weapons", "Quitar todas las armas", "移除所有武器", "Alle Waffen entfernen", "全武器を削除", "Убрать всё оружие", "Remover Todas as Armas", "Retirer toutes les armes"), "APPLY", g_item = weaponIndex, 2) ENDIF
+        IF weaponIndex = 7
+            IF g_fire_ammo DRAW_OPTION(y, TR("Fire Bullets", "Balas de fuego", "燃烧子弹", "Brandmunition", "焼夷弾", "Зажигательные пули", "Balas de Fogo", "Balles incendiaires"), "ON", g_item = weaponIndex, 1) ELSE DRAW_OPTION(y, TR("Fire Bullets", "Balas de fuego", "燃烧子弹", "Brandmunition", "焼夷弾", "Зажигательные пули", "Balas de Fogo", "Balles incendiaires"), "OFF", g_item = weaponIndex, 0) ENDIF
+        ENDIF
+        IF weaponIndex = 8 DRAW_SPECIAL_GUN_SELECTOR(y, g_item = weaponIndex) ENDIF
+        IF weaponIndex = 9 DRAW_OPTION(y, TR("Remove Current Weapon", "Quitar arma actual", "移除当前武器", "Aktuelle Waffe entfernen", "現在の武器を削除", "Убрать текущее оружие", "Remover Arma Atual", "Retirer l'arme actuelle"), "APPLY", g_item = weaponIndex, 0) ENDIF
+        IF weaponIndex = 10 DRAW_OPTION(y, TR("Remove All Weapons", "Quitar todas las armas", "移除所有武器", "Alle Waffen entfernen", "全武器を削除", "Убрать всё оружие", "Remover Todas as Armas", "Retirer toutes les armes"), "APPLY", g_item = weaponIndex, 2) ENDIF
         weaponIndex = weaponIndex + 1
         weaponRow = weaponRow + 1
     ENDWHILE
@@ -2826,7 +2814,8 @@ PROC DRAW_NSC_LOADER_ROW(INT index, FLOAT y)
         EXIT
     ENDIF
     IF index = 1
-        DRAW_OPTION(y, TR("VM Stack Size", "Tamaño de pila VM", "虚拟机栈大小", "VM-Stack-Größe", "VMスタックサイズ", "Размер стека VM", "Tamanho da Pilha VM", "Taille de pile VM"), NSC_STACK_LABEL_FROM_CHOICE(g_nsc_stack_choice), selected, -1)
+        rowBadge = NSC_STACK_LABEL_FROM_CHOICE(g_nsc_stack_choice)
+        DRAW_OPTION(y, TR("VM Stack Size", "Tamaño de pila VM", "虚拟机栈大小", "VM-Stack-Größe", "VMスタックサイズ", "Размер стека VM", "Tamanho da Pilha VM", "Taille de pile VM"), rowBadge, selected, -1)
         EXIT
     ENDIF
     IF index = 2
@@ -2861,9 +2850,10 @@ ENDPROC
 
 PROC DRAW_NSC_UNLOAD_ROW(INT index, FLOAT y)
     BOOL selected = (g_item = index)
-    INT slot = NSC_GET_ACTIVE_SLOT_FOR_INDEX(index)
-    IF slot >= 0
-        TEXT_LABEL_63 rowLabel = FORMAT_CUSTOM_NSC_ROW_LABEL(slot)
+    TEXT_LABEL_31 name = NSC_GET_ACTIVE_NAME_FOR_INDEX(index)
+    IF NOT IS_STRING_NULL_OR_EMPTY(name)
+        TEXT_LABEL_63 rowLabel = name
+        rowLabel += ".nsc"
         DRAW_OPTION(y, rowLabel, "REMOVE", selected, 0)
     ENDIF
 ENDPROC
