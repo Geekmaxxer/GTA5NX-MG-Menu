@@ -2949,12 +2949,14 @@ PROC DRAW_LANGUAGE_ROW(INT index, FLOAT y)
     BOOL selected = (g_item = index)
     STRING label = "English"
     SWITCH index
-        CASE 0 label = TR("English", "Inglés (English)", "", "Englisch (English)", "", "Английский (English)", "Inglês (English)", "Anglais (English)") BREAK
-        CASE 1 label = TR("Spanish", "Español", "", "Spanisch (Español)", "", "Испанский (Español)", "Espanhol (Español)", "Espagnol (Español)") BREAK
-        CASE 2 label = TR("German", "Alemán (Deutsch)", "", "Deutsch", "", "Немецкий (Deutsch)", "Alemão (Deutsch)", "Allemand (Deutsch)") BREAK
-        CASE 3 label = TR("Russian", "Ruso (Русский)", "", "Russisch (Русский)", "", "Русский", "Russo (Русский)", "Russe (Русский)") BREAK
-        CASE 4 label = TR("Portuguese", "Português", "", "Portugiesisch (Português)", "", "Португальский (Português)", "Português", "Portugais (Português)") BREAK
-        CASE 5 label = TR("French", "Francés (Français)", "", "Französisch (Français)", "", "Французский (Français)", "Francês (Français)", "Français") BREAK
+        CASE 0 label = TR("English", "Inglés (English)", "英语 (English)", "Englisch (English)", "英語 (English)", "Английский (English)", "Inglês (English)", "Anglais (English)") BREAK
+        CASE 1 label = TR("Spanish", "Español", "西班牙语 (Español)", "Spanisch (Español)", "スペイン語 (Español)", "Испанский (Español)", "Espanhol (Español)", "Espagnol (Español)") BREAK
+        CASE 2 label = TR("German", "Alemán (Deutsch)", "德语 (Deutsch)", "Deutsch", "ドイツ語 (Deutsch)", "Немецкий (Deutsch)", "Alemão (Deutsch)", "Allemand (Deutsch)") BREAK
+        CASE 3 label = TR("Russian", "Ruso (Русский)", "俄语 (Русский)", "Russisch (Русский)", "ロシア語 (Русский)", "Русский", "Russo (Русский)", "Russe (Русский)") BREAK
+        CASE 4 label = TR("Portuguese", "Português", "葡萄牙语 (Português)", "Portugiesisch (Português)", "ポルトガル語 (Português)", "Португальский (Português)", "Português", "Portugais (Português)") BREAK
+        CASE 5 label = TR("French", "Francés (Français)", "法语 (Français)", "Französisch (Français)", "フランス語 (Français)", "Французский (Français)", "Francês (Français)", "Français") BREAK
+        CASE 6 label = TR("Chinese (中文)", "Chino (中文)", "中文 (Chinese)", "Chinesisch (中文)", "中国語 (Chinese)", "Китайский (Chinese)", "Chinês (中文)", "Chinois (中文)") BREAK
+        CASE 7 label = TR("Japanese (日本語)", "Japonés (日本語)", "日语 (Japanese)", "Japanisch (日本語)", "日本語 (Japanese)", "Японский (Japanese)", "Japonês (日本語)", "Japonais (日本語)") BREAK
     ENDSWITCH
     IF g_menu_language = index
         DRAW_OPTION(y, label, "SELECTED", selected, 1)

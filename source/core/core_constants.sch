@@ -287,8 +287,9 @@ CONST_INT WORLD_MAYHEM_MENU_ROWS 4
 
 // Language submenu (Menu Settings tab Row 0).
 // 0 = English, 1 = Spanish, 2 = German,
-// 3 = Russian, 4 = Portuguese, 5 = French.
-CONST_INT LANGUAGE_MENU_ROWS 6
+// 3 = Russian, 4 = Portuguese, 5 = French, 6 = Chinese, 7 = Japanese.
+// Existing IDs remain stable for saved language preferences.
+CONST_INT LANGUAGE_MENU_ROWS 8
 
 // Custom Story PEDs submenu (PED Changer Row 0, util_story_peds.sch).
 // 112 named story characters (0..111); the currently active playable protagonist

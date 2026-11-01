@@ -289,8 +289,8 @@
   },
   "nsc_tool_checks": 62,
   "menu": {
-    "sha256": "68ad7e11a43f258864cf168908b6d4cd01f1bb7d85e4ef5c7934808879ed111e",
-    "binding_sha256": "3f4b04ba4d43118043fe75e1cbe9cc33138b9fae71287e2bd142cd022db2a2eb",
+    "sha256": "1066b00cba9f263cc879521270fe642c5b5492f15a5aa9b68b56ea94f75428e7",
+    "binding_sha256": "0fc902e7d5016077bc27a7bff4d8c7bf1ff9359c6f5dfadfe131dae8201e1b93",
     "stock_natives": 509,
     "registered_custom_natives": 19,
     "self_native_matches": 528
@@ -329,10 +329,15 @@
   },
   "source_regression_checks": {
     "passed": 207,
-    "record": "stability-audit-verification.json",
+    "record": "language-verification.json",
     "physical_switch_accepted": false
   },
-  "revision": "stability-audit-20261101",
+  "revision": "v1.1-language-restoration-20261101",
   "runtime_validation_note": "Runtime suites retain the previous local scope; this audit does not change or reaccept the pinned runtime binary.",
-  "stability_audit_record": "stability-audit-verification.json"
+  "stability_audit_record": "stability-audit-verification.json",
+  "language_checks": {
+    "passed": 84,
+    "record": "language-verification.json",
+    "cjk_glyph_rendering_accepted": false
+  }
 }

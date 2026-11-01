@@ -1,3 +1,11 @@
+# v1.1 language verification
+
+The [language verification record](language-verification.json) identifies the
+current menu and binding, source hashes and refreshed installers. All 207 source
+regressions and 84 focused language checks passed. Those checks execute selected
+live routines with native models; they do not establish font rendering or Switch
+gameplay acceptance. Earlier verification records retain their original scope.
+
 # v1.1 stability verification
 
 The [stability audit](STABILITY-AUDIT.md) and its

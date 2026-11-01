@@ -536,7 +536,7 @@ PROC PERSIST_UNPACK_ALL_FROM_BUFFER()
     INT savedLang = g_persist_sd_data[PERSIST_WORD_LANG]
     INT slot = 0
 
-    IF savedLang >= 0 AND savedLang <= 5
+    IF savedLang >= 0 AND savedLang < LANGUAGE_MENU_ROWS
         g_menu_language = savedLang
     ENDIF
 

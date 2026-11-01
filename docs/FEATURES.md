@@ -13,7 +13,7 @@ adjust selectors.
 | World | Time/weather including system-time sync, wind and persistence; IPLs, gravity, doors and world effects. |
 | Teleport | Waypoint/objective, nineteen stores, thirty-five locations, nudge and numeric coordinates. |
 | Misc | Ambient NPC and world controls, cleanup and coordinates. |
-| Menu | Twelve rows, thirteen with RGB; six languages, Spooner, saved NSCs, native plugins, appearance, respawn, settings and credits. |
+| Menu | Twelve rows, thirteen with RGB; eight languages, Spooner, saved NSCs, native plugins, appearance, respawn, settings and credits. |
 
 Plugin discovery is independent of resident admission. Rescan completion and
 failure are visible; deleted unmapped entries disappear and resident mappings

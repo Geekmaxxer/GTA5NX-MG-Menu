@@ -1,5 +1,5 @@
 //|=======================================================================================|
-//|  core_localization.sch - 6-Language Localization Engine for MEGATARD Menu
+//|  core_localization.sch - 8-Language Localization Engine for MEGATARD Menu
 //|=======================================================================================|
 //  0 = English
 //  1 = Spanish
@@ -7,16 +7,18 @@
 //  3 = Russian
 //  4 = Portuguese
 //  5 = French
+//  6 = Chinese
+//  7 = Japanese
 
 FUNC STRING TR(STRING en, STRING es, STRING zh, STRING de, STRING ja, STRING ru, STRING pt, STRING fr)
-    zh = ja
-    ja = zh
     SWITCH g_menu_language
         CASE 1 RETURN es
         CASE 2 RETURN de
         CASE 3 RETURN ru
         CASE 4 RETURN pt
         CASE 5 RETURN fr
+        CASE 6 RETURN zh
+        CASE 7 RETURN ja
     ENDSWITCH
     RETURN en
 ENDFUNC

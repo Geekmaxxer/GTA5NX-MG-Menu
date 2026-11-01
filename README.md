@@ -4,7 +4,8 @@ SanScript source and build tools for MEGATARD's single-player mod menu, with
 [ScriptHookV-NX](https://github.com/Geekmaxxer/ScriptHookV-NX) SD settings and plugin management.
 
 Player, weapon, vehicle, world, teleport and NPC options sit alongside Object
-Spooner, Custom NSC Loader, custom story PEDs, language settings and persistence.
+Spooner, Custom NSC Loader, custom story PEDs, eight selectable languages and
+persistence. Chinese and Japanese rendering remains subject to console verification.
 See [Features](docs/FEATURES.md) and [v1.1 changes](docs/CHANGELOG.md).
 
 The [v1.1 guide](docs/V1.1.md) describes growing catalogues and numeric vehicle

@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1 language restoration - 2026-11-01
+
+- Restore Chinese and Japanese selection and their existing translations.
+- Preserve saved IDs for the other six languages and accept all eight on reload.
+- Retain Latin language labels and an identifiable English recovery row.
+- Regenerate the menu binding and installers; CJK font rendering awaits console verification.
+
 ## v1.1 stability revision - 2026-11-01
 
 - Repair saved NSC character decoding, failed-write retry and settings persistence.
