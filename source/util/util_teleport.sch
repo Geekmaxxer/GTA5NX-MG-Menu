@@ -51,32 +51,37 @@ ENDFUNC
 PROC WARP_PLAYER_TO_COORD(VECTOR target)
     PED_INDEX playerPed = PLAYER_PED_ID()
     VEHICLE_INDEX playerVeh = NULL
+    IF NOT DOES_ENTITY_EXIST(playerPed) OR IS_ENTITY_DEAD(playerPed) EXIT ENDIF
     IF IS_PED_IN_ANY_VEHICLE(playerPed)
         playerVeh = GET_VEHICLE_PED_IS_IN(playerPed)
         SET_ENTITY_LOAD_COLLISION_FLAG(playerVeh, TRUE)
         SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION(playerVeh, TRUE)
-        SET_ENTITY_COORDS(playerVeh, target, TRUE, TRUE, TRUE, TRUE)
+        SET_ENTITY_COORDS(playerVeh, target, TRUE, TRUE, TRUE, FALSE)
         SET_VEHICLE_ON_GROUND_PROPERLY(playerVeh)
     ELSE
         SET_ENTITY_LOAD_COLLISION_FLAG(playerPed, TRUE)
         SET_ENTITY_SHOULD_FREEZE_WAITING_ON_COLLISION(playerPed, TRUE)
-        SET_ENTITY_COORDS(playerPed, target, TRUE, TRUE, TRUE, TRUE)
+        SET_ENTITY_COORDS(playerPed, target, TRUE, TRUE, TRUE, FALSE)
     ENDIF
     REQUEST_COLLISION_AT_COORD(target)
+ENDPROC
+
+PROC CANCEL_PENDING_TELEPORT()
+    IF g_teleport_scene_owned AND IS_NEW_LOAD_SCENE_ACTIVE() AND NOT GET_MISSION_FLAG() AND NOT IS_CUTSCENE_ACTIVE()
+        NEW_LOAD_SCENE_STOP()
+    ENDIF
+    g_teleport_scene_owned = FALSE
+    g_teleport_pending = FALSE
 ENDPROC
 
 PROC START_TELEPORT(VECTOR destination)
     VECTOR target = destination
     FLOAT groundZ = 0.0
 
-    // Cancel any prior pending teleport cleanly
-    IF g_teleport_pending
-        IF IS_NEW_LOAD_SCENE_ACTIVE()
-            NEW_LOAD_SCENE_STOP()
-        ENDIF
-        CLEAR_FOCUS()
-        g_teleport_pending = FALSE
-    ENDIF
+    IF NOT DOES_ENTITY_EXIST(PLAYER_PED_ID()) OR IS_ENTITY_DEAD(PLAYER_PED_ID()) EXIT ENDIF
+    IF NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) OR IS_CUTSCENE_ACTIVE() EXIT ENDIF
+    CANCEL_PENDING_TELEPORT()
+    g_teleport_failed = FALSE
 
     REQUEST_COLLISION_AT_COORD(target)
 
@@ -95,12 +100,10 @@ PROC START_TELEPORT(VECTOR destination)
     g_pending_teleport_destination = destination
     g_teleport_request_time = GET_GAME_TIMER()
     g_teleport_pending = TRUE
-    SET_FOCUS_POS_AND_VEL(destination, <<0.0, 0.0, 0.0>>)
-    LOAD_SCENE(destination)
-    IF IS_NEW_LOAD_SCENE_ACTIVE()
-        NEW_LOAD_SCENE_STOP()
+    // Mission scripts retain control of their streaming scene and camera focus.
+    IF NOT GET_MISSION_FLAG() AND NOT IS_NEW_LOAD_SCENE_ACTIVE()
+        g_teleport_scene_owned = NEW_LOAD_SCENE_START_SPHERE(destination, 200.0, NEWLOADSCENE_FLAG_REQUIRE_COLLISION | NEWLOADSCENE_FLAG_INTERIOR_AND_EXTERIOR)
     ENDIF
-    NEW_LOAD_SCENE_START_SPHERE(destination, 200.0, NEWLOADSCENE_FLAG_REQUIRE_COLLISION | NEWLOADSCENE_FLAG_INTERIOR_AND_EXTERIOR)
 ENDPROC
 
 PROC TELEPORT_PLAYER_FAST(VECTOR destination)
@@ -114,64 +117,50 @@ ENDPROC
 PROC FINISH_PENDING_TELEPORT()
     FLOAT groundZ = 0.0
     VECTOR target = g_pending_teleport_destination
-    IF PROBE_GROUND_Z(target, groundZ)
+    BOOL groundFound = PROBE_GROUND_Z(target, groundZ)
+    IF groundFound
         IF target.z >= -1.0 AND target.z <= 1.0
             target.z = groundZ + 1.0
         ELIF groundZ > target.z - 2.0 AND groundZ < target.z + 5.0
             target.z = groundZ + 1.0
         ENDIF
     ENDIF
-    WARP_PLAYER_TO_COORD(target)
-    IF IS_NEW_LOAD_SCENE_ACTIVE()
-        NEW_LOAD_SCENE_STOP()
+    // A 2D waypoint must have ground. Explicit 3D coordinates can describe
+    // interiors or open water; accept those only after our collision scene loads.
+    IF groundFound OR (g_teleport_scene_owned AND IS_NEW_LOAD_SCENE_LOADED() AND (target.z > 1.0 OR target.z < -1.0))
+        WARP_PLAYER_TO_COORD(target)
+    ELSE
+        g_teleport_failed = TRUE
     ENDIF
-    CLEAR_FOCUS()
-    g_teleport_pending = FALSE
+    CANCEL_PENDING_TELEPORT()
 ENDPROC
 
 PROC PROCESS_PENDING_TELEPORT()
     IF NOT g_teleport_pending EXIT ENDIF
+    IF g_teleport_scene_owned AND GET_MISSION_FLAG()
+        CANCEL_PENDING_TELEPORT()
+        EXIT
+    ENDIF
 
-    IF IS_ENTITY_DEAD(PLAYER_PED_ID())
-        IF IS_NEW_LOAD_SCENE_ACTIVE()
-            NEW_LOAD_SCENE_STOP()
-        ENDIF
-        CLEAR_FOCUS()
-        g_teleport_pending = FALSE
+    IF NOT DOES_ENTITY_EXIST(PLAYER_PED_ID()) OR IS_ENTITY_DEAD(PLAYER_PED_ID()) OR NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) OR IS_CUTSCENE_ACTIVE()
+        CANCEL_PENDING_TELEPORT()
         EXIT
     ENDIF
 
     FLOAT groundZ = 0.0
     VECTOR target = g_pending_teleport_destination
 
-    // Keep collision and focus requested
+    // Request destination collision without overriding the game's focus.
     REQUEST_COLLISION_AT_COORD(target)
-    SET_FOCUS_POS_AND_VEL(target, <<0.0, 0.0, 0.0>>)
 
-    // Check if collision has streamed in and ground is confirmed
+    // Check collision once here; the completion routine owns placement.
     IF PROBE_GROUND_Z(target, groundZ)
-        IF target.z >= -1.0 AND target.z <= 1.0
-            target.z = groundZ + 1.0
-        ELIF groundZ > target.z - 2.0 AND groundZ < target.z + 5.0
-            target.z = groundZ + 1.0
-        ENDIF
-        WARP_PLAYER_TO_COORD(target)
-        IF IS_NEW_LOAD_SCENE_ACTIVE()
-            NEW_LOAD_SCENE_STOP()
-        ENDIF
-        CLEAR_FOCUS()
-        g_teleport_pending = FALSE
+        FINISH_PENDING_TELEPORT()
         EXIT
     ENDIF
 
-    // Safety timeout: 3500ms max (e.g. open ocean water where no ground collision exists)
-    IF GET_GAME_TIMER() > g_teleport_request_time + 3500 OR IS_NEW_LOAD_SCENE_LOADED()
-        WARP_PLAYER_TO_COORD(target)
-        IF IS_NEW_LOAD_SCENE_ACTIVE()
-            NEW_LOAD_SCENE_STOP()
-        ENDIF
-        CLEAR_FOCUS()
-        g_teleport_pending = FALSE
+    IF GET_GAME_TIMER() > g_teleport_request_time + 5000 OR (g_teleport_scene_owned AND IS_NEW_LOAD_SCENE_LOADED())
+        FINISH_PENDING_TELEPORT()
     ENDIF
 ENDPROC
 
@@ -206,20 +195,9 @@ FUNC BOOL TELEPORT_TO_GPS_ROUTE_BLIP()
     RETURN FALSE
 ENDFUNC
 
-// Mission objective blips use strand/heist/mission sprites the 5-sprite
-// sweep never matches, and carry no GPS route until the player waypoints
-// them by hand. Walk the sprite enum by index instead: SanScript passes an
-// enum-typed value where BLIP_SPRITE is expected, but rejects raw INT, so
-// the scan cursor is stepped with INT_TO_ENUM the same way the outfit and
-// vehicle code steps PED_COMPONENT and MOD_TYPE.
+// Routed objectives may use additional sprites. Only a routed blip qualifies
+// in this fallback scan; stores, properties and other nearby icons do not.
 FUNC BOOL TELEPORT_TO_ANY_OBJECTIVE_BLIP()
-    VECTOR playerPosition = GET_ENTITY_COORDS(PLAYER_PED_ID())
-    VECTOR blipPosition = <<0.0, 0.0, 0.0>>
-    VECTOR bestPosition = <<0.0, 0.0, 0.0>>
-    VECTOR delta = <<0.0, 0.0, 0.0>>
-    FLOAT bestDistance = 0.0
-    FLOAT distance = 0.0
-    BOOL found = FALSE
     BLIP_SPRITE sprite = RADAR_TRACE_OBJECTIVE
     BLIP_INDEX blip = GET_CLOSEST_BLIP_INFO_ID(RADAR_TRACE_OBJECTIVE)
     INT scanned = 0
@@ -234,22 +212,10 @@ FUNC BOOL TELEPORT_TO_ANY_OBJECTIVE_BLIP()
                     TELEPORT_PLAYER_FAST(GET_BLIP_COORDS(blip))
                     RETURN TRUE
                 ENDIF
-                blipPosition = GET_BLIP_COORDS(blip)
-                delta = blipPosition - playerPosition
-                distance = SQRT((delta.x * delta.x) + (delta.y * delta.y) + (delta.z * delta.z))
-                IF NOT found OR distance < bestDistance
-                    found = TRUE
-                    bestDistance = distance
-                    bestPosition = blipPosition
-                ENDIF
             ENDIF
             scanned = scanned + 1
         ENDIF
     ENDWHILE
-    IF found
-        TELEPORT_PLAYER_FAST(bestPosition)
-        RETURN TRUE
-    ENDIF
     RETURN FALSE
 ENDFUNC
 
@@ -284,10 +250,18 @@ PROC PROCESS_AUTO_OBJECTIVE_TELEPORT()
         EXIT
     ENDIF
     IF g_auto_objective_pending AND GET_GAME_TIMER() >= g_auto_objective_tp_time
+        IF NOT DOES_ENTITY_EXIST(PLAYER_PED_ID()) OR IS_ENTITY_DEAD(PLAYER_PED_ID()) EXIT ENDIF
+        IF NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) EXIT ENDIF
         g_auto_objective_pending = FALSE
         TELEPORT_TO_OBJECTIVE()
     ENDIF
 ENDPROC
+
+FUNC STRING TELEPORT_ACTION_LABEL()
+    IF g_teleport_pending RETURN "LOADING" ENDIF
+    IF g_teleport_failed RETURN "NO COLLISION" ENDIF
+    RETURN "APPLY"
+ENDFUNC
 
 PROC TELEPORT_TO_ENTERED_COORDS()
     TELEPORT_PLAYER_FAST(<<g_teleport_x, g_teleport_y, g_teleport_z>>)
@@ -313,9 +287,9 @@ PROC NUDGE_PLAYER_BY_OFFSET(VECTOR offset)
         // (that is what deleted the car on the nudge actions). Same rule as
         // TELEPORT_PLAYER_FAST / FINISH_PENDING_TELEPORT above: either the
         // vehicle or the ped, never both.
-        SET_ENTITY_COORDS(occupied, basePosition + worldOffset, TRUE, TRUE, TRUE, TRUE)
+        SET_ENTITY_COORDS(occupied, basePosition + worldOffset, TRUE, TRUE, TRUE, FALSE)
     ELSE
-        SET_ENTITY_COORDS(playerPed, basePosition + worldOffset, TRUE, TRUE, TRUE, TRUE)
+        SET_ENTITY_COORDS(playerPed, basePosition + worldOffset, TRUE, TRUE, TRUE, FALSE)
     ENDIF
     REQUEST_COLLISION_AT_COORD(basePosition + worldOffset)
 ENDPROC
@@ -325,9 +299,12 @@ PROC REFRESH_STREAMED_ASSETS()
 ENDPROC
 
 PROC PROCESS_SKIP_CUTSCENES()
+    IF NOT IS_CUTSCENE_ACTIVE() g_skip_cutscene_requested = FALSE ENDIF
     IF NOT g_skip_cutscenes EXIT ENDIF
-    IF IS_CUTSCENE_PLAYING() OR IS_CUTSCENE_ACTIVE()
-        STOP_CUTSCENE_IMMEDIATELY()
+    IF IS_CUTSCENE_PLAYING() AND NOT g_skip_cutscene_requested
+        // Advance through the normal scene ending; keep script-owned actors.
+        STOP_CUTSCENE(FALSE)
+        g_skip_cutscene_requested = TRUE
     ENDIF
 ENDPROC
 

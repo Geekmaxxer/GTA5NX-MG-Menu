@@ -7,8 +7,9 @@ Player, weapon, vehicle, world, teleport and NPC options sit alongside Object
 Spooner, Custom NSC Loader, custom story PEDs, language settings and persistence.
 See [Features](docs/FEATURES.md) and [v1.1 changes](docs/CHANGELOG.md).
 
-The [v1.1 guide](docs/V1.1.md) describes growing catalogues, rescan status,
-live stack counts, numeric vehicle controls and pending hardware acceptance.
+The [v1.1 guide](docs/V1.1.md) describes growing catalogues and numeric vehicle
+controls. The [stability audit](docs/STABILITY-AUDIT.md) documents persistence,
+cleanup and mission-sensitive corrections, with physical acceptance tracked separately.
 
 ## Requirements
 
@@ -40,7 +41,7 @@ Run from this repository's root; replace the example paths with your locations:
   -DevNgRoot 'C:/modding/dev_ng' `
   -ScriptHookRoot 'C:/modding/ScriptHookV-NX' `
   -SwitchHeaderReferenceFolder 'C:/modding/stock/script_rel.rpf' `
-  -OutputDirectory './out-v108-test1'
+  -OutputDirectory './out-v11-stability'
 ```
 
 Use a new output directory for each build. This produces `ragemenu.nsc`,
@@ -98,7 +99,9 @@ belong to the separate ScriptHookV-NX project.
 Edit the modules under `source/core`, `features`, `submenus` and `util`.
 [Developing](docs/DEVELOPING.md) covers builds, native checks and contributions.
 
-The current source compiles with matched bindings and passes 62 tooling tests.
+The current source compiles with matched bindings and passes 207 portable source
+checks plus 62 tooling tests. Run `python ./tools/Test-MenuSource.py` for source
+regressions; its native models are separate from Switch gameplay validation.
 See [build verification](docs/BUILD-VERIFICATION.md) for the source and artifact
 hashes. This source synchronization has not received a new Switch gameplay test.
 Compilation, header validation and native coverage do not establish in-game behavior.

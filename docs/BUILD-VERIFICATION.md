@@ -1,3 +1,11 @@
+# v1.1 stability verification
+
+The [stability audit](STABILITY-AUDIT.md) and its
+[verification record](stability-audit-verification.json) identify the audited
+source, reproducible outputs and installer checks. The native-model source suite
+passes 207 checks and the NSC tooling suite passes 62 tests. Physical acceptance
+of this revision remains pending. Earlier records below retain their dated scope.
+
 # v1.1 local verification
 
 The [current record](v1.1-verification.json) identifies the exact menu/runtime pair. The GitHub checkout reproduces the menu and binding bytes. Physical v1.1 acceptance remains pending; the following records retain their original scope.

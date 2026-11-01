@@ -25,6 +25,14 @@ Acceleration Speed and Tyre Grip Strength offer 0.05 to 999, 0.05 steps, Normal 
 grip uses tyre-slip levels below Normal and grounded lateral assistance above it.
 Strength is not a literal multiplier of the tyre handling curve.
 
+The stability revision adds committed-state recovery for failed SD writes,
+owned custom-name buffers, corrected character profiles and freecam restoration.
+Vehicle toggles and selectors are repaired; teleports, destructive selections and
+conversion protect mission entities and existing streaming ownership. Updated
+optional Chaos/dealership scripts pause mission-sensitive work and support menu
+shutdown cleanup. Details and acceptance limits are in the
+[stability audit](STABILITY-AUDIT.md). No feature is removed.
+
 Read [v1.1 implementation and acceptance](V1.1.md) for ownership, migration,
 packaging and hardware-test boundaries. New gameplay effects remain pending
 physical acceptance of the complete matched pair.

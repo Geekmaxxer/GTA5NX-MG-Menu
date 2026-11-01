@@ -14,6 +14,10 @@ ENDPROC
 
 PROC START_ATTACKER_SPAWN()
     IF g_attacker_spawn_pending EXIT ENDIF
+    IF NOT g_attacker_relationship_ready
+        IF NOT ADD_RELATIONSHIP_GROUP("MG_MENU_ATTACKERS", g_attacker_relationship_group) EXIT ENDIF
+        g_attacker_relationship_ready = TRUE
+    ENDIF
     INT readIndex = 0
     INT writeIndex = 0
     REPEAT g_menu_attacker_count readIndex
@@ -40,7 +44,7 @@ PROC START_ATTACKER_SPAWN()
     // this install must be rejected here, exactly like REQUEST_PED_CHANGE does
     // for the player, otherwise the 8s load timeout in the main loop would run
     // and leave the pending flag set for no reason.
-    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_attacker_model) OR NOT IS_MODEL_VALID(g_pending_attacker_model) EXIT ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_attacker_model) OR NOT IS_MODEL_VALID(g_pending_attacker_model) OR NOT IS_MODEL_A_PED(g_pending_attacker_model) EXIT ENDIF
     SWITCH g_attacker_weapon_choice
         CASE 0 g_pending_attacker_weapon = WEAPONTYPE_PISTOL BREAK
         CASE 1 g_pending_attacker_weapon = WEAPONTYPE_SMG BREAK
@@ -67,19 +71,19 @@ PROC FINISH_ATTACKER_SPAWN()
         SET_ENTITY_AS_MISSION_ENTITY(attacker, TRUE, TRUE)
         GIVE_WEAPON_TO_PED(attacker, g_pending_attacker_weapon, 9999, TRUE, TRUE)
         SET_PED_AS_ENEMY(attacker, TRUE)
-        SET_PED_RELATIONSHIP_GROUP_HASH(attacker, RELGROUPHASH_HATES_PLAYER)
-        SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_PLAYER)
-        SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_PLAYER, RELGROUPHASH_HATES_PLAYER)
+        SET_PED_RELATIONSHIP_GROUP_HASH(attacker, g_attacker_relationship_group)
+        SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_PLAYER)
+        SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_PLAYER, g_attacker_relationship_group)
         SET_PED_FLEE_ATTRIBUTES(attacker, FA_NEVER_FLEE, TRUE)
         SET_PED_COMBAT_ABILITY(attacker, CAL_PROFESSIONAL)
         SET_BLOCKING_OF_NON_TEMPORARY_EVENTS(attacker, TRUE)
         IF g_attacker_rage
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVMALE, RELGROUPHASH_HATES_PLAYER)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVFEMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_HATES_PLAYER)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_COP)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_COP, RELGROUPHASH_HATES_PLAYER)
+            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_CIVMALE)
+            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVMALE, g_attacker_relationship_group)
+            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_CIVFEMALE)
+            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVFEMALE, g_attacker_relationship_group)
+            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_COP)
+            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_COP, g_attacker_relationship_group)
             TASK_COMBAT_HATED_TARGETS_AROUND_PED(attacker, 100.0)
         ELSE
             TASK_COMBAT_PED(attacker, PLAYER_PED_ID())
@@ -103,15 +107,20 @@ ENDPROC
 // for the rest of the session.  Restoring the neutral rows belongs to both
 // switching rage off and dismissing the attackers, so it lives here.
 PROC RESTORE_ATTACKER_RELATIONSHIP_GROUPS()
-    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVMALE)
-    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_CIVMALE, RELGROUPHASH_HATES_PLAYER)
-    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVFEMALE)
-    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_HATES_PLAYER)
-    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_COP)
-    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_COP, RELGROUPHASH_HATES_PLAYER)
+    IF NOT g_attacker_relationship_ready EXIT ENDIF
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, g_attacker_relationship_group, RELGROUPHASH_CIVMALE)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_CIVMALE, g_attacker_relationship_group)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, g_attacker_relationship_group, RELGROUPHASH_CIVFEMALE)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_CIVFEMALE, g_attacker_relationship_group)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, g_attacker_relationship_group, RELGROUPHASH_COP)
+    SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_IGNORE, RELGROUPHASH_COP, g_attacker_relationship_group)
 ENDPROC
 
 PROC CLEAR_MENU_ATTACKERS()
+    IF g_attacker_spawn_pending
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_attacker_model)
+        g_attacker_spawn_pending = FALSE
+    ENDIF
     INT index = 0
     REPEAT g_menu_attacker_count index
         IF DOES_ENTITY_EXIST(g_menu_attackers[index])
@@ -122,7 +131,10 @@ PROC CLEAR_MENU_ATTACKERS()
     g_menu_attacker_count = 0
     // Nothing is left in the HATES_PLAYER group for the rage rows to apply to, so
     // the shared table is put back to neutral here as well as on the Rage toggle.
-    RESTORE_ATTACKER_RELATIONSHIP_GROUPS()
+    IF g_attacker_relationship_ready
+        REMOVE_RELATIONSHIP_GROUP(g_attacker_relationship_group)
+        g_attacker_relationship_ready = FALSE
+    ENDIF
 ENDPROC
 
 PROC APPLY_ATTACKER_RAGE_STATE()
@@ -137,23 +149,23 @@ PROC APPLY_ATTACKER_RAGE_STATE()
         IF DOES_ENTITY_EXIST(g_menu_attackers[index]) AND NOT IS_PED_INJURED(g_menu_attackers[index])
             IF g_attacker_rage
                 SET_PED_AS_ENEMY(g_menu_attackers[index], TRUE)
-                SET_PED_RELATIONSHIP_GROUP_HASH(g_menu_attackers[index], RELGROUPHASH_HATES_PLAYER)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_PLAYER)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_PLAYER, RELGROUPHASH_HATES_PLAYER)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVMALE)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVMALE, RELGROUPHASH_HATES_PLAYER)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_CIVFEMALE)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_HATES_PLAYER)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_COP)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_COP, RELGROUPHASH_HATES_PLAYER)
+                SET_PED_RELATIONSHIP_GROUP_HASH(g_menu_attackers[index], g_attacker_relationship_group)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_PLAYER)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_PLAYER, g_attacker_relationship_group)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_CIVMALE)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVMALE, g_attacker_relationship_group)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_CIVFEMALE)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVFEMALE, g_attacker_relationship_group)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_COP)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_COP, g_attacker_relationship_group)
                 CLEAR_PED_TASKS(g_menu_attackers[index])
                 TASK_COMBAT_HATED_TARGETS_AROUND_PED(g_menu_attackers[index], 100.0)
                 SET_PED_KEEP_TASK(g_menu_attackers[index], TRUE)
             ELSE
                 SET_PED_AS_ENEMY(g_menu_attackers[index], TRUE)
-                SET_PED_RELATIONSHIP_GROUP_HASH(g_menu_attackers[index], RELGROUPHASH_HATES_PLAYER)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_HATES_PLAYER, RELGROUPHASH_PLAYER)
-                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_PLAYER, RELGROUPHASH_HATES_PLAYER)
+                SET_PED_RELATIONSHIP_GROUP_HASH(g_menu_attackers[index], g_attacker_relationship_group)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, g_attacker_relationship_group, RELGROUPHASH_PLAYER)
+                SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_PLAYER, g_attacker_relationship_group)
                 CLEAR_PED_TASKS(g_menu_attackers[index])
                 TASK_COMBAT_PED(g_menu_attackers[index], PLAYER_PED_ID())
                 SET_PED_KEEP_TASK(g_menu_attackers[index], TRUE)
@@ -281,7 +293,7 @@ PROC START_BODYGUARD_SPAWN()
     // Same validation as the attacker spawn and the player ped changer: a DLC
     // model that is not streamed on this install is a clean no-op rather than a
     // request that can only time out.
-    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_bodyguard_model) OR NOT IS_MODEL_VALID(g_pending_bodyguard_model) EXIT ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_bodyguard_model) OR NOT IS_MODEL_VALID(g_pending_bodyguard_model) OR NOT IS_MODEL_A_PED(g_pending_bodyguard_model) EXIT ENDIF
     REQUEST_MODEL(g_pending_bodyguard_model)
     g_bodyguard_spawn_pending = TRUE
     g_bodyguard_request_time = GET_GAME_TIMER()
@@ -312,12 +324,9 @@ PROC BODYGUARD_FOLLOW_OFFSET(INT slot, VECTOR &offset)
         INT positionInRing = ringSlot - ringStart
         INT angleStep = (positionInRing * 137) % 360
         FLOAT radius = 8.0 + (TO_FLOAT(ring) * 3.0)
-        FLOAT angleRad = TO_FLOAT(angleStep) * 0.0174533
-        // COS/SIN are RAGE script builtins (rage_builtins.sch) and are used by
-        // many stock scripts. The previous hand-rolled 8th-order Taylor series
-        // is only accurate near 0 rad, so ring slots whose angle passed about
-        // 180 degrees were placed tens of metres away in the wrong direction.
-        offset = <<radius * COS(angleRad), radius * SIN(angleRad), 0.0>>
+        // SanScript SIN/COS take degrees (rage_builtins.sch).
+        FLOAT angleDegrees = TO_FLOAT(angleStep)
+        offset = <<radius * COS(angleDegrees), radius * SIN(angleDegrees), 0.0>>
     ENDIF
     IF g_bodyguard_formation_choice = 1
         IF slot = 0 offset = <<-3.0, 2.0, 0.0>> ENDIF
@@ -551,6 +560,10 @@ PROC APPLY_BODYGUARD_GOD_STATE()
 ENDPROC
 
 PROC CLEAR_BODYGUARDS()
+    IF g_bodyguard_spawn_pending
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_bodyguard_model)
+        g_bodyguard_spawn_pending = FALSE
+    ENDIF
     INT index = 0
     REPEAT g_bodyguard_count index
         IF DOES_BLIP_EXIST(g_bodyguard_blip_handles[index])
@@ -772,6 +785,10 @@ PROC PROCESS_STRIPPER_SPAWN()
 ENDPROC
 
 PROC CLEAR_STRIPPER_PEDS()
+    IF g_stripper_spawn_pending
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_stripper_model)
+        g_stripper_spawn_pending = FALSE
+    ENDIF
     INT index = 0
     REPEAT g_stripper_count index
         IF DOES_ENTITY_EXIST(g_stripper_peds[index])
@@ -1007,35 +1024,32 @@ PROC PROCESS_GODMODE_TOW_HOOK()
     PED_INDEX playerPed = PLAYER_PED_ID()
     VEHICLE_INDEX truck = NULL
     VEHICLE_INDEX towed = NULL
-    IF NOT g_godmode_tow_hook EXIT ENDIF
+    ENTITY_INDEX attached = NULL
+    IF NOT g_godmode_tow_hook OR GET_MISSION_FLAG() EXIT ENDIF
     IF NOT IS_PED_IN_ANY_VEHICLE(playerPed) EXIT ENDIF
     truck = GET_VEHICLE_PED_IS_IN(playerPed)
     IF NOT DOES_ENTITY_EXIST(truck) EXIT ENDIF
-    // The remembered handle is only reused while it still points at a live vehicle
-    // sitting next to this truck.  Entity handles are recycled, so trusting
-    // DOES_ENTITY_EXIST alone would let a stale index attach whatever vehicle now
-    // owns that index to the tow hook.
-    IF DOES_ENTITY_EXIST(g_tow_hook_towed) AND IS_ENTITY_A_VEHICLE(g_tow_hook_towed)
-        IF VDIST(GET_ENTITY_COORDS(truck), GET_ENTITY_COORDS(g_tow_hook_towed)) < 25.0
-            towed = g_tow_hook_towed
-        ELSE
-            g_tow_hook_towed = NULL
-        ENDIF
-    ELSE
-        IF IS_ENTITY_ATTACHED(truck)
-            IF IS_ENTITY_A_VEHICLE(GET_ENTITY_ATTACHED_TO(truck))
-                IF DOES_ENTITY_EXIST(GET_ENTITY_ATTACHED_TO(truck))
-                    towed = GET_RANDOM_VEHICLE_IN_SPHERE(GET_ENTITY_COORDS(truck), 12.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
-                ENDIF
-            ENDIF
-        ENDIF
+    IF truck != g_tow_hook_truck
+        g_tow_hook_towed = NULL
+        g_tow_hook_truck = truck
     ENDIF
-    IF NOT DOES_ENTITY_EXIST(towed) EXIT ENDIF
-    IF NOT IS_ENTITY_A_VEHICLE(towed) EXIT ENDIF
+    // Resolve the actual tow attachment. A random nearby vehicle must never
+    // become an attachment merely because this option is enabled.
+    attached = GET_ENTITY_ATTACHED_TO_TOW_TRUCK(truck)
+    IF DOES_ENTITY_EXIST(attached) AND IS_ENTITY_A_VEHICLE(attached)
+        g_tow_hook_towed = GET_VEHICLE_INDEX_FROM_ENTITY_INDEX(attached)
+        EXIT
+    ENDIF
+    IF NOT DOES_ENTITY_EXIST(g_tow_hook_towed) EXIT ENDIF
+    IF IS_ENTITY_A_MISSION_ENTITY(g_tow_hook_towed) EXIT ENDIF
+    IF VDIST(GET_ENTITY_COORDS(truck), GET_ENTITY_COORDS(g_tow_hook_towed)) >= 25.0
+        g_tow_hook_towed = NULL
+        EXIT
+    ENDIF
+    towed = g_tow_hook_towed
     IF NOT IS_VEHICLE_ATTACHED_TO_TOW_TRUCK(truck, towed)
         ATTACH_VEHICLE_TO_TOW_TRUCK(truck, towed, -1, <<0.0, -1.5, 0.0>>)
     ENDIF
-    g_tow_hook_towed = towed
 ENDPROC
 
 // Pushes the current dispatch service state into the engine.  The Wanted Level
@@ -1116,6 +1130,7 @@ PROC PROCESS_SUPER_PUNCH()
 ENDPROC
 
 PROC EXPLODE_ALL_NEARBY_VEHICLES()
+    IF GET_MISSION_FLAG() EXIT ENDIF
     // Random sampler, not an enumerator: same handle comes back repeatedly,
     // and NULLs appear in sparse areas. Old code EXITed the whole sweep on
     // the first miss (one boom, then "cooldown" on a depleted pool). Now
@@ -1135,11 +1150,11 @@ PROC EXPLODE_ALL_NEARBY_VEHICLES()
         occupied = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     ENDIF
     WHILE foundCount < 64 AND guard < 512 AND deadRun < 48
-        candidate = GET_RANDOM_VEHICLE_IN_SPHERE(center, 1500.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES | VEHICLE_SEARCH_FLAG_RETURN_MISSION_VEHICLES)
+        candidate = GET_RANDOM_VEHICLE_IN_SPHERE(center, 1500.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
         guard = guard + 1
         IF NOT DOES_ENTITY_EXIST(candidate)
             deadRun = deadRun + 1
-        ELIF candidate = occupied
+        ELIF candidate = occupied OR IS_ENTITY_A_MISSION_ENTITY(candidate)
             deadRun = deadRun + 1
         ELSE
             known = FALSE
@@ -1180,17 +1195,52 @@ ENDPROC
 // the player dies or leaves the area part-way through the drain.
 PROC PROCESS_EXPLODE_QUEUE()
     INT burst = 0
+    VEHICLE_INDEX occupied = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+    IF GET_MISSION_FLAG() g_explode_queue_count = 0 ENDIF
     IF g_explode_queue_index >= g_explode_queue_count
         g_explode_queue_count = 0
         g_explode_queue_index = 0
         EXIT
     ENDIF
     WHILE burst < EXPLODE_BURST_PER_FRAME AND g_explode_queue_index < g_explode_queue_count
-        IF DOES_ENTITY_EXIST(g_explode_queue[g_explode_queue_index])
+        IF DOES_ENTITY_EXIST(g_explode_queue[g_explode_queue_index]) AND g_explode_queue[g_explode_queue_index] != occupied AND NOT IS_ENTITY_A_MISSION_ENTITY(g_explode_queue[g_explode_queue_index])
             EXPLODE_VEHICLE(g_explode_queue[g_explode_queue_index], TRUE, FALSE)
         ENDIF
         g_explode_queue_index = g_explode_queue_index + 1
         burst = burst + 1
+    ENDWHILE
+ENDPROC
+
+PROC CLEAR_NEARBY_AMBIENT_ENTITIES(BOOL vehicles)
+    PED_INDEX nearbyPeds[64]
+    VEHICLE_INDEX nearbyVehicles[64]
+    INT count = 0
+    INT index = 0
+    ENTITY_INDEX candidate = NULL
+    VECTOR centre = GET_ENTITY_COORDS(PLAYER_PED_ID())
+    IF vehicles
+        count = GET_PED_NEARBY_VEHICLES(PLAYER_PED_ID(), nearbyVehicles)
+        IF count > COUNT_OF(nearbyVehicles) count = COUNT_OF(nearbyVehicles) ENDIF
+    ELSE
+        count = GET_PED_NEARBY_PEDS(PLAYER_PED_ID(), nearbyPeds, PEDTYPE_INVALID)
+        IF count > COUNT_OF(nearbyPeds) count = COUNT_OF(nearbyPeds) ENDIF
+    ENDIF
+    WHILE index < count
+        IF vehicles candidate = nearbyVehicles[index] ELSE candidate = nearbyPeds[index] ENDIF
+        IF DOES_ENTITY_EXIST(candidate) AND NOT IS_ENTITY_A_MISSION_ENTITY(candidate)
+            IF GET_DISTANCE_BETWEEN_COORDS(centre, GET_ENTITY_COORDS(candidate), TRUE) <= 50.0
+                IF vehicles
+                    IF nearbyVehicles[index] != GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
+                        SET_ENTITY_AS_MISSION_ENTITY(nearbyVehicles[index], TRUE, TRUE)
+                        DELETE_VEHICLE(nearbyVehicles[index])
+                    ENDIF
+                ELIF NOT IS_MENU_MANAGED_PED(nearbyPeds[index]) AND NOT IS_PED_A_PLAYER(nearbyPeds[index]) AND NOT IS_PED_IN_GROUP(nearbyPeds[index])
+                    SET_ENTITY_AS_MISSION_ENTITY(nearbyPeds[index], TRUE, TRUE)
+                    DELETE_PED(nearbyPeds[index])
+                ENDIF
+            ENDIF
+        ENDIF
+        index = index + 1
     ENDWHILE
 ENDPROC
 
@@ -2306,6 +2356,9 @@ PROC ANNOUNCE_MENU_WELCOME()
 ENDPROC
 
 FUNC BOOL AUTO_SAVE_STATE_SAFE()
+    MODEL_NAMES playerModel = GET_ENTITY_MODEL(PLAYER_PED_ID())
+    IF playerModel != PLAYER_ZERO AND playerModel != PLAYER_ONE AND playerModel != PLAYER_TWO RETURN FALSE ENDIF
+    IF g_ped_change_pending OR g_ped_death_recovery RETURN FALSE ENDIF
     // Silent autosave must never fire while the game is in a scripted or
     // transitional state. These are the same guards the stock
     // autosave_controller uses before it calls DO_AUTO_SAVE, so a save can not
@@ -2442,6 +2495,14 @@ PROC APPLY_ACCENT_CHOICE()
     IF g_accent_choice != 14 g_accent_rgb = FALSE ENDIF
 ENDPROC
 
+PROC RESTORE_FREECAM_STATE()
+    IF NOT g_player_freecam EXIT ENDIF
+    g_player_freecam = FALSE
+    g_invisible = g_freecam_previous_invisible
+    g_first_person = g_freecam_previous_first_person
+    SET_ENTITY_VISIBLE(PLAYER_PED_ID(), NOT g_invisible)
+ENDPROC
+
 PROC PROCESS_PLAYER_NOCLIP()
     PED_INDEX playerPed = PLAYER_PED_ID()
     VECTOR currentPosition = <<0.0, 0.0, 0.0>>
@@ -2472,7 +2533,7 @@ PROC PROCESS_PLAYER_NOCLIP()
     ENDIF
     IF IS_ENTITY_DEAD(playerPed)
         g_player_noclip = FALSE
-        g_player_freecam = FALSE
+        RESTORE_FREECAM_STATE()
         FREEZE_ENTITY_POSITION(playerPed, FALSE)
         SET_ENTITY_HAS_GRAVITY(playerPed, TRUE)
         SET_ENTITY_COLLISION(playerPed, TRUE, TRUE)
@@ -2556,7 +2617,7 @@ PROC SET_PLAYER_NOCLIP_ENABLED(BOOL enabled)
     VECTOR enablePosition = <<0.0, 0.0, 0.0>>
     FLOAT groundZ = 0.0
     g_player_noclip = enabled
-    IF NOT enabled g_player_freecam = FALSE ENDIF
+    IF NOT enabled RESTORE_FREECAM_STATE() ENDIF
     IF enabled
         enablePosition = GET_ENTITY_COORDS(playerPed)
         g_player_noclip_z = enablePosition.z
@@ -2591,17 +2652,20 @@ ENDPROC
 // visibility/camera parts apply (noclip stands down, same as No-Clip).
 PROC SET_PLAYER_FREECAM_ENABLED(BOOL enabled)
     PED_INDEX playerPed = PLAYER_PED_ID()
-    g_player_freecam = enabled
     IF enabled
+        IF g_player_freecam EXIT ENDIF
+        g_freecam_previous_invisible = g_invisible
+        g_freecam_previous_first_person = g_first_person
+        g_freecam_previous_noclip = g_player_noclip
+        g_player_freecam = TRUE
         g_invisible = TRUE
         SET_ENTITY_VISIBLE(playerPed, FALSE)
         g_first_person = TRUE
         IF NOT IS_PED_IN_ANY_VEHICLE(playerPed) SET_PLAYER_NOCLIP_ENABLED(TRUE) ENDIF
     ELSE
-        g_invisible = FALSE
-        SET_ENTITY_VISIBLE(playerPed, TRUE)
-        g_first_person = FALSE
-        IF g_player_noclip SET_PLAYER_NOCLIP_ENABLED(FALSE) ENDIF
+        IF NOT g_player_freecam EXIT ENDIF
+        RESTORE_FREECAM_STATE()
+        SET_PLAYER_NOCLIP_ENABLED(g_freecam_previous_noclip)
     ENDIF
 ENDPROC
 
@@ -2813,6 +2877,7 @@ FUNC BOOL IS_SELECTOR_ACTIVE()
 ENDFUNC
 
 PROC ADJUST_SELECTOR(INT direction)
+    INT availableChoices = 0
     g_description_dirty = TRUE
     IF g_tab = 0 AND g_outfit_open
         ADJUST_OUTFIT_SLOT(direction)
@@ -2980,9 +3045,13 @@ PROC ADJUST_SELECTOR(INT direction)
     ENDIF
     IF g_tab = 0 AND NOT g_outfit_open AND NOT g_radio_open AND NOT g_bodyguard_open AND NOT g_attacker_open AND NOT g_ped_open AND NOT g_weapon_upgrades_open
         IF g_item = 17
-            g_cash_amount = g_cash_amount + (direction * 10000)
-            IF g_cash_amount < 0 g_cash_amount = 0 ENDIF
-            IF g_cash_amount > 2147483647 g_cash_amount = 2147483647 ENDIF
+            IF direction > 0 AND g_cash_amount > 2147473647
+                g_cash_amount = 2147483647
+            ELIF direction < 0 AND g_cash_amount < 10000
+                g_cash_amount = 0
+            ELSE
+                g_cash_amount = g_cash_amount + (direction * 10000)
+            ENDIF
         ENDIF
         // Auto Save Interval: 1 step per minute, clamped 0-120 with no wrap.
         // 0 keeps Auto Save switchable but stops the periodic save.
@@ -3088,9 +3157,11 @@ PROC ADJUST_SELECTOR(INT direction)
     IF g_tab = 3 AND g_hydro_open
         IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
         IF g_item = 1
+            LSC_KIT_FOR_SLOT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), ENUM_TO_INT(MOD_HYDRO))
+            availableChoices = GET_NUM_VEHICLE_MODS(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), MOD_HYDRO)
             g_hydro_level = g_hydro_level + direction
-            IF g_hydro_level < -1 g_hydro_level = 8 ENDIF
-            IF g_hydro_level > 8 g_hydro_level = -1 ENDIF
+            IF g_hydro_level < -1 g_hydro_level = availableChoices - 1 ENDIF
+            IF g_hydro_level >= availableChoices g_hydro_level = -1 ENDIF
             APPLY_HYDRO_LEVEL()
         ENDIF
         IF g_item = 3
@@ -3162,9 +3233,10 @@ PROC ADJUST_SELECTOR(INT direction)
             SYNC_INTERIOR_SLOT()
         ENDIF
         IF g_item = 3
+            availableChoices = INTERIOR_AVAILABLE()
             g_interior_choice = g_interior_choice + direction
-            IF g_interior_choice < -1 g_interior_choice = 9 ENDIF
-            IF g_interior_choice > 9 g_interior_choice = -1 ENDIF
+            IF g_interior_choice < -1 g_interior_choice = availableChoices - 1 ENDIF
+            IF g_interior_choice >= availableChoices g_interior_choice = -1 ENDIF
             APPLY_INTERIOR_SLOT()
         ENDIF
         IF g_item = 7
@@ -3203,9 +3275,11 @@ PROC ADJUST_SELECTOR(INT direction)
     IF g_tab = 3 AND g_lsc_extras_open
         IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
         IF g_item = 0
+            availableChoices = GET_VEHICLE_LIVERY_COUNT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()))
+            IF availableChoices < 0 availableChoices = 0 ENDIF
             g_lsc_livery = g_lsc_livery + direction
-            IF g_lsc_livery < -1 g_lsc_livery = 8 ENDIF
-            IF g_lsc_livery > 8 g_lsc_livery = -1 ENDIF
+            IF g_lsc_livery < -1 g_lsc_livery = availableChoices - 1 ENDIF
+            IF g_lsc_livery >= availableChoices g_lsc_livery = -1 ENDIF
             APPLY_LIVERY()
         ENDIF
         IF g_item = 4
@@ -3514,8 +3588,8 @@ PROC PROCESS_VEHICLE_GRIP(VEHICLE_INDEX vehicle)
     FLOAT delta = GET_FRAME_TIME()
     FLOAT rate = 0.0
     INT reduction = 0
-    IF g_grip_vehicle != vehicle OR g_vehicle_grip_level = 100 OR g_chaos_mod_running
-        IF g_grip_applied AND DOES_ENTITY_EXIST(g_grip_vehicle) AND NOT IS_ENTITY_DEAD(g_grip_vehicle) AND NOT g_chaos_mod_running
+    IF g_grip_vehicle != vehicle OR g_vehicle_grip_level = 100 OR g_chaos_mod_running OR (DOES_ENTITY_EXIST(vehicle) AND GET_PED_IN_VEHICLE_SEAT(vehicle, VS_DRIVER) != PLAYER_PED_ID())
+        IF g_grip_applied AND DOES_ENTITY_EXIST(g_grip_vehicle) AND NOT IS_ENTITY_DEAD(g_grip_vehicle)
             SET_VEHICLE_REDUCE_GRIP(g_grip_vehicle, FALSE)
             SET_VEHICLE_REDUCE_GRIP_LEVEL(g_grip_vehicle, 0)
         ENDIF
@@ -3549,4 +3623,25 @@ PROC PROCESS_VEHICLE_GRIP(VEHICLE_INDEX vehicle)
     IF rate > 1.0 / delta rate = 1.0 / delta ENDIF
     force = <<-velocity.x * rate, 0.0, 0.0>>
     APPLY_FORCE_TO_ENTITY_CENTER_OF_MASS(vehicle, APPLY_TYPE_FORCE, force, 0, TRUE, TRUE)
+ENDPROC
+
+PROC CACHE_CURRENT_PLAYER()
+    g_cached_player_ped = PLAYER_PED_ID()
+    g_cached_player_id = PLAYER_ID()
+    IF DOES_ENTITY_EXIST(g_cached_player_ped)
+        g_cached_player_dead = IS_ENTITY_DEAD(g_cached_player_ped)
+        g_cached_player_coords = GET_ENTITY_COORDS(g_cached_player_ped)
+        g_cached_player_in_veh = IS_PED_IN_ANY_VEHICLE(g_cached_player_ped)
+        IF g_cached_player_in_veh
+            g_cached_player_veh = GET_VEHICLE_PED_IS_IN(g_cached_player_ped, FALSE)
+        ELSE
+            g_cached_player_veh = NULL
+        ENDIF
+    ELSE
+        g_cached_player_dead = TRUE
+        g_cached_player_coords = <<0.0, 0.0, 0.0>>
+        g_cached_player_in_veh = FALSE
+        g_cached_player_veh = NULL
+    ENDIF
+    g_player_in_vehicle = g_cached_player_in_veh
 ENDPROC

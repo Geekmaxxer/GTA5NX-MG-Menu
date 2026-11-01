@@ -43,6 +43,11 @@ CONST_INT CHAOS_EFFECT_COUNT             35
 // STATICS (Script-Level Persistence for RAGE VM Fixed Stack Pools)
 // -------------------------------------------------------------------------
 BOOL g_chaos_active                     = TRUE
+BOOL g_chaos_suspended = FALSE
+BOOL g_chaos_relationships_saved = FALSE
+RELATIONSHIP_TYPE g_chaos_relationships[6]
+VEHICLE_INDEX g_chaos_boosted_vehicles[16]
+INT g_chaos_boosted_count = 0
 INT g_chaos_current_effect              = -1
 INT g_chaos_timer_duration              = 20000
 INT g_chaos_remaining_ms                = 20000
@@ -115,8 +120,7 @@ ENDPROC
 
 PROC CHAOS_RESET_VEHICLE_MODIFIERS(VEHICLE_INDEX veh)
     IF DOES_ENTITY_EXIST(veh) AND NOT IS_ENTITY_DEAD(veh)
-        SET_VEHICLE_FRICTION_OVERRIDE(veh, 1.0)
-        SET_VEHICLE_FRICTION_OVERRIDE(veh, -1.0)
+            SET_VEHICLE_FRICTION_OVERRIDE(veh, -1.0)
         SET_VEHICLE_STEER_BIAS(veh, 0.0)
         SET_VEHICLE_HANDBRAKE(veh, FALSE)
         SET_VEHICLE_CHEAT_POWER_INCREASE(veh, 1.0)
@@ -127,15 +131,59 @@ ENDPROC
 // CLEANUP: Scoped State Restoration & Zero Entity Leaks
 // Only resets states modified by the active effect so RageMenu toggles are preserved!
 // -------------------------------------------------------------------------
+FUNC REL_GROUP_HASH CHAOS_RIOT_FROM(INT index)
+    IF index = 1 OR index = 3 RETURN RELGROUPHASH_CIVFEMALE ENDIF
+    IF index = 4 RETURN RELGROUPHASH_COP ENDIF
+    RETURN RELGROUPHASH_CIVMALE
+ENDFUNC
+
+FUNC REL_GROUP_HASH CHAOS_RIOT_TO(INT index)
+    IF index = 0 OR index = 1 RETURN RELGROUPHASH_HATES_PLAYER ENDIF
+    IF index = 2 RETURN RELGROUPHASH_CIVFEMALE ENDIF
+    IF index = 5 RETURN RELGROUPHASH_COP ENDIF
+    RETURN RELGROUPHASH_CIVMALE
+ENDFUNC
+
+PROC CHAOS_BEGIN_RIOT_RELATIONSHIPS()
+    INT index = 0
+    WHILE index < COUNT_OF(g_chaos_relationships)
+        g_chaos_relationships[index] = GET_RELATIONSHIP_BETWEEN_GROUPS(CHAOS_RIOT_FROM(index), CHAOS_RIOT_TO(index))
+        SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, CHAOS_RIOT_FROM(index), CHAOS_RIOT_TO(index))
+        index = index + 1
+    ENDWHILE
+    g_chaos_relationships_saved = TRUE
+ENDPROC
+
+PROC CHAOS_RESTORE_RIOT_RELATIONSHIPS()
+    INT index = 0
+    IF NOT g_chaos_relationships_saved EXIT ENDIF
+    WHILE index < COUNT_OF(g_chaos_relationships)
+        SET_RELATIONSHIP_BETWEEN_GROUPS(g_chaos_relationships[index], CHAOS_RIOT_FROM(index), CHAOS_RIOT_TO(index))
+        index = index + 1
+    ENDWHILE
+    g_chaos_relationships_saved = FALSE
+ENDPROC
+
+PROC CHAOS_BOOST_AMBIENT_VEHICLE(VEHICLE_INDEX vehicle)
+    INT index = 0
+    WHILE index < g_chaos_boosted_count
+        IF g_chaos_boosted_vehicles[index] = vehicle
+            SET_VEHICLE_CHEAT_POWER_INCREASE(vehicle, 4.0)
+            EXIT
+        ENDIF
+        index = index + 1
+    ENDWHILE
+    IF g_chaos_boosted_count >= COUNT_OF(g_chaos_boosted_vehicles) EXIT ENDIF
+    g_chaos_boosted_vehicles[g_chaos_boosted_count] = vehicle
+    g_chaos_boosted_count = g_chaos_boosted_count + 1
+    SET_VEHICLE_CHEAT_POWER_INCREASE(vehicle, 4.0)
+ENDPROC
+
 PROC CHAOS_CLEANUP_ACTIVE_EFFECT()
     PED_INDEX playerPed = PLAYER_PED_ID()
     PLAYER_INDEX player = PLAYER_ID()
-    VEHICLE_INDEX curVeh = NULL
     INT index = 0
 
-    IF DOES_ENTITY_EXIST(playerPed) AND IS_PED_IN_ANY_VEHICLE(playerPed)
-        curVeh = GET_VEHICLE_PED_IS_IN(playerPed, FALSE)
-    ENDIF
 
     SWITCH g_chaos_current_effect
         CASE 0
@@ -164,14 +212,7 @@ PROC CHAOS_CLEANUP_ACTIVE_EFFECT()
             SET_ARTIFICIAL_LIGHTS_STATE(FALSE)
         BREAK
         CASE 9
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_RESPECT, RELGROUPHASH_CIVMALE, RELGROUPHASH_CIVMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_RESPECT, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_CIVFEMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_RESPECT, RELGROUPHASH_CIVMALE, RELGROUPHASH_CIVFEMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_RESPECT, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_CIVMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_NONE, RELGROUPHASH_CIVMALE, RELGROUPHASH_HATES_PLAYER)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_NONE, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_HATES_PLAYER)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_NONE, RELGROUPHASH_COP, RELGROUPHASH_CIVMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_NONE, RELGROUPHASH_CIVMALE, RELGROUPHASH_COP)
+            CHAOS_RESTORE_RIOT_RELATIONSHIPS()
         BREAK
         CASE 10
             STOP_GAMEPLAY_CAM_SHAKING(TRUE)
@@ -181,8 +222,7 @@ PROC CHAOS_CLEANUP_ACTIVE_EFFECT()
         CASE 19
         CASE 25
         CASE 26
-            CHAOS_RESET_VEHICLE_MODIFIERS(curVeh)
-            CHAOS_RESET_VEHICLE_MODIFIERS(g_chaos_last_modified_veh)
+                CHAOS_RESET_VEHICLE_MODIFIERS(g_chaos_last_modified_veh)
         BREAK
         CASE 14
         CASE 32
@@ -192,11 +232,10 @@ PROC CHAOS_CLEANUP_ACTIVE_EFFECT()
         CASE 15
             SET_RUN_SPRINT_MULTIPLIER_FOR_PLAYER(player, 1.0)
             SET_SWIM_MULTIPLIER_FOR_PLAYER(player, 1.0)
-            CHAOS_RESET_VEHICLE_MODIFIERS(curVeh)
-            CHAOS_RESET_VEHICLE_MODIFIERS(g_chaos_last_modified_veh)
+                CHAOS_RESET_VEHICLE_MODIFIERS(g_chaos_last_modified_veh)
         BREAK
         CASE 16
-            SET_WEATHER_TYPE_NOW_PERSIST("CLEAR")
+            CLEAR_WEATHER_TYPE_PERSIST()
         BREAK
         CASE 27
             CLEAR_TIMECYCLE_MODIFIER()
@@ -204,6 +243,15 @@ PROC CHAOS_CLEANUP_ACTIVE_EFFECT()
         BREAK
     ENDSWITCH
 
+    WHILE index < g_chaos_boosted_count
+        IF DOES_ENTITY_EXIST(g_chaos_boosted_vehicles[index]) AND NOT IS_ENTITY_A_MISSION_ENTITY(g_chaos_boosted_vehicles[index])
+            SET_VEHICLE_CHEAT_POWER_INCREASE(g_chaos_boosted_vehicles[index], 1.0)
+        ENDIF
+        g_chaos_boosted_vehicles[index] = NULL
+        index = index + 1
+    ENDWHILE
+    index = 0
+    g_chaos_boosted_count = 0
     g_chaos_last_modified_veh = NULL
     g_chaos_current_timescale = 1.0
 
@@ -260,7 +308,7 @@ PROC CHAOS_TRIGGER_NEXT_EFFECT()
     INT loopIdx = 0
     BOOL inInterior = FALSE
 
-    IF NOT DOES_ENTITY_EXIST(playerPed) OR IS_ENTITY_DEAD(playerPed)
+    IF NOT DOES_ENTITY_EXIST(playerPed) OR IS_ENTITY_DEAD(playerPed) OR GET_MISSION_FLAG() OR IS_CUTSCENE_ACTIVE() OR NOT IS_PLAYER_CONTROL_ON(player)
         EXIT
     ENDIF
 
@@ -373,13 +421,8 @@ PROC CHAOS_TRIGGER_NEXT_EFFECT()
             g_chaos_color_r = 230
             g_chaos_color_g = 0
             g_chaos_color_b = 0
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVMALE, RELGROUPHASH_HATES_PLAYER)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_HATES_PLAYER)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVMALE, RELGROUPHASH_CIVFEMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVFEMALE, RELGROUPHASH_CIVMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_COP, RELGROUPHASH_CIVMALE)
-            SET_RELATIONSHIP_BETWEEN_GROUPS(ACQUAINTANCE_TYPE_PED_HATE, RELGROUPHASH_CIVMALE, RELGROUPHASH_COP)
-            g_chaos_riot_tick = 0
+            CHAOS_BEGIN_RIOT_RELATIONSHIPS()
+        g_chaos_riot_tick = 0
         BREAK
 
         // --- 10: Earthquake ---
@@ -511,7 +554,7 @@ PROC CHAOS_TRIGGER_NEXT_EFFECT()
                 pCoords.y = pCoords.y - 18.0
             ENDIF
             pCoords.z = pCoords.z + 160.0
-            SET_ENTITY_COORDS(playerPed, pCoords, TRUE, TRUE, TRUE, TRUE)
+            SET_ENTITY_COORDS(playerPed, pCoords, TRUE, TRUE, TRUE, FALSE)
             GIVE_WEAPON_TO_PED(playerPed, GADGETTYPE_PARACHUTE, 1, FALSE, TRUE)
         BREAK
 
@@ -542,7 +585,7 @@ PROC CHAOS_TRIGGER_NEXT_EFFECT()
             loopIdx = 0
             WHILE loopIdx < 6
                 candVeh = GET_RANDOM_VEHICLE_IN_SPHERE(pCoords, 55.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
-                IF DOES_ENTITY_EXIST(candVeh) AND candVeh != pVeh AND GET_DISTANCE_BETWEEN_COORDS(GET_ENTITY_COORDS(candVeh), <<-44.0, -1100.0, 26.4>>, TRUE) > 22.0
+                IF DOES_ENTITY_EXIST(candVeh) AND NOT IS_ENTITY_A_MISSION_ENTITY(candVeh) AND candVeh != pVeh AND GET_DISTANCE_BETWEEN_COORDS(GET_ENTITY_COORDS(candVeh), <<-44.0, -1100.0, 26.4>>, TRUE) > 22.0
                     ADD_EXPLOSION(GET_ENTITY_COORDS(candVeh), EXP_TAG_HI_OCTANE, 1.0, TRUE, FALSE, 0.65)
                 ENDIF
                 loopIdx = loopIdx + 1
@@ -724,7 +767,7 @@ PROC CHAOS_PROCESS_FRAME_EFFECTS()
     BOOL isAiming = FALSE
     DRIVINGMODE crazyMode = DF_SwerveAroundAllCars|DF_SteerAroundObjects|DF_DriveIntoOncomingTraffic|DF_ChangeLanesAroundObstructions|DF_UseShortCutLinks|DF_ForceJoinInRoadDirection|DF_UseWanderFallbackInsteadOfStraightLine
 
-    IF NOT DOES_ENTITY_EXIST(playerPed) OR IS_ENTITY_DEAD(playerPed)
+    IF NOT DOES_ENTITY_EXIST(playerPed) OR IS_ENTITY_DEAD(playerPed) OR GET_MISSION_FLAG() OR IS_CUTSCENE_ACTIVE() OR NOT IS_PLAYER_CONTROL_ON(player)
         EXIT
     ENDIF
 
@@ -735,7 +778,7 @@ PROC CHAOS_PROCESS_FRAME_EFFECTS()
 
     // If the player exited or switched vehicles during a vehicle-modifying effect,
     // immediately restore the previous vehicle so it isn't left with locked handbrake/steer/friction.
-    IF pVeh != g_chaos_last_modified_veh
+    IF (g_chaos_current_effect = 13 OR g_chaos_current_effect = 15 OR g_chaos_current_effect = 18 OR g_chaos_current_effect = 19 OR g_chaos_current_effect = 25 OR g_chaos_current_effect = 26) AND pVeh != g_chaos_last_modified_veh
         IF g_chaos_last_modified_veh != NULL
             CHAOS_RESET_VEHICLE_MODIFIERS(g_chaos_last_modified_veh)
         ENDIF
@@ -771,9 +814,9 @@ PROC CHAOS_PROCESS_FRAME_EFFECTS()
                 loopIdx = 0
                 WHILE loopIdx < 8
                     candVeh = GET_RANDOM_VEHICLE_IN_SPHERE(pCoords, 85.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
-                    IF DOES_ENTITY_EXIST(candVeh) AND candVeh != pVeh
+                    IF DOES_ENTITY_EXIST(candVeh) AND NOT IS_ENTITY_A_MISSION_ENTITY(candVeh) AND candVeh != pVeh
                         driverPed = GET_PED_IN_VEHICLE_SEAT(candVeh, VS_DRIVER, FALSE)
-                        IF DOES_ENTITY_EXIST(driverPed) AND driverPed != playerPed AND NOT IS_PED_INJURED(driverPed) AND NOT IS_PED_IN_GROUP(driverPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(driverPed) != RELGROUPHASH_PLAYER
+                        IF DOES_ENTITY_EXIST(driverPed) AND NOT IS_ENTITY_A_MISSION_ENTITY(driverPed) AND driverPed != playerPed AND NOT IS_PED_INJURED(driverPed) AND NOT IS_PED_IN_GROUP(driverPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(driverPed) != RELGROUPHASH_PLAYER
                             SET_DRIVER_ABILITY(driverPed, 1.0)
                             SET_DRIVER_AGGRESSIVENESS(driverPed, 1.0)
                             TASK_VEHICLE_DRIVE_WANDER(driverPed, candVeh, 45.0, crazyMode)
@@ -795,7 +838,7 @@ PROC CHAOS_PROCESS_FRAME_EFFECTS()
                 IF nearbyCount > COUNT_OF(nearbyPeds) nearbyCount = COUNT_OF(nearbyPeds) ENDIF
                 loopIdx = 0
                 WHILE loopIdx < nearbyCount
-                    IF DOES_ENTITY_EXIST(nearbyPeds[loopIdx]) AND nearbyPeds[loopIdx] != playerPed AND NOT IS_PED_INJURED(nearbyPeds[loopIdx]) AND NOT IS_PED_A_PLAYER(nearbyPeds[loopIdx]) AND NOT IS_PED_IN_GROUP(nearbyPeds[loopIdx]) AND GET_PED_RELATIONSHIP_GROUP_HASH(nearbyPeds[loopIdx]) != RELGROUPHASH_PLAYER
+                    IF DOES_ENTITY_EXIST(nearbyPeds[loopIdx]) AND NOT IS_ENTITY_A_MISSION_ENTITY(nearbyPeds[loopIdx]) AND nearbyPeds[loopIdx] != playerPed AND NOT IS_PED_INJURED(nearbyPeds[loopIdx]) AND NOT IS_PED_A_PLAYER(nearbyPeds[loopIdx]) AND NOT IS_PED_IN_GROUP(nearbyPeds[loopIdx]) AND GET_PED_RELATIONSHIP_GROUP_HASH(nearbyPeds[loopIdx]) != RELGROUPHASH_PLAYER
                         GIVE_WEAPON_TO_PED(nearbyPeds[loopIdx], WEAPONTYPE_MICROSMG, 9999, TRUE, TRUE)
                         SET_PED_COMBAT_ATTRIBUTES(nearbyPeds[loopIdx], CA_ALWAYS_FIGHT, TRUE)
                         SET_PED_FLEE_ATTRIBUTES(nearbyPeds[loopIdx], FA_NEVER_FLEE, TRUE)
@@ -860,8 +903,8 @@ PROC CHAOS_PROCESS_FRAME_EFFECTS()
                 loopIdx = 0
                 WHILE loopIdx < 8
                     candVeh = GET_RANDOM_VEHICLE_IN_SPHERE(pCoords, 80.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
-                    IF DOES_ENTITY_EXIST(candVeh) AND candVeh != pVeh
-                        SET_VEHICLE_CHEAT_POWER_INCREASE(candVeh, 4.0)
+                    IF DOES_ENTITY_EXIST(candVeh) AND NOT IS_ENTITY_A_MISSION_ENTITY(candVeh) AND candVeh != pVeh
+                        CHAOS_BOOST_AMBIENT_VEHICLE(candVeh)
                         IF GET_ENTITY_SPEED(candVeh) > 1.5 AND GET_ENTITY_SPEED(candVeh) < 38.0
                             SET_VEHICLE_FORWARD_SPEED(candVeh, GET_ENTITY_SPEED(candVeh) + 9.0)
                         ENDIF
@@ -1027,7 +1070,7 @@ PROC CHAOS_PROCESS_FRAME_EFFECTS()
                 loopIdx = 0
                 WHILE loopIdx < 8
                     candVeh = GET_RANDOM_VEHICLE_IN_SPHERE(pCoords, 65.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
-                    IF DOES_ENTITY_EXIST(candVeh) AND GET_DISTANCE_BETWEEN_COORDS(GET_ENTITY_COORDS(candVeh), <<-44.0, -1100.0, 26.4>>, TRUE) > 22.0
+                    IF DOES_ENTITY_EXIST(candVeh) AND NOT IS_ENTITY_A_MISSION_ENTITY(candVeh) AND GET_DISTANCE_BETWEEN_COORDS(GET_ENTITY_COORDS(candVeh), <<-44.0, -1100.0, 26.4>>, TRUE) > 22.0
                         APPLY_FORCE_TO_ENTITY_CENTER_OF_MASS(candVeh, APPLY_TYPE_EXTERNAL_IMPULSE, <<0.0, 0.0, 9.5>>, 0, TRUE, TRUE)
                     ENDIF
                     loopIdx = loopIdx + 1
@@ -1195,7 +1238,7 @@ PROC CHAOS_DRAW_HUD()
     // 2. Inner Track Background (matches RageMenu row background tone)
     DRAW_RECT(0.500, 0.038, 0.298, 0.026, 20, 22, 26, 238)
 
-    IF g_chaos_active
+    IF g_chaos_active AND NOT g_chaos_suspended
         IF remainingMs < 0 remainingMs = 0 ENDIF
         secRemaining = remainingMs / 1000
 
@@ -1259,7 +1302,11 @@ PROC CHAOS_DRAW_HUD()
         SET_TEXT_DROPSHADOW(1, 0, 0, 0, 220)
         SET_TEXT_OUTLINE()
         BEGIN_TEXT_COMMAND_DISPLAY_TEXT("STRING")
-        ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("~y~CHAOS MOD PAUSED~s~")
+        IF g_chaos_suspended
+            ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("~y~CHAOS PAUSED: MISSION / PLAYER TRANSITION~s~")
+        ELSE
+            ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME("~y~CHAOS MOD PAUSED~s~")
+        ENDIF
         END_TEXT_COMMAND_DISPLAY_TEXT(0.500, 0.024)
         SET_TEXT_CENTRE(FALSE)
 
@@ -1307,6 +1354,12 @@ SCRIPT
 
     WHILE TRUE
         WAIT(0)
+    IF HAS_FORCE_CLEANUP_OCCURRED(FORCE_CLEANUP_FLAG_DEBUG_MENU)
+        CHAOS_CLEANUP_ACTIVE_EFFECT()
+        TERMINATE_THIS_THREAD()
+    ENDIF
+
+
 
         IF DOES_ENTITY_EXIST(PLAYER_PED_ID()) AND IS_ENTITY_DEAD(PLAYER_PED_ID())
             IF g_chaos_current_effect != -1
@@ -1316,10 +1369,18 @@ SCRIPT
         ENDIF
 
         // 1. Process Controller Inputs
+        g_chaos_suspended = GET_MISSION_FLAG() OR IS_CUTSCENE_ACTIVE() OR NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) OR NOT DOES_ENTITY_EXIST(PLAYER_PED_ID()) OR IS_ENTITY_DEAD(PLAYER_PED_ID())
+    IF g_chaos_suspended
+        IF g_chaos_current_effect != -1
+            CHAOS_CLEANUP_ACTIVE_EFFECT()
+            g_chaos_current_effect = -1
+        ENDIF
+    ELSE
         CHAOS_PROCESS_CONTROLS()
+    ENDIF
 
         // 2. Active Chaos Loop
-        IF g_chaos_active
+        IF g_chaos_active AND NOT g_chaos_suspended
             CHAOS_PROCESS_FRAME_EFFECTS()
 
             // Advance countdown using timescale-compensated delta so slow-motion

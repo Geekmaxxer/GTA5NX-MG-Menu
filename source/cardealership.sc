@@ -35,6 +35,7 @@ USING "commands_interiors.sch"
 USING "commands_stats.sch"
 USING "stats_enums.sch"
 USING "commands_object.sch"
+USING "commands_cutscene.sch"
 
 // -------------------------------------------------------------------------
 // CONSTANTS (Matches RageMenu core_constants.sch 1:1)
@@ -61,6 +62,10 @@ VEHICLE_INDEX g_dealer_showroom_vehs[5]
 INT g_dealer_slot_model[5]
 INT g_dealer_slot_paint[5]
 
+BOOL g_dealer_original_fakeint = FALSE
+BOOL g_dealer_original_broken = FALSE
+BOOL g_dealer_original_boarded = FALSE
+BOOL g_dealer_original_showroom = FALSE
 BOOL g_dealer_in_range                  = FALSE
 BOOL g_dealer_test_drive_active         = FALSE
 INT g_dealer_test_drive_end             = 0
@@ -390,23 +395,24 @@ FUNC INT DEALER_GET_PLAYER_CASH(PED_INDEX pPed)
     RETURN cash
 ENDFUNC
 
-PROC DEALER_DEDUCT_PLAYER_CASH(PED_INDEX pPed, INT amount)
+FUNC BOOL DEALER_DEDUCT_PLAYER_CASH(PED_INDEX pPed, INT amount)
     INT cash = DEALER_GET_PLAYER_CASH(pPed)
     IF cash >= amount
         cash = cash - amount
         SWITCH GET_ENTITY_MODEL(pPed)
             CASE PLAYER_ZERO
-                STAT_SET_INT(SP0_TOTAL_CASH, cash)
+                RETURN STAT_SET_INT(SP0_TOTAL_CASH, cash)
             BREAK
             CASE PLAYER_ONE
-                STAT_SET_INT(SP1_TOTAL_CASH, cash)
+                RETURN STAT_SET_INT(SP1_TOTAL_CASH, cash)
             BREAK
             CASE PLAYER_TWO
-                STAT_SET_INT(SP2_TOTAL_CASH, cash)
+                RETURN STAT_SET_INT(SP2_TOTAL_CASH, cash)
             BREAK
         ENDSWITCH
     ENDIF
-ENDPROC
+    RETURN FALSE
+ENDFUNC
 
 // -------------------------------------------------------------------------
 // UI & NOTIFICATION HELPERS (1:1 RageMenu core_menu.sch Layout & Scales)
@@ -666,7 +672,14 @@ ENDPROC
 // -------------------------------------------------------------------------
 // SHOWROOM VEHICLE SPAWN & REFRESH (Pristine Display Setup)
 // -------------------------------------------------------------------------
+FUNC BOOL DEALER_CONTEXT_READY()
+    PED_INDEX playerPed = PLAYER_PED_ID()
+    IF NOT DOES_ENTITY_EXIST(playerPed) OR IS_ENTITY_DEAD(playerPed) RETURN FALSE ENDIF
+    RETURN IS_PLAYER_CONTROL_ON(PLAYER_ID()) AND NOT GET_MISSION_FLAG() AND NOT IS_CUTSCENE_ACTIVE() AND NOT HAS_FORCE_CLEANUP_OCCURRED(FORCE_CLEANUP_FLAG_DEBUG_MENU)
+ENDFUNC
+
 PROC DEALER_SPAWN_SLOT_VEHICLE(INT slot)
+    IF slot < 0 OR slot >= NUM_SHOWROOM_SLOTS OR NOT DEALER_CONTEXT_READY() EXIT ENDIF
     MODEL_NAMES model = DEALER_GET_MODEL(slot, g_dealer_slot_model[slot])
     VECTOR coords = DEALER_GET_SLOT_COORDS(slot)
     FLOAT heading = DEALER_GET_SLOT_HEADING(slot)
@@ -675,7 +688,7 @@ PROC DEALER_SPAWN_SLOT_VEHICLE(INT slot)
 
     REQUEST_MODEL(model)
     waitTime = GET_GAME_TIMER() + 2000
-    WHILE NOT HAS_MODEL_LOADED(model) AND GET_GAME_TIMER() < waitTime
+    WHILE NOT HAS_MODEL_LOADED(model) AND GET_GAME_TIMER() < waitTime AND DEALER_CONTEXT_READY()
         IF g_dealer_selected_slot >= 0 AND DOES_ENTITY_EXIST(PLAYER_PED_ID()) AND NOT IS_ENTITY_DEAD(PLAYER_PED_ID())
             DEALER_SUPPRESS_INSPECTION_CONTROLS()
             DEALER_DRAW_INSPECTION_CARD(g_dealer_selected_slot, PLAYER_PED_ID())
@@ -683,7 +696,7 @@ PROC DEALER_SPAWN_SLOT_VEHICLE(INT slot)
         WAIT(0)
     ENDWHILE
 
-    IF HAS_MODEL_LOADED(model)
+    IF HAS_MODEL_LOADED(model) AND DEALER_CONTEXT_READY()
         // Delete existing vehicle in slot only after replacement model has loaded
         IF DOES_ENTITY_EXIST(g_dealer_showroom_vehs[slot])
             DELETE_VEHICLE(g_dealer_showroom_vehs[slot])
@@ -706,8 +719,6 @@ PROC DEALER_FORCE_OPEN_DOOR(MODEL_NAMES doorModel, VECTOR doorCoords, FLOAT open
     IF DOOR_SYSTEM_FIND_EXISTING_DOOR(doorCoords, doorModel, doorHash)
         DOOR_SYSTEM_SET_DOOR_STATE(doorHash, DOORSTATE_FORCE_UNLOCKED_THIS_FRAME, TRUE, TRUE)
         DOOR_SYSTEM_SET_OPEN_RATIO(doorHash, openRatio, TRUE, TRUE)
-        DOOR_SYSTEM_SET_HOLD_OPEN(doorHash, TRUE)
-        DOOR_SYSTEM_SET_SPRING_REMOVED(doorHash, TRUE, TRUE, TRUE)
     ENDIF
 ENDPROC
 
@@ -735,6 +746,10 @@ ENDPROC
 
 PROC DEALER_ENTER_SHOWROOM()
     INT s = 0
+    g_dealer_original_fakeint = IS_IPL_ACTIVE("fakeint")
+    g_dealer_original_broken = IS_IPL_ACTIVE("carshowroom_broken")
+    g_dealer_original_boarded = IS_IPL_ACTIVE("carshowroom_boarded")
+    g_dealer_original_showroom = IS_IPL_ACTIVE("shr_int")
 
     // Ensure intact showroom IPL is loaded
     REMOVE_IPL("fakeint")
@@ -768,6 +783,12 @@ ENDPROC
 
 PROC DEALER_EXIT_SHOWROOM()
     INT s = 0
+    IF g_dealer_in_range
+        IF g_dealer_original_fakeint REQUEST_IPL("fakeint") ELSE REMOVE_IPL("fakeint") ENDIF
+        IF g_dealer_original_broken REQUEST_IPL("carshowroom_broken") ELSE REMOVE_IPL("carshowroom_broken") ENDIF
+        IF g_dealer_original_boarded REQUEST_IPL("carshowroom_boarded") ELSE REMOVE_IPL("carshowroom_boarded") ENDIF
+        IF g_dealer_original_showroom REQUEST_IPL("shr_int") ELSE REMOVE_IPL("shr_int") ENDIF
+    ENDIF
 
     // Delete showroom display cars to free memory
     FOR s = 0 TO 4
@@ -798,6 +819,7 @@ ENDPROC
 // TEST DRIVE & PURCHASE HANDLERS
 // -------------------------------------------------------------------------
 PROC DEALER_START_TEST_DRIVE(INT slot, PED_INDEX playerPed)
+    IF slot < 0 OR slot >= NUM_SHOWROOM_SLOTS OR NOT DEALER_CONTEXT_READY() EXIT ENDIF
     MODEL_NAMES model = DEALER_GET_MODEL(slot, g_dealer_slot_model[slot])
     INT paintColor = DEALER_GET_PAINT_COLOR(g_dealer_slot_paint[slot])
     VECTOR spawnPos = <<-45.10, -1116.3706, 25.4346>>
@@ -812,7 +834,7 @@ PROC DEALER_START_TEST_DRIVE(INT slot, PED_INDEX playerPed)
 
     REQUEST_MODEL(model)
     waitTime = GET_GAME_TIMER() + 2000
-    WHILE NOT HAS_MODEL_LOADED(model) AND GET_GAME_TIMER() < waitTime
+    WHILE NOT HAS_MODEL_LOADED(model) AND GET_GAME_TIMER() < waitTime AND DEALER_CONTEXT_READY()
         IF g_dealer_selected_slot >= 0 AND DOES_ENTITY_EXIST(playerPed) AND NOT IS_ENTITY_DEAD(playerPed)
             DEALER_SUPPRESS_INSPECTION_CONTROLS()
             DEALER_DRAW_INSPECTION_CARD(g_dealer_selected_slot, playerPed)
@@ -820,23 +842,26 @@ PROC DEALER_START_TEST_DRIVE(INT slot, PED_INDEX playerPed)
         WAIT(0)
     ENDWHILE
 
-    IF HAS_MODEL_LOADED(model)
-        DO_SCREEN_FADE_OUT(400)
-        WAIT(450)
+    IF HAS_MODEL_LOADED(model) AND DEALER_CONTEXT_READY()
+        g_dealer_test_veh = CREATE_VEHICLE(model, spawnPos, spawnHeading, FALSE, TRUE)
+        IF NOT DOES_ENTITY_EXIST(g_dealer_test_veh)
+            SET_MODEL_AS_NO_LONGER_NEEDED(model)
+            DEALER_SHOW_NOTIFICATION("~r~TEST DRIVE FAILED:~s~ Vehicle creation failed.")
+            EXIT
+        ENDIF
+
 
         IF DOES_ENTITY_EXIST(playerPed) AND NOT IS_ENTITY_DEAD(playerPed)
             IF IS_PED_IN_ANY_VEHICLE(playerPed)
                 CLEAR_PED_TASKS_IMMEDIATELY(playerPed)
             ENDIF
             REQUEST_COLLISION_AT_COORD(spawnPos)
-            SET_ENTITY_COORDS(playerPed, spawnPos, FALSE, FALSE, FALSE, TRUE)
+            SET_ENTITY_COORDS(playerPed, spawnPos, FALSE, FALSE, FALSE, FALSE)
             SET_ENTITY_HEADING(playerPed, spawnHeading)
         ENDIF
 
         IF NOT DOES_ENTITY_EXIST(g_dealer_purchased_veh) OR GET_DISTANCE_BETWEEN_COORDS(GET_ENTITY_COORDS(g_dealer_purchased_veh), spawnPos, TRUE) > 8.0
-            CLEAR_AREA_OF_VEHICLES(spawnPos, 5.0)
         ENDIF
-        g_dealer_test_veh = CREATE_VEHICLE(model, spawnPos, spawnHeading, TRUE, TRUE)
         IF DOES_ENTITY_EXIST(g_dealer_test_veh)
             SET_ENTITY_AS_MISSION_ENTITY(g_dealer_test_veh, TRUE, TRUE)
             IF SET_VEHICLE_ON_GROUND_PROPERLY(g_dealer_test_veh)
@@ -857,8 +882,6 @@ PROC DEALER_START_TEST_DRIVE(INT slot, PED_INDEX playerPed)
         ENABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_ENTER)
         ENABLE_CONTROL_ACTION(PLAYER_CONTROL, INPUT_CONTEXT)
 
-        DO_SCREEN_FADE_IN(400)
-
         g_dealer_selected_slot = -1
         g_dealer_test_drive_active = TRUE
         g_dealer_test_drive_end = GET_GAME_TIMER() + TEST_DRIVE_DURATION_MS
@@ -870,8 +893,7 @@ PROC DEALER_START_TEST_DRIVE(INT slot, PED_INDEX playerPed)
 ENDPROC
 
 PROC DEALER_FINISH_TEST_DRIVE(PED_INDEX playerPed)
-    DO_SCREEN_FADE_OUT(400)
-    WAIT(450)
+
 
     IF DOES_ENTITY_EXIST(playerPed) AND NOT IS_ENTITY_DEAD(playerPed) AND IS_PED_IN_ANY_VEHICLE(playerPed)
         CLEAR_PED_TASKS_IMMEDIATELY(playerPed)
@@ -884,17 +906,16 @@ PROC DEALER_FINISH_TEST_DRIVE(PED_INDEX playerPed)
 
     // Return player to showroom entrance
     IF DOES_ENTITY_EXIST(playerPed) AND NOT IS_ENTITY_DEAD(playerPed)
-        SET_ENTITY_COORDS(playerPed, <<-45.0, -1106.5, 26.4>>, FALSE, FALSE, FALSE, TRUE)
+        SET_ENTITY_COORDS(playerPed, <<-45.0, -1106.5, 26.4>>, FALSE, FALSE, FALSE, FALSE)
         SET_ENTITY_HEADING(playerPed, 20.0)
     ENDIF
-
-    DO_SCREEN_FADE_IN(400)
 
     g_dealer_test_drive_active = FALSE
     DEALER_SHOW_NOTIFICATION("~b~TEST DRIVE:~s~ Concluded. Vehicle returned to showroom.")
 ENDPROC
 
 FUNC BOOL DEALER_PURCHASE_VEHICLE(INT slot, PED_INDEX playerPed, BOOL fromTestDrive)
+    IF slot < 0 OR slot >= NUM_SHOWROOM_SLOTS OR NOT DEALER_CONTEXT_READY() RETURN FALSE ENDIF
     INT modelChoice = g_dealer_slot_model[slot]
     INT price = DEALER_GET_PRICE(slot, modelChoice)
     INT cash = DEALER_GET_PLAYER_CASH(playerPed)
@@ -916,17 +937,14 @@ FUNC BOOL DEALER_PURCHASE_VEHICLE(INT slot, PED_INDEX playerPed, BOOL fromTestDr
     // If buying on the spot during a test drive while sitting in the test vehicle,
     // convert the active test vehicle directly into the player's purchased vehicle!
     IF fromTestDrive AND DOES_ENTITY_EXIST(g_dealer_test_veh) AND NOT IS_ENTITY_DEAD(g_dealer_test_veh)
-        IF DOES_ENTITY_EXIST(playerPed)
-            DEALER_DEDUCT_PLAYER_CASH(playerPed, price)
+        IF NOT DEALER_DEDUCT_PLAYER_CASH(playerPed, price)
+            DEALER_SHOW_NOTIFICATION("~r~PURCHASE FAILED:~s~ Funds could not be charged.")
+            RETURN FALSE
         ENDIF
         PLAY_SOUND_FRONTEND(-1, "PURCHASE", "HUD_AWARDS", TRUE)
 
         IF DOES_ENTITY_EXIST(g_dealer_purchased_veh) AND g_dealer_purchased_veh != g_dealer_test_veh
-            IF NOT IS_PED_IN_VEHICLE(playerPed, g_dealer_purchased_veh, FALSE)
-                DELETE_VEHICLE(g_dealer_purchased_veh)
-            ELSE
-                SET_VEHICLE_AS_NO_LONGER_NEEDED(g_dealer_purchased_veh)
-            ENDIF
+            SET_VEHICLE_AS_NO_LONGER_NEEDED(g_dealer_purchased_veh)
         ENDIF
 
         g_dealer_purchased_veh = g_dealer_test_veh
@@ -952,7 +970,7 @@ FUNC BOOL DEALER_PURCHASE_VEHICLE(INT slot, PED_INDEX playerPed, BOOL fromTestDr
     // Request model and spawn delivered vehicle outside
     REQUEST_MODEL(model)
     waitTime = GET_GAME_TIMER() + 2000
-    WHILE NOT HAS_MODEL_LOADED(model) AND GET_GAME_TIMER() < waitTime
+    WHILE NOT HAS_MODEL_LOADED(model) AND GET_GAME_TIMER() < waitTime AND DEALER_CONTEXT_READY()
         IF g_dealer_selected_slot >= 0 AND DOES_ENTITY_EXIST(playerPed) AND NOT IS_ENTITY_DEAD(playerPed)
             DEALER_SUPPRESS_INSPECTION_CONTROLS()
             DEALER_DRAW_INSPECTION_CARD(g_dealer_selected_slot, playerPed)
@@ -960,62 +978,49 @@ FUNC BOOL DEALER_PURCHASE_VEHICLE(INT slot, PED_INDEX playerPed, BOOL fromTestDr
         WAIT(0)
     ENDWHILE
 
-    IF HAS_MODEL_LOADED(model)
-        IF DOES_ENTITY_EXIST(playerPed)
-            DEALER_DEDUCT_PLAYER_CASH(playerPed, price)
-        ENDIF
-        PLAY_SOUND_FRONTEND(-1, "PURCHASE", "HUD_AWARDS", TRUE)
-
-        IF fromTestDrive AND DOES_ENTITY_EXIST(g_dealer_test_veh)
-            DELETE_VEHICLE(g_dealer_test_veh)
-            g_dealer_test_veh = NULL
-            g_dealer_test_drive_active = FALSE
-        ENDIF
-
-        IF DOES_ENTITY_EXIST(g_dealer_purchased_veh)
-            IF NOT IS_PED_IN_VEHICLE(playerPed, g_dealer_purchased_veh, FALSE)
-                DELETE_VEHICLE(g_dealer_purchased_veh)
-            ELSE
+    IF HAS_MODEL_LOADED(model) AND DOES_ENTITY_EXIST(playerPed) AND playerPed = PLAYER_PED_ID() AND NOT IS_ENTITY_DEAD(playerPed) AND IS_PLAYER_CONTROL_ON(PLAYER_ID()) AND NOT GET_MISSION_FLAG() AND NOT IS_CUTSCENE_ACTIVE()
+        boughtVeh = CREATE_VEHICLE(model, spawnPos, spawnHeading, FALSE, TRUE)
+        IF DOES_ENTITY_EXIST(boughtVeh)
+            // Commit payment only after delivery succeeds, and retain the
+            // previous vehicle until the transaction has been accepted.
+            IF NOT DEALER_DEDUCT_PLAYER_CASH(playerPed, price)
+                DELETE_VEHICLE(boughtVeh)
+                SET_MODEL_AS_NO_LONGER_NEEDED(model)
+                DEALER_SHOW_NOTIFICATION("~r~DELIVERY FAILED:~s~ Funds could not be charged.")
+                RETURN FALSE
+            ENDIF
+            IF fromTestDrive AND DOES_ENTITY_EXIST(g_dealer_test_veh)
+                DELETE_VEHICLE(g_dealer_test_veh)
+                g_dealer_test_veh = NULL
+                g_dealer_test_drive_active = FALSE
+            ENDIF
+            IF DOES_ENTITY_EXIST(g_dealer_purchased_veh)
                 SET_VEHICLE_AS_NO_LONGER_NEEDED(g_dealer_purchased_veh)
             ENDIF
-            g_dealer_purchased_veh = NULL
-        ENDIF
-
-        CLEAR_AREA_OF_VEHICLES(spawnPos, 6.0)
-        boughtVeh = CREATE_VEHICLE(model, spawnPos, spawnHeading, TRUE, TRUE)
-        g_dealer_purchased_veh = boughtVeh
-        IF DOES_ENTITY_EXIST(boughtVeh)
-            IF SET_VEHICLE_ON_GROUND_PROPERLY(boughtVeh)
-            ENDIF
+            g_dealer_purchased_veh = boughtVeh
+            SET_VEHICLE_ON_GROUND_PROPERLY(boughtVeh)
             SET_VEHICLE_COLOURS(boughtVeh, paintColor, paintColor)
             SET_VEHICLE_DIRT_LEVEL(boughtVeh, 0.0)
             SET_VEHICLE_DOORS_LOCKED(boughtVeh, VEHICLELOCK_UNLOCKED)
             SET_VEHICLE_ENGINE_ON(boughtVeh, TRUE, TRUE, FALSE)
             SET_ENTITY_AS_MISSION_ENTITY(boughtVeh, TRUE, TRUE)
-
-            // Flash hazard indicators once to announce delivery
             SET_VEHICLE_INDICATOR_LIGHTS(boughtVeh, TRUE, TRUE)
             SET_VEHICLE_INDICATOR_LIGHTS(boughtVeh, FALSE, TRUE)
-
-            // Create delivery blip
-            IF DOES_BLIP_EXIST(g_dealer_delivery_blip)
-                REMOVE_BLIP(g_dealer_delivery_blip)
-            ENDIF
+            IF DOES_BLIP_EXIST(g_dealer_delivery_blip) REMOVE_BLIP(g_dealer_delivery_blip) ENDIF
             g_dealer_delivery_blip = ADD_BLIP_FOR_ENTITY(boughtVeh)
             SET_BLIP_SPRITE(g_dealer_delivery_blip, RADAR_TRACE_CAR_SHOWROOM)
-            SET_BLIP_COLOUR(g_dealer_delivery_blip, 2) // Green
+            SET_BLIP_COLOUR(g_dealer_delivery_blip, 2)
             SET_BLIP_SCALE(g_dealer_delivery_blip, 0.80)
+            PLAY_SOUND_FRONTEND(-1, "PURCHASE", "HUD_AWARDS", TRUE)
+            TEXT_LABEL_63 buyMsg = "~g~PURCHASED: ~y~"
+            buyMsg += name
+            buyMsg += "~s~ delivered outside!"
+            DEALER_SHOW_NOTIFICATION(buyMsg)
+            SET_MODEL_AS_NO_LONGER_NEEDED(model)
+            RETURN TRUE
         ENDIF
-
-        TEXT_LABEL_63 buyMsg = "~g~PURCHASED: ~y~"
-        buyMsg += name
-        buyMsg += "~s~ delivered outside!"
-        DEALER_SHOW_NOTIFICATION(buyMsg)
-        SET_MODEL_AS_NO_LONGER_NEEDED(model)
-        RETURN TRUE
-    ELSE
-        DEALER_SHOW_NOTIFICATION("~r~DELIVERY FAILED: ~w~Vehicle could not be streamed. No funds charged.")
     ENDIF
+    DEALER_SHOW_NOTIFICATION("~r~DELIVERY FAILED: ~w~No vehicle delivered. No funds charged.")
     SET_MODEL_AS_NO_LONGER_NEEDED(model)
     RETURN FALSE
 ENDFUNC
@@ -1059,6 +1064,16 @@ SCRIPT
 
     WHILE TRUE
         WAIT(0)
+    IF HAS_FORCE_CLEANUP_OCCURRED(FORCE_CLEANUP_FLAG_DEBUG_MENU)
+        IF g_dealer_in_range DEALER_EXIT_SHOWROOM() ENDIF
+        IF DOES_ENTITY_EXIST(g_dealer_test_veh) SET_VEHICLE_AS_NO_LONGER_NEEDED(g_dealer_test_veh) ENDIF
+        IF DOES_ENTITY_EXIST(g_dealer_purchased_veh) SET_VEHICLE_AS_NO_LONGER_NEEDED(g_dealer_purchased_veh) ENDIF
+        IF DOES_BLIP_EXIST(g_dealer_delivery_blip) REMOVE_BLIP(g_dealer_delivery_blip) ENDIF
+        IF DOES_BLIP_EXIST(g_dealer_map_blip) REMOVE_BLIP(g_dealer_map_blip) ENDIF
+        TERMINATE_THIS_THREAD()
+    ENDIF
+
+
 
         playerPed = PLAYER_PED_ID()
         IF DOES_ENTITY_EXIST(playerPed) AND NOT IS_ENTITY_DEAD(playerPed)
@@ -1148,7 +1163,7 @@ SCRIPT
                                 CLEAR_PED_TASKS_IMMEDIATELY(playerPed)
                             ENDIF
                             IF GET_DISTANCE_BETWEEN_COORDS(GET_ENTITY_COORDS(g_dealer_showroom_vehs[s]), DEALER_GET_SLOT_COORDS(s), TRUE) > 0.35
-                                SET_ENTITY_COORDS(g_dealer_showroom_vehs[s], DEALER_GET_SLOT_COORDS(s), FALSE, FALSE, FALSE, TRUE)
+                                SET_ENTITY_COORDS(g_dealer_showroom_vehs[s], DEALER_GET_SLOT_COORDS(s), FALSE, FALSE, FALSE, FALSE)
                             ENDIF
                         ENDIF
                         IF now >= g_dealer_exit_cooldown

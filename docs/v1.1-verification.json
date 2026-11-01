@@ -288,7 +288,20 @@
     }
   },
   "nsc_tool_checks": 62,
-  "nsc_catalogue_model_checks": {
+  "menu": {
+    "sha256": "68ad7e11a43f258864cf168908b6d4cd01f1bb7d85e4ef5c7934808879ed111e",
+    "binding_sha256": "3f4b04ba4d43118043fe75e1cbe9cc33138b9fae71287e2bd142cd022db2a2eb",
+    "stock_natives": 509,
+    "registered_custom_natives": 19,
+    "self_native_matches": 528
+  },
+  "installation_zip_paths_verified": true,
+  "previous_packages_preserved": true,
+  "menu_version": "1.1",
+  "runtime_revision": "v1.4.1 Preview catalogue revision 1",
+  "github_menu_reproduction": true,
+  "controller_source_sha256": "3d0e2aa10788a58aa050e9d7162bc33bdecf5d7b4b8b79dfba13bc2a2010c7c4",
+  "prior_nsc_catalogue_model_checks": {
     "passed": 14,
     "checks": [
       "96 names exceed both previous entry and character limits",
@@ -311,19 +324,15 @@
       "util/util_nsc_loader.sch": "5c7d3902ace9ad5538620724115e0e246f77d9b81f09efdfbbed059cb9a0c050",
       "util/util_persistence.sch": "c56013029cde5bc9dd153d85401662dde47672bcaa6cded777ca0f3b7fdb8091"
     },
+    "physical_switch_accepted": false,
+    "scope_note": "Earlier 14-check model used a simplified filename codec; superseded by the audit suite using the live codec."
+  },
+  "source_regression_checks": {
+    "passed": 207,
+    "record": "stability-audit-verification.json",
     "physical_switch_accepted": false
   },
-  "menu": {
-    "sha256": "35db706684aec0e10c6792b962a47bc934b7ff40931245804653c8b0b31c4895",
-    "binding_sha256": "d984df8aefbc0ffbd41f3a185202321c4abfc5e7f1dfee38805182080b8b7141",
-    "stock_natives": 507,
-    "registered_custom_natives": 19,
-    "self_native_matches": 526
-  },
-  "installation_zip_paths_verified": true,
-  "previous_packages_preserved": true,
-  "menu_version": "1.1",
-  "runtime_revision": "v1.4.1 Preview catalogue revision 1",
-  "github_menu_reproduction": true,
-  "controller_source_sha256": "3ba732b74e945a3029d37c23f8325f5f0c7f13abdd59618ea107921effeec821"
+  "revision": "stability-audit-20261101",
+  "runtime_validation_note": "Runtime suites retain the previous local scope; this audit does not change or reaccept the pinned runtime binary.",
+  "stability_audit_record": "stability-audit-verification.json"
 }

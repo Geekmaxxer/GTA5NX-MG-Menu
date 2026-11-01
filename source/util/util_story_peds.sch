@@ -27,8 +27,8 @@
 
 FUNC STRING STORY_CHAR_DISPLAY_NAME_PAGE_0(INT charId)
     SWITCH charId
-        CASE 0 RETURN "Franklin Clinton" BREAK
-        CASE 1 RETURN "Michael De Santa" BREAK
+        CASE 0 RETURN "Michael De Santa" BREAK
+        CASE 1 RETURN "Franklin Clinton" BREAK
         CASE 2 RETURN "Trevor Philips" BREAK
         CASE 3 RETURN "Lamar Davis" BREAK
         CASE 4 RETURN "Lester Crest" BREAK
@@ -543,8 +543,8 @@ ENDFUNC
 
 FUNC STRING STORY_CHAR_SCENE_HANDLE_1_PAGE_0(INT charId)
     SWITCH charId
-        CASE 0 RETURN "Franklin" BREAK
-        CASE 1 RETURN "Michael" BREAK
+        CASE 0 RETURN "Michael" BREAK
+        CASE 1 RETURN "Franklin" BREAK
         CASE 2 RETURN "Trevor" BREAK
         CASE 3 RETURN "Lamar" BREAK
         CASE 4 RETURN "Lester" BREAK
@@ -839,24 +839,25 @@ FUNC MODEL_NAMES STORY_CHAR_SELECTED_MODEL(INT charId)
     RETURN STORY_CHAR_DEFAULT_MODEL(charId)
 ENDFUNC
 
-FUNC STRING STORY_CHAR_SELECTED_MODEL_NAME(INT charId)
+FUNC TEXT_LABEL_63 STORY_CHAR_SELECTED_MODEL_NAME(INT charId)
     INT choiceVal = 0
     INT catIdx = -1
-    IF charId < 0 OR charId >= STORY_CHAR_COUNT
-        RETURN "PLAYER_ZERO"
-    ENDIF
+    TEXT_LABEL_63 label = "PLAYER_ZERO"
+    IF charId < 0 OR charId >= STORY_CHAR_COUNT RETURN label ENDIF
     choiceVal = g_story_ped_choice[charId]
     IF choiceVal > 0 AND choiceVal <= PED_CHOICE_COUNT()
-        RETURN PED_NAME_FOR_CHOICE(choiceVal - 1)
-    ENDIF
-    IF choiceVal = -1
+        label = PED_NAME_FOR_CHOICE(choiceVal - 1)
+    ELIF choiceVal = -1
         catIdx = PED_CHOICE_FOR_MODEL(g_story_ped_custom_model[charId])
         IF catIdx >= 0
-            RETURN PED_NAME_FOR_CHOICE(catIdx)
+            label = PED_NAME_FOR_CHOICE(catIdx)
+        ELSE
+            label = g_story_ped_custom_labels[charId]
         ENDIF
-        RETURN g_story_ped_custom_label
+    ELSE
+        label = STORY_CHAR_DEFAULT_MODEL_NAME(charId)
     ENDIF
-    RETURN STORY_CHAR_DEFAULT_MODEL_NAME(charId)
+    RETURN label
 ENDFUNC
 
 FUNC BOOL STORY_CHAR_IS_CUSTOMIZED(INT charId)
@@ -890,8 +891,8 @@ PROC SET_STORY_CHAR_CATALOG_CHOICE(INT charId, INT catalogChoice)
     ENDIF
     g_story_ped_custom_model[charId] = pickedModel
     g_story_ped_search_not_found = FALSE
-    IF charId = 0 g_franklin_ped = pickedModel ENDIF
-    IF charId = 1 g_michael_ped = pickedModel ENDIF
+    IF charId = 0 g_michael_ped = pickedModel ENDIF
+    IF charId = 1 g_franklin_ped = pickedModel ENDIF
     IF charId = 2 g_trevor_ped = pickedModel ENDIF
     REFRESH_STORY_PEDS_ACTIVE_FLAG()
 ENDPROC
@@ -910,10 +911,10 @@ PROC SET_STORY_CHAR_CUSTOM_MODEL(INT charId, MODEL_NAMES customModel, STRING cus
         g_story_ped_choice[charId] = -1
     ENDIF
     g_story_ped_custom_model[charId] = customModel
-    g_story_ped_custom_label = customLabel
+    g_story_ped_custom_labels[charId] = customLabel
     g_story_ped_search_not_found = FALSE
-    IF charId = 0 g_franklin_ped = customModel ENDIF
-    IF charId = 1 g_michael_ped = customModel ENDIF
+    IF charId = 0 g_michael_ped = customModel ENDIF
+    IF charId = 1 g_franklin_ped = customModel ENDIF
     IF charId = 2 g_trevor_ped = customModel ENDIF
     REFRESH_STORY_PEDS_ACTIVE_FLAG()
 ENDPROC
@@ -932,6 +933,7 @@ PROC APPLY_RANDOM_STORY_CHAR_PED()
 ENDPROC
 
 PROC DRAW_CUSTOM_STORY_PEDS_PAGE()
+    TEXT_LABEL_63 selectedModelLabel = ""
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("CUSTOM STORY PEDS", "PEDS DE HISTORIA", "故事角色模型", "STORY-CHARAKTER-PEDS", "ストーリーPED変更", "МОДЕЛИ СЮЖЕТНЫХ PED", "PEDS DO MODO HISTÓRIA", "PEDS DU MODE HISTOIRE"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_scroll
@@ -941,10 +943,11 @@ PROC DRAW_CUSTOM_STORY_PEDS_PAGE()
     WHILE row < 8 AND index < visTotal
         FLOAT y = 0.268 + (TO_FLOAT(row) * ROW_H)
         charId = STORY_CHAR_ID_FOR_VISIBLE_ROW(index)
+        selectedModelLabel = STORY_CHAR_SELECTED_MODEL_NAME(charId)
         IF g_story_ped_choice[charId] != 0
-            DRAW_OPTION(y, STORY_CHAR_DISPLAY_NAME(charId), STORY_CHAR_SELECTED_MODEL_NAME(charId), g_item = index, 1)
+            DRAW_OPTION(y, STORY_CHAR_DISPLAY_NAME(charId), selectedModelLabel, g_item = index, 1)
         ELSE
-            DRAW_OPTION(y, STORY_CHAR_DISPLAY_NAME(charId), STORY_CHAR_SELECTED_MODEL_NAME(charId), g_item = index, 2)
+            DRAW_OPTION(y, STORY_CHAR_DISPLAY_NAME(charId), selectedModelLabel, g_item = index, 2)
         ENDIF
         index = index + 1
         row = row + 1
@@ -952,6 +955,7 @@ PROC DRAW_CUSTOM_STORY_PEDS_PAGE()
 ENDPROC
 
 PROC DRAW_STORY_PED_PICKER_PAGE()
+    TEXT_LABEL_63 selectedModelLabel = STORY_CHAR_SELECTED_MODEL_NAME(g_story_ped_active_char)
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, STORY_CHAR_DISPLAY_NAME(g_story_ped_active_char))
     DRAW_MENU_VERSION_TAG()
     INT index = g_scroll
@@ -962,7 +966,7 @@ PROC DRAW_STORY_PED_PICKER_PAGE()
             IF g_story_ped_search_not_found
                 DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), "NOT FOUND", g_item = index, 0)
             ELSE
-                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), STORY_CHAR_SELECTED_MODEL_NAME(g_story_ped_active_char), g_item = index, 2)
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), selectedModelLabel, g_item = index, 2)
             ENDIF
         ELIF index = 1
             DRAW_OPTION(y, TR("Random PED", "PED aleatorio", "随机模型", "Zufälliges PED", "ランダムPED", "Случайный PED", "PED Aleatório", "PED aléatoire"), "APPLY", g_item = index, 2)
@@ -999,6 +1003,10 @@ ENDPROC
 PROC CLEANUP_STORY_CUTSCENE_SLOTS()
     INT s = 0
     WHILE s < STORY_CS_MAX
+        IF DOES_ENTITY_EXIST(g_story_cs_original[s]) AND GET_ENTITY_MODEL(g_story_cs_original[s]) = g_story_cs_original_model[s]
+            SET_ENTITY_ALPHA(g_story_cs_original[s], g_story_cs_original_alpha[s], FALSE)
+        ENDIF
+        g_story_cs_original[s] = NULL
         IF DOES_ENTITY_EXIST(g_story_cs_ped[s])
             SET_ENTITY_AS_MISSION_ENTITY(g_story_cs_ped[s], TRUE, TRUE)
             DELETE_PED(g_story_cs_ped[s])
@@ -1016,8 +1024,8 @@ ENDPROC
 
 PROC CLEANUP_STORY_PROXY_SLOT(INT slot)
     IF slot < 0 OR slot >= STORY_PROXY_MAX EXIT ENDIF
-    IF DOES_ENTITY_EXIST(g_story_proxy_real[slot])
-        RESET_ENTITY_ALPHA(g_story_proxy_real[slot])
+    IF DOES_ENTITY_EXIST(g_story_proxy_real[slot]) AND GET_ENTITY_MODEL(g_story_proxy_real[slot]) = g_story_proxy_real_model[slot]
+        SET_ENTITY_ALPHA(g_story_proxy_real[slot], g_story_proxy_real_alpha[slot], FALSE)
     ENDIF
     g_story_proxy_real[slot] = NULL
     IF DOES_ENTITY_EXIST(g_story_proxy_ped[slot])
@@ -1100,10 +1108,11 @@ PROC PROCESS_STORY_PEDS_CUTSCENE()
                 WHILE s < STORY_CS_MAX
                     IF g_story_cs_char[s] < 0
                         targetModel = STORY_CHAR_SELECTED_MODEL(charId)
-                        IF IS_MODEL_IN_CDIMAGE(targetModel) AND IS_MODEL_VALID(targetModel)
+                        IF IS_MODEL_IN_CDIMAGE(targetModel) AND IS_MODEL_VALID(targetModel) AND IS_MODEL_A_PED(targetModel)
                             g_story_cs_char[s] = charId
                             g_story_cs_model[s] = targetModel
                             g_story_cs_registered[s] = FALSE
+                        g_story_cs_request_ms[s] = GET_GAME_TIMER()
                             REQUEST_MODEL(targetModel)
                         ENDIF
                         s = STORY_CS_MAX
@@ -1120,20 +1129,18 @@ PROC PROCESS_STORY_PEDS_CUTSCENE()
     s = 0
     WHILE s < STORY_CS_MAX
         charId = g_story_cs_char[s]
-        IF charId >= 0
+        IF charId >= 0 AND g_story_cs_model[s] != DUMMY_MODEL_FOR_SCRIPT
             handle = RESOLVE_ACTIVE_CUTSCENE_HANDLE(charId)
             targetModel = g_story_cs_model[s]
             defModel = STORY_CHAR_DEFAULT_MODEL(charId)
             altModel = STORY_CHAR_ALT_MODEL(charId)
             IF NOT IS_STRING_NULL_OR_EMPTY(handle)
                 IF NOT HAS_MODEL_LOADED(targetModel)
-                    REQUEST_MODEL(targetModel)
-                ENDIF
-                IF CAN_REQUEST_ASSETS_FOR_CUTSCENE_ENTITY()
-                    SET_CUTSCENE_ENTITY_STREAMING_FLAGS(handle, DUMMY_MODEL_FOR_SCRIPT, CES_DONT_STREAM_AND_APPLY_VARIATIONS)
-                    SET_CUTSCENE_ENTITY_STREAMING_FLAGS(handle, defModel, CES_DONT_STREAM_AND_APPLY_VARIATIONS)
-                    IF altModel != defModel
-                        SET_CUTSCENE_ENTITY_STREAMING_FLAGS(handle, altModel, CES_DONT_STREAM_AND_APPLY_VARIATIONS)
+                    IF GET_GAME_TIMER() >= g_story_cs_request_ms[s] + 5000
+                        SET_MODEL_AS_NO_LONGER_NEEDED(targetModel)
+                        g_story_cs_model[s] = DUMMY_MODEL_FOR_SCRIPT
+                    ELSE
+                        REQUEST_MODEL(targetModel)
                     ENDIF
                 ENDIF
                 IF HAS_MODEL_LOADED(targetModel)
@@ -1171,6 +1178,14 @@ PROC PROCESS_STORY_PEDS_CUTSCENE()
                             IF DOES_ENTITY_EXIST(csEnt) AND IS_ENTITY_A_PED(csEnt)
                                 csEntPed = GET_PED_INDEX_FROM_ENTITY_INDEX(csEnt)
                                 IF csEntPed != g_story_cs_ped[s] AND csEntPed != PLAYER_PED_ID()
+                                IF g_story_cs_original[s] != csEnt
+                                    IF DOES_ENTITY_EXIST(g_story_cs_original[s]) AND GET_ENTITY_MODEL(g_story_cs_original[s]) = g_story_cs_original_model[s]
+                                        SET_ENTITY_ALPHA(g_story_cs_original[s], g_story_cs_original_alpha[s], FALSE)
+                                    ENDIF
+                                    g_story_cs_original[s] = csEnt
+                                    g_story_cs_original_model[s] = GET_ENTITY_MODEL(csEnt)
+                                    g_story_cs_original_alpha[s] = GET_ENTITY_ALPHA(csEnt)
+                                ENDIF
                                     SET_ENTITY_ALPHA(csEnt, 0, FALSE)
                                     IF NOT DOES_ENTITY_EXIST(regEnt)
                                         csCoords = GET_ENTITY_COORDS(csEnt, FALSE)
@@ -1261,7 +1276,7 @@ PROC MAINTAIN_STORY_PROXY_SLOT(INT slot)
     IF charId < 0
         EXIT
     ENDIF
-    IF NOT STORY_CHAR_IS_CUSTOMIZED(charId) OR NOT DOES_ENTITY_EXIST(realPed) OR IS_ENTITY_DEAD(realPed) OR realPed = PLAYER_PED_ID()
+    IF NOT STORY_CHAR_IS_CUSTOMIZED(charId) OR NOT DOES_ENTITY_EXIST(realPed) OR IS_ENTITY_DEAD(realPed) OR realPed = PLAYER_PED_ID() OR GET_ENTITY_MODEL(realPed) != g_story_proxy_real_model[slot]
         CLEANUP_STORY_PROXY_SLOT(slot)
         EXIT
     ENDIF
@@ -1273,11 +1288,15 @@ PROC MAINTAIN_STORY_PROXY_SLOT(INT slot)
     ENDIF
 
     IF NOT DOES_ENTITY_EXIST(proxyPed)
-        IF NOT IS_MODEL_IN_CDIMAGE(wantedModel) OR NOT IS_MODEL_VALID(wantedModel)
+        IF NOT IS_MODEL_IN_CDIMAGE(wantedModel) OR NOT IS_MODEL_VALID(wantedModel) OR NOT IS_MODEL_A_PED(wantedModel)
             CLEANUP_STORY_PROXY_SLOT(slot)
             EXIT
         ENDIF
         IF NOT HAS_MODEL_LOADED(wantedModel)
+            IF GET_GAME_TIMER() >= g_story_proxy_request_ms[slot] + 5000
+                CLEANUP_STORY_PROXY_SLOT(slot)
+                EXIT
+            ENDIF
             REQUEST_MODEL(wantedModel)
             EXIT
         ENDIF
@@ -1288,6 +1307,7 @@ PROC MAINTAIN_STORY_PROXY_SLOT(INT slot)
             EXIT
         ENDIF
         g_story_proxy_ped[slot] = proxyPed
+        SET_ENTITY_COLLISION(proxyPed, FALSE, FALSE)
         SET_PED_DEFAULT_COMPONENT_VARIATION(proxyPed)
         SET_ENTITY_INVINCIBLE(proxyPed, TRUE)
         SET_ENTITY_PROOFS(proxyPed, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE)
@@ -1363,12 +1383,15 @@ PROC SCAN_NEARBY_STORY_PEDS()
                 matchedChar = FIND_CUSTOMIZED_STORY_CHAR_FOR_MODEL(candModel)
                 IF matchedChar >= 0
                     wantedModel = STORY_CHAR_SELECTED_MODEL(matchedChar)
-                    IF IS_MODEL_IN_CDIMAGE(wantedModel) AND IS_MODEL_VALID(wantedModel)
+                    IF IS_MODEL_IN_CDIMAGE(wantedModel) AND IS_MODEL_VALID(wantedModel) AND IS_MODEL_A_PED(wantedModel)
                         slot = 0
                         WHILE slot < STORY_PROXY_MAX
                             IF g_story_proxy_char[slot] < 0
                                 g_story_proxy_char[slot] = matchedChar
                                 g_story_proxy_real[slot] = candPed
+                        g_story_proxy_real_model[slot] = candModel
+                        g_story_proxy_real_alpha[slot] = GET_ENTITY_ALPHA(candPed)
+                        g_story_proxy_request_ms[slot] = GET_GAME_TIMER()
                                 g_story_proxy_model[slot] = wantedModel
                                 g_story_proxy_task_ms[slot] = 0
                                 REQUEST_MODEL(wantedModel)
@@ -1389,7 +1412,9 @@ PROC PROCESS_CUSTOM_STORY_PEDS()
     INT slot = 0
 
     IF NOT g_story_peds_any_active
-        IF g_story_cs_was_active
+        // Registered actors remain alive until the cutscene engine releases
+        // them, even when their menu customization is disabled mid-scene.
+        IF g_story_cs_was_active AND NOT IS_CUTSCENE_ACTIVE()
             CLEANUP_STORY_CUTSCENE_SLOTS()
             g_story_cs_was_active = FALSE
         ENDIF
@@ -1401,7 +1426,7 @@ PROC PROCESS_CUSTOM_STORY_PEDS()
     // CREATE_TRACKED_POINT / IS_TRACKED_POINT_VISIBLE photo raycasts behind
     // IG_JEWELASS and Lester's Sweatshop planning board cutscene are never obstructed.
     IF GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(HASH("jewelry_setup1")) > 0
-        IF g_story_cs_was_active
+        IF g_story_cs_was_active AND NOT IS_CUTSCENE_ACTIVE()
             CLEANUP_STORY_CUTSCENE_SLOTS()
             g_story_cs_was_active = FALSE
         ENDIF

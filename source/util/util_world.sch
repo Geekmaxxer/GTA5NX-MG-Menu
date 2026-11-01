@@ -1105,21 +1105,18 @@ PROC APPLY_BLACKOUT_STATE()
 ENDPROC
 
 PROC STOP_ARMED_PED_RIOT()
-    PED_INDEX nearbyPeds[32]
-    INT nearbyCount = GET_PED_NEARBY_PEDS(PLAYER_PED_ID(), nearbyPeds, PEDTYPE_INVALID)
     INT index = 0
-    IF nearbyCount > COUNT_OF(nearbyPeds)
-        nearbyCount = COUNT_OF(nearbyPeds)
-    ENDIF
-    WHILE index < nearbyCount
-        IF DOES_ENTITY_EXIST(nearbyPeds[index]) AND nearbyPeds[index] != PLAYER_PED_ID() AND nearbyPeds[index] != g_chauffeur_driver AND NOT IS_PED_A_PLAYER(nearbyPeds[index]) AND NOT IS_PED_IN_GROUP(nearbyPeds[index]) AND GET_PED_RELATIONSHIP_GROUP_HASH(nearbyPeds[index]) != RELGROUPHASH_PLAYER
-            CLEAR_PED_TASKS(nearbyPeds[index])
-            SET_PED_KEEP_TASK(nearbyPeds[index], FALSE)
-            SET_PED_AS_ENEMY(nearbyPeds[index], FALSE)
-            SET_PED_COMBAT_ATTRIBUTES(nearbyPeds[index], CA_ALWAYS_FIGHT, FALSE)
+    WHILE index < g_riot_ped_count
+        IF DOES_ENTITY_EXIST(g_riot_peds[index]) AND NOT IS_ENTITY_A_MISSION_ENTITY(g_riot_peds[index])
+            CLEAR_PED_TASKS(g_riot_peds[index])
+            SET_PED_KEEP_TASK(g_riot_peds[index], FALSE)
+            SET_PED_AS_ENEMY(g_riot_peds[index], FALSE)
+            SET_PED_COMBAT_ATTRIBUTES(g_riot_peds[index], CA_ALWAYS_FIGHT, FALSE)
         ENDIF
+        g_riot_peds[index] = NULL
         index = index + 1
     ENDWHILE
+    g_riot_ped_count = 0
 ENDPROC
 
 PROC RUN_ARMED_PED_RIOT_TICK(PED_INDEX playerPed)
@@ -1130,12 +1127,16 @@ PROC RUN_ARMED_PED_RIOT_TICK(PED_INDEX playerPed)
     PED_INDEX otherPed = NULL
     WEAPON_TYPE riotWeapon = WEAPONTYPE_MICROSMG
     INT weaponRoll = 0
+    // Retire the previous bounded set before assigning new ambient actors.
+    STOP_ARMED_PED_RIOT()
     IF nearbyCount > COUNT_OF(nearbyPeds)
         nearbyCount = COUNT_OF(nearbyPeds)
     ENDIF
     WHILE index < nearbyCount
         riotPed = nearbyPeds[index]
-        IF DOES_ENTITY_EXIST(riotPed) AND riotPed != playerPed AND riotPed != g_chauffeur_driver AND NOT IS_PED_INJURED(riotPed) AND NOT IS_PED_A_PLAYER(riotPed) AND NOT IS_PED_IN_GROUP(riotPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(riotPed) != RELGROUPHASH_PLAYER
+        IF DOES_ENTITY_EXIST(riotPed) AND NOT IS_ENTITY_A_MISSION_ENTITY(riotPed) AND riotPed != playerPed AND riotPed != g_chauffeur_driver AND NOT IS_PED_INJURED(riotPed) AND NOT IS_PED_A_PLAYER(riotPed) AND NOT IS_PED_IN_GROUP(riotPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(riotPed) != RELGROUPHASH_PLAYER
+            g_riot_peds[g_riot_ped_count] = riotPed
+            g_riot_ped_count = g_riot_ped_count + 1
             weaponRoll = GET_RANDOM_INT_IN_RANGE(0, 5)
             IF weaponRoll = 0 riotWeapon = WEAPONTYPE_MICROSMG ENDIF
             IF weaponRoll = 1 riotWeapon = WEAPONTYPE_ASSAULTRIFLE ENDIF
@@ -1149,7 +1150,7 @@ PROC RUN_ARMED_PED_RIOT_TICK(PED_INDEX playerPed)
             SET_PED_AS_ENEMY(riotPed, TRUE)
             IF index + 1 < nearbyCount
                 otherPed = nearbyPeds[index + 1]
-                IF DOES_ENTITY_EXIST(otherPed) AND otherPed != riotPed AND NOT IS_PED_INJURED(otherPed) AND NOT IS_PED_IN_GROUP(otherPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(otherPed) != RELGROUPHASH_PLAYER
+                IF DOES_ENTITY_EXIST(otherPed) AND NOT IS_ENTITY_A_MISSION_ENTITY(otherPed) AND otherPed != playerPed AND NOT IS_PED_A_PLAYER(otherPed) AND otherPed != riotPed AND NOT IS_PED_INJURED(otherPed) AND NOT IS_PED_IN_GROUP(otherPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(otherPed) != RELGROUPHASH_PLAYER
                     TASK_COMBAT_PED(riotPed, otherPed)
                 ELSE
                     TASK_COMBAT_HATED_TARGETS_AROUND_PED(riotPed, 100.0)
@@ -1181,6 +1182,7 @@ PROC PROCESS_WORLD_MAYHEM()
     ENDIF
 
     IF GET_MISSION_FLAG()
+        IF g_riot_ped_count > 0 STOP_ARMED_PED_RIOT() ENDIF
         EXIT
     ENDIF
 
@@ -1229,9 +1231,9 @@ PROC PROCESS_WORLD_MAYHEM()
         index = 0
         WHILE index < 12
             candVeh = GET_RANDOM_VEHICLE_IN_SPHERE(playerCoords, 130.0, DUMMY_MODEL_FOR_SCRIPT, VEHICLE_SEARCH_FLAG_RETURN_RANDOM_VEHICLES)
-            IF DOES_ENTITY_EXIST(candVeh) AND NOT IS_ENTITY_DEAD(candVeh) AND candVeh != playerVeh AND candVeh != g_chauffeur_vehicle
+            IF DOES_ENTITY_EXIST(candVeh) AND NOT IS_ENTITY_A_MISSION_ENTITY(candVeh) AND NOT IS_ENTITY_DEAD(candVeh) AND candVeh != playerVeh AND candVeh != g_chauffeur_vehicle
                 driverPed = GET_PED_IN_VEHICLE_SEAT(candVeh, VS_DRIVER, FALSE)
-                IF DOES_ENTITY_EXIST(driverPed) AND driverPed != playerPed AND driverPed != g_chauffeur_driver AND NOT IS_PED_INJURED(driverPed) AND NOT IS_PED_IN_GROUP(driverPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(driverPed) != RELGROUPHASH_PLAYER
+                IF DOES_ENTITY_EXIST(driverPed) AND NOT IS_ENTITY_A_MISSION_ENTITY(driverPed) AND driverPed != playerPed AND driverPed != g_chauffeur_driver AND NOT IS_PED_INJURED(driverPed) AND NOT IS_PED_IN_GROUP(driverPed) AND GET_PED_RELATIONSHIP_GROUP_HASH(driverPed) != RELGROUPHASH_PLAYER
                     SET_DRIVER_ABILITY(driverPed, 1.0)
                     SET_DRIVER_AGGRESSIVENESS(driverPed, 1.0)
                     SET_PED_FLEE_ATTRIBUTES(driverPed, FA_NEVER_FLEE, TRUE)

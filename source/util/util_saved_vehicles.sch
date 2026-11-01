@@ -257,8 +257,8 @@ PROC APPLY_SAVED_VEHICLE_CONFIG(VEHICLE_INDEX veh, INT slot)
     INT baseModIdx = slot * 50
     WHILE m < 50
         INT modVal = g_saved_veh_mods[baseModIdx + m]
-        IF modVal >= 0
-            IF m = 23 AND g_saved_veh_custom_tyres[slot] = 1
+        IF modVal >= 0 AND (m < ENUM_TO_INT(MOD_TOGGLE_NITROUS) OR m > ENUM_TO_INT(MOD_TOGGLE_XENON_LIGHTS)) AND modVal < GET_NUM_VEHICLE_MODS(veh, INT_TO_ENUM(MOD_TYPE, m))
+            IF (m = 23 OR m = 24) AND g_saved_veh_custom_tyres[slot] = 1
                 SET_VEHICLE_MOD(veh, INT_TO_ENUM(MOD_TYPE, m), modVal, TRUE)
             ELSE
                 SET_VEHICLE_MOD(veh, INT_TO_ENUM(MOD_TYPE, m), modVal, FALSE)
@@ -268,9 +268,9 @@ PROC APPLY_SAVED_VEHICLE_CONFIG(VEHICLE_INDEX veh, INT slot)
     ENDWHILE
 
     INT rState = g_saved_veh_roof_state[slot]
-    IF rState = 0 OR rState = 2
+    IF rState = ENUM_TO_INT(CRS_LOWERING) OR rState = ENUM_TO_INT(CRS_LOWERED) OR rState = ENUM_TO_INT(CRS_ROOF_STUCK_LOWERED)
         LOWER_CONVERTIBLE_ROOF(veh, TRUE)
-    ELIF rState = 1 OR rState = 3
+    ELSE
         RAISE_CONVERTIBLE_ROOF(veh, TRUE)
     ENDIF
 ENDPROC
@@ -279,6 +279,11 @@ ENDPROC
 FUNC INT PERSIST_COMPUTE_VEH_SD_CHECKSUM()
     INT sum = 0
     INT i = 4
+    // Version 1 omitted the record count. Continue reading it, while new
+    // records also protect the identity, schema and count fields.
+    IF g_persist_veh_sd_data[1] >= 2
+        sum = g_persist_veh_sd_data[0] + g_persist_veh_sd_data[1] + g_persist_veh_sd_data[2]
+    ENDIF
     WHILE i < PERSIST_VEH_BUFFER_WORDS
         sum = sum + g_persist_veh_sd_data[i]
         i = i + 1
@@ -486,16 +491,32 @@ ENDPROC
 // Saves the current saved vehicles array to SD card file (megatard-vehicles-*.bin)
 PROC PERSIST_SAVE_SAVED_VEHICLES()
     PERSIST_PACK_VEHICLES_TO_BUFFER()
-    MEGASAVE(g_persist_veh_sd_data[0], PERSIST_VEH_BUFFER_WORDS, 2)
+    IF MEGASAVE(g_persist_veh_sd_data[0], PERSIST_VEH_BUFFER_WORDS, 2)
+        g_saved_vehicles_dirty = FALSE
+        g_saved_veh_feedback = 2
+        g_saved_veh_feedback_until = GET_GAME_TIMER() + 2500
+    ELSE
+        g_saved_vehicles_dirty = TRUE
+        g_saved_vehicles_retry_ms = GET_GAME_TIMER() + 5000
+    ENDIF
+ENDPROC
+
+PROC PROCESS_SAVED_VEHICLE_STORAGE()
+    IF g_saved_vehicles_dirty AND GET_GAME_TIMER() >= g_saved_vehicles_retry_ms
+        PERSIST_SAVE_SAVED_VEHICLES()
+    ENDIF
 ENDPROC
 
 // Loads saved vehicles from SD card file upon boot
 FUNC BOOL PERSIST_LOAD_SAVED_VEHICLES()
     INT wordsRead = MEGALOAD(g_persist_veh_sd_data[0], PERSIST_VEH_BUFFER_WORDS, 2)
-    IF wordsRead < 20
+    IF wordsRead != PERSIST_VEH_BUFFER_WORDS
         RETURN FALSE
     ENDIF
-    IF g_persist_veh_sd_data[0] != PERSIST_VEH_MAGIC OR g_persist_veh_sd_data[1] != PERSIST_VEH_VERSION
+    IF g_persist_veh_sd_data[0] != PERSIST_VEH_MAGIC OR (g_persist_veh_sd_data[1] != 1 AND g_persist_veh_sd_data[1] != PERSIST_VEH_VERSION)
+        RETURN FALSE
+    ENDIF
+    IF g_persist_veh_sd_data[2] < 0 OR g_persist_veh_sd_data[2] > MAX_SAVED_VEHICLES
         RETURN FALSE
     ENDIF
     IF g_persist_veh_sd_data[3] != PERSIST_COMPUTE_VEH_SD_CHECKSUM()
@@ -579,6 +600,17 @@ PROC DELETE_SAVED_VEHICLE(INT targetSlot)
     IF targetSlot < 0 OR targetSlot >= g_saved_vehicles_count
         EXIT
     ENDIF
+    IF g_vehicle_spawn_pending AND g_spawn_is_saved_vehicle
+        IF g_spawn_saved_vehicle_index = targetSlot
+            SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_vehicle_model)
+            g_vehicle_spawn_pending = FALSE
+            g_spawn_is_saved_vehicle = FALSE
+            g_active_spawn_count = 0
+            g_spawn_remaining = 0
+        ELIF g_spawn_saved_vehicle_index > targetSlot
+            g_spawn_saved_vehicle_index = g_spawn_saved_vehicle_index - 1
+        ENDIF
+    ENDIF
 
     INT v = targetSlot
     WHILE v < g_saved_vehicles_count - 1
@@ -657,7 +689,9 @@ ENDFUNC
 PROC DRAW_SAVED_VEHICLES_ROW(INT index, FLOAT y)
     IF index = 0
         STRING saveLabel = TR("Save Vehicle", "Guardar vehículo", "保存载具", "Fahrzeug speichern", "車両を保存", "Сохранить ТС", "Salvar Veículo", "Sauvegarder véhicule")
-        IF g_saved_veh_feedback = 1 AND GET_GAME_TIMER() < g_saved_veh_feedback_until
+        IF g_saved_vehicles_dirty
+            DRAW_OPTION(y, saveLabel, "SD WRITE FAILED", g_item = 0, 0)
+        ELIF g_saved_veh_feedback = 1 AND GET_GAME_TIMER() < g_saved_veh_feedback_until
             DRAW_OPTION(y, saveLabel, TR("No Vehicle", "Sin vehículo", "不在载具内", "Kein Fahrzeug", "車両なし", "Нет транспорта", "Sem Veículo", "Aucun véhicule"), g_item = 0, 0)
         ELIF g_saved_veh_feedback = 2 AND GET_GAME_TIMER() < g_saved_veh_feedback_until
             DRAW_OPTION(y, saveLabel, TR("Saved!", "¡Guardado!", "已保存！", "Gespeichert!", "保存完了！", "Сохранено!", "Salvo!", "Sauvegardé !"), g_item = 0, 1)

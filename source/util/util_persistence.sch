@@ -129,6 +129,7 @@ CONST_INT PERSIST_MAX_NSC_STACK 2
 // Write-through pacing
 CONST_INT PERSIST_QUIET_MS 1000
 CONST_INT PERSIST_MAX_DEFER_MS 5000
+CONST_INT PERSIST_RETRY_MS 5000
 
 // Reads the current value of a bool slot out of menu globals
 FUNC BOOL PERSIST_GLOBAL_BOOL(INT slot)
@@ -310,7 +311,7 @@ PROC PERSIST_SET_GLOBAL_INT(INT slot, INT value)
             g_vehicle_speed_unit = value
         BREAK
         CASE PERSIST_INT_AUTO_SAVE_INTERVAL
-            IF value > 255 value = 255 ENDIF
+            IF value > 120 value = 120 ENDIF
             g_auto_save_interval = value
         BREAK
         CASE PERSIST_INT_BODYGUARD_WEAPON
@@ -396,7 +397,7 @@ PROC PERSIST_SET_GLOBAL_INT(INT slot, INT value)
             g_lsc_xenon_colour = value
         BREAK
         CASE PERSIST_INT_LSC_NEON
-            IF value > PERSIST_MAX_VEHICLE_COLOUR value = PERSIST_MAX_VEHICLE_COLOUR ENDIF
+            IF value > 12 value = 12 ENDIF
             g_lsc_neon_colour = value
         BREAK
         CASE PERSIST_INT_LSC_WHEEL_TYPE
@@ -483,6 +484,7 @@ PROC PERSIST_REFRESH_SHADOW()
         slot = slot + 1
     ENDWHILE
     g_persist_shadow_valid = TRUE
+    g_persist_shadow_language = g_menu_language
 ENDPROC
 
 // Packs live menu globals into g_persist_sd_data buffer
@@ -586,14 +588,18 @@ PROC PERSIST_SAVE_ALL()
 
     IF MEGASAVE(g_persist_sd_data[0], PERSIST_BUFFER_WORDS)
         g_persist_written = g_persist_written + 1
+        PERSIST_REFRESH_SHADOW()
+        g_persist_dirty = FALSE
         g_persist_status_text = TR("Saved to SD (ScriptHookV-NX)", "Guardado en SD (ScriptHookV-NX)", "已保存到 SD 卡 (ScriptHookV-NX)", "Auf SD gespeichert (ScriptHookV-NX)", "SDに保存完了 (ScriptHookV-NX)", "Сохранено на SD (ScriptHookV-NX)", "Salvo no SD (ScriptHookV-NX)", "Sauvegardé sur SD (ScriptHookV-NX)")
     ELSE
         g_persist_failed = g_persist_failed + 1
+        // Keep the last successful baseline and retry without issuing SD writes
+        // on every frame after the maximum coalescing interval has elapsed.
+        g_persist_dirty = TRUE
+        g_persist_dirty_since = GET_GAME_TIMER()
+        g_persist_next_write = g_persist_dirty_since + PERSIST_RETRY_MS
         g_persist_status_text = TR("SD Write Failed / Bridge Inactive", "Fallo al escribir en SD / Bridge inactivo", "SD 卡写入失败 / Bridge 未激活", "SD-Schreiben fehlgeschlagen", "SD書き込み失敗 / ブリッジ停止", "Ошибка записи на SD / Мост неактивен", "Falha ao gravar no SD / Ponte inativa", "Échec écriture SD / Pont inactif")
     ENDIF
-
-    PERSIST_REFRESH_SHADOW()
-    g_persist_dirty = FALSE
 
     probeElapsed = GET_GAME_TIMER() - probeStart
     IF probeElapsed > g_prof_worst_burst
@@ -635,12 +641,14 @@ PROC PERSIST_SAVE_DELTA()
         ENDWHILE
     ENDIF
 
-    IF NOT needsWrite AND g_menu_language != g_persist_sd_data[PERSIST_WORD_LANG]
+    IF NOT needsWrite AND g_menu_language != g_persist_shadow_language
         needsWrite = TRUE
     ENDIF
 
     IF needsWrite
         PERSIST_SAVE_ALL()
+    ELSE
+        g_persist_dirty = FALSE
     ENDIF
 ENDPROC
 
@@ -678,16 +686,20 @@ FUNC BOOL PERSIST_LOAD_ALL()
     RETURN TRUE
 ENDFUNC
 
-// Clears saved settings on SD card and resets to menu defaults
+// Clears the disk record. Current session settings remain unchanged.
 PROC PERSIST_CLEAR_ALL()
     INT i = 0
     WHILE i < PERSIST_BUFFER_WORDS
         g_persist_sd_data[i] = 0
         i = i + 1
     ENDWHILE
-    MEGASAVE(g_persist_sd_data[0], PERSIST_BUFFER_WORDS)
+    IF NOT MEGASAVE(g_persist_sd_data[0], PERSIST_BUFFER_WORDS)
+        g_persist_failed = g_persist_failed + 1
+        g_persist_status_text = TR("SD Write Failed / Bridge Inactive", "Fallo de escritura SD / Puente inactivo", "SD 写入失败", "SD-Schreibfehler / Bridge inaktiv", "SD 書き込み失敗", "Ошибка записи SD / Мост неактивен", "Falha de escrita SD / Ponte inativa", "Échec écriture SD / Pont inactif")
+        EXIT
+    ENDIF
     g_persist_dirty = FALSE
-    g_persist_shadow_valid = FALSE
+    PERSIST_REFRESH_SHADOW()
     g_persist_written = 0
     g_persist_failed = 0
     g_persist_checksum_ok = -1
@@ -734,8 +746,8 @@ PROC PERSIST_SELF_TEST()
 ENDPROC
 
 // Coalesces rapid changes
-PROC MARK_PERSIST_DIRTY()
-    IF NOT g_persist_enabled EXIT ENDIF
+PROC MARK_PERSIST_DIRTY(BOOL preferenceChange = FALSE)
+    IF NOT g_persist_enabled AND NOT preferenceChange EXIT ENDIF
     IF NOT g_persist_dirty
         g_persist_dirty_since = GET_GAME_TIMER()
     ENDIF
@@ -761,13 +773,11 @@ PROC PERSIST_FLUSH_NOW()
     IF NOT g_persist_enabled EXIT ENDIF
     IF NOT g_persist_dirty EXIT ENDIF
     PERSIST_SAVE_DELTA()
-    g_persist_dirty = FALSE
 ENDPROC
 
 // Immediately saves selected menu language to SD card
 PROC PERSIST_SAVE_LANGUAGE_NOW()
     IF g_persist_enabled
-        g_persist_sd_data[PERSIST_WORD_LANG] = g_menu_language
         PERSIST_SAVE_ALL()
     ENDIF
 ENDPROC
@@ -791,10 +801,7 @@ PROC PROCESS_PERSISTENCE()
         EXIT
     ENDIF
 
-    IF NOT g_persist_enabled
-        EXIT
-    ENDIF
-
+    // Explicit preference writes may need retrying after persistence is disabled.
     IF NOT g_persist_dirty
         EXIT
     ENDIF
@@ -881,11 +888,11 @@ PROC PERSIST_HANDLE_ROW(INT index)
     SWITCH index
         CASE 0
             g_persist_enabled = NOT g_persist_enabled
-            IF g_persist_enabled MARK_PERSIST_DIRTY() ENDIF
+            // Persist the disabled preference as well as the enabled one.
+            PERSIST_SAVE_ALL()
         BREAK
         CASE 1
             PERSIST_SAVE_ALL()
-            g_persist_dirty = FALSE
         BREAK
         CASE 2
             PERSIST_CLEAR_ALL()

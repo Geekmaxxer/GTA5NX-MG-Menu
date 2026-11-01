@@ -1379,7 +1379,7 @@ FUNC TEXT_LABEL_31 NSC_NAME_AT(INT slot)
     WHILE i < 31
         code = g_nsc_catalog_data[offset + i]
         IF code = 0 RETURN name ENDIF
-        IF code < 2 OR code > 40
+        IF code < 1 OR code > 39
             g_nsc_catalog_error = 1
             name = ""
             RETURN name
@@ -1413,7 +1413,7 @@ FUNC BOOL NSC_PREPARE_PAGE()
     g_nsc_catalog_page = -1
     g_nsc_catalog_cached_page = -1
     IF saved RETURN TRUE ENDIF
-    g_nsc_catalog_error = 1
+    g_nsc_catalog_error = 2
     g_nsc_catalog_page = -1
     g_nsc_catalog_cached_page = -1
     RETURN FALSE
@@ -1430,7 +1430,7 @@ FUNC BOOL NSC_COMMIT_COUNT(INT count)
     g_nsc_catalog_page = -1
     g_nsc_catalog_cached_page = -1
     IF NOT SHVNX_SAVE(g_nsc_catalog_root[0], 6, 1599999999)
-        g_nsc_catalog_error = 1
+        g_nsc_catalog_error = 2
         RETURN FALSE
     ENDIF
     g_nsc_catalog_generation = g_nsc_catalog_generation + 1
@@ -1511,6 +1511,9 @@ ENDFUNC
 FUNC BOOL TRY_REGISTER_CUSTOM_NSC(STRING candidateName)
     TEXT_LABEL_31 name = NORMALIZE_NSC_SCRIPT_NAME(candidateName)
     INIT_NSC_CATALOG()
+    // A failed write leaves the committed generation intact and can be retried.
+    // A malformed committed record remains blocked until it is repaired.
+    IF g_nsc_catalog_error = 2 g_nsc_catalog_error = 0 ENDIF
     IF IS_STRING_NULL_OR_EMPTY(name) RETURN FALSE ENDIF
     INT scriptHash = GET_HASH_KEY(name)
     IF IS_STOCK_OR_CORE_NSC_HASH(scriptHash) RETURN FALSE ENDIF
@@ -1547,6 +1550,7 @@ ENDPROC
 // Restores global engine states that a terminated custom .nsc script (such as chaosmod
 // or cardealership) may have modified mid-effect when killed via TERMINATE_THREAD.
 PROC RESTORE_ENGINE_STATE_AFTER_CUSTOM_NSC_UNLOAD()
+    IF GET_MISSION_FLAG() OR IS_CUTSCENE_ACTIVE() OR NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) EXIT ENDIF
     PED_INDEX playerPed = PLAYER_PED_ID()
     VEHICLE_INDEX playerVeh = NULL
     APPLY_TIME_SCALE()
@@ -1585,10 +1589,23 @@ ENDPROC
 
 // The engine iterator is bounded by actual VM threads, independent of the
 // number of saved names. Core and stock scripts remain excluded.
+PROC REQUEST_MENU_AUXILIARY_SHUTDOWN(STRING name)
+    IF NOT ARE_STRINGS_EQUAL(name, "chaosmod") AND NOT ARE_STRINGS_EQUAL(name, "cardealership") EXIT ENDIF
+    IF GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(GET_HASH_KEY(name)) <= 0 EXIT ENDIF
+    FORCE_CLEANUP_FOR_ALL_THREADS_WITH_THIS_NAME(name, FORCE_CLEANUP_FLAG_DEBUG_MENU)
+    // A yielding model request can need more than one turn to return to its
+    // cleanup handler. Bound the grace period before the general stop fallback.
+    INT deadline = GET_GAME_TIMER() + 500
+    WHILE GET_NUMBER_OF_THREADS_RUNNING_THE_SCRIPT_WITH_THIS_HASH(GET_HASH_KEY(name)) > 0 AND GET_GAME_TIMER() < deadline
+        WAIT(0)
+    ENDWHILE
+ENDPROC
+
 PROC TERMINATE_AND_UNLOAD_CUSTOM_NSC_NAME(STRING name)
     IF IS_STRING_NULL_OR_EMPTY(name) EXIT ENDIF
     INT targetHash = GET_HASH_KEY(name)
     IF IS_STOCK_OR_CORE_NSC_HASH(targetHash) EXIT ENDIF
+    REQUEST_MENU_AUXILIARY_SHUTDOWN(name)
     SCRIPT_THREAD_ITERATOR_RESET()
     THREADID thread = SCRIPT_THREAD_ITERATOR_GET_NEXT_THREAD_ID()
     WHILE NATIVE_TO_INT(thread) <> 0
@@ -1603,6 +1620,8 @@ PROC TERMINATE_AND_UNLOAD_CUSTOM_NSC_NAME(STRING name)
 ENDPROC
 
 PROC STOP_ALL_CUSTOM_NSC_SCRIPTS()
+    REQUEST_MENU_AUXILIARY_SHUTDOWN("chaosmod")
+    REQUEST_MENU_AUXILIARY_SHUTDOWN("cardealership")
     IF g_nsc_async_stage <> NSC_STAGE_IDLE SET_SCRIPT_AS_NO_LONGER_NEEDED(g_nsc_async_name) ENDIF
     g_nsc_async_stage = NSC_STAGE_IDLE
     g_nsc_async_slot = -1
@@ -1624,6 +1643,7 @@ ENDPROC
 PROC REMOVE_SAVED_CUSTOM_NSC_AT_SLOT(INT slot)
     IF slot < 0 OR slot >= g_nsc_discovered_count EXIT ENDIF
     IF g_nsc_catalog_generation = 2147483647 EXIT ENDIF
+    IF g_nsc_catalog_error = 2 g_nsc_catalog_error = 0 ENDIF
     TEXT_LABEL_31 removedName = NSC_NAME_AT(slot)
     TEXT_LABEL_31 lastName = NSC_NAME_AT(g_nsc_discovered_count - 1)
     IF IS_STRING_NULL_OR_EMPTY(removedName) OR IS_STRING_NULL_OR_EMPTY(lastName) EXIT ENDIF

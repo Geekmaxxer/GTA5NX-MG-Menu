@@ -49,6 +49,8 @@ VEHICLE_INDEX g_explode_queue[64]
 INT g_explode_queue_count = 0
 INT g_explode_queue_index = 0
 INT g_attacker_weapon_choice = 0
+REL_GROUP_HASH g_attacker_relationship_group = RELGROUPHASH_HATES_PLAYER
+BOOL g_attacker_relationship_ready = FALSE
 BOOL g_attacker_spawn_pending = FALSE
 MODEL_NAMES g_pending_attacker_model = PLAYER_ZERO
 WEAPON_TYPE g_pending_attacker_weapon = WEAPONTYPE_PISTOL
@@ -100,6 +102,7 @@ INT g_vehicle_acceleration_level = 100
 // removed in batch38 with the NPC Vehicle Speed row.
 BOOL g_godmode_tow_hook = FALSE
 VEHICLE_INDEX g_tow_hook_towed = NULL
+VEHICLE_INDEX g_tow_hook_truck = NULL
 INT g_vehicle_grip_level = 100
 BOOL g_vehicle_bulletproof_tyres = FALSE
 // Tracks whether the bulletproof-tyres toggle is currently forcing the tyres
@@ -110,7 +113,7 @@ BOOL g_bulletproof_tyres_applied = FALSE
 BOOL g_vehicle_speedometer = FALSE
 INT g_vehicle_speed_unit = 0
 VEHICLE_INDEX g_speedometer_cached_veh = NULL
-STRING g_speedometer_cached_name = ""
+TEXT_LABEL_63 g_speedometer_cached_name = ""
 BOOL g_lsc_open = FALSE
 VEHICLE_INDEX g_lsc_vehicle
 INT g_lsc_slot_choice = 0
@@ -298,13 +301,15 @@ INT g_ped_choice = 0
 BOOL g_ped_search_not_found = FALSE
 INT g_ped_search_error = 0 // 1: seated; 2: streaming timeout
 BOOL g_ped_search_has_value = FALSE
-STRING g_ped_search_value = ""
+TEXT_LABEL_63 g_ped_search_value = ""
 BOOL g_ped_search_is_custom = FALSE
-STRING g_current_ped_label = "PLAYER_ZERO"
+TEXT_LABEL_63 g_current_ped_label = "PLAYER_ZERO"
 MODEL_NAMES g_current_ped_label_model = PLAYER_ZERO
 INT g_character_slot = 0
-MODEL_NAMES g_franklin_ped = PLAYER_ZERO
-MODEL_NAMES g_michael_ped = PLAYER_ONE
+MODEL_NAMES g_michael_ped = PLAYER_ZERO
+INT g_character_profile_choice = 0
+INT g_pending_character_slot = 0
+MODEL_NAMES g_franklin_ped = PLAYER_ONE
 MODEL_NAMES g_trevor_ped = PLAYER_TWO
 MODEL_NAMES g_pending_ped_model = PLAYER_ZERO
 BOOL g_ped_change_pending = FALSE
@@ -322,10 +327,12 @@ BOOL g_unlimited_ability = FALSE
 FLOAT g_teleport_x = 0.0
 FLOAT g_teleport_y = 0.0
 FLOAT g_teleport_z = 0.0
+BOOL g_teleport_scene_owned = FALSE
+BOOL g_teleport_failed = FALSE
 BOOL g_teleport_pending = FALSE
 VECTOR g_pending_teleport_destination = <<0.0, 0.0, 0.0>>
 INT g_teleport_request_time = 0
-STRING g_vehicle_search_value = ""
+TEXT_LABEL_63 g_vehicle_search_value = ""
 BOOL g_vehicle_search_not_found = FALSE
 BOOL g_vehicle_search_has_value = FALSE
 INT g_time_hour = 12
@@ -333,8 +340,8 @@ INT g_time_minute = 0
 INT g_time_second = 0
 BOOL g_pause_time = FALSE
 INT g_ipl_preset = 0
-STRING g_custom_ipl_name = ""
-STRING g_plate_value = ""
+TEXT_LABEL_63 g_custom_ipl_name = ""
+TEXT_LABEL_15 g_plate_value = ""
 BOOL g_everyone_ignores = FALSE
 BOOL g_low_population = FALSE
 BOOL g_hud_hidden = FALSE
@@ -369,7 +376,7 @@ BOOL g_guard_ped_open = FALSE
 INT g_guard_ped_item = 0
 INT g_guard_ped_scroll = 0
 INT g_guard_ped_choice = 0
-STRING g_guard_ped_name = "PLAYER_ZERO"
+TEXT_LABEL_63 g_guard_ped_name = "PLAYER_ZERO"
 BOOL g_guard_ped_search_not_found = FALSE
 // Set when a bodyguard/attacker ped was typed by name and is not one of the
 // catalog entries.  The spawn path then uses g_*_ped_model directly instead of
@@ -380,7 +387,7 @@ BOOL g_attacker_ped_open = FALSE
 INT g_attacker_ped_item = 0
 INT g_attacker_ped_scroll = 0
 INT g_attacker_ped_choice = 0
-STRING g_attacker_ped_name = "PLAYER_ZERO"
+TEXT_LABEL_63 g_attacker_ped_name = "PLAYER_ZERO"
 BOOL g_attacker_ped_search_not_found = FALSE
 BOOL g_attacker_ped_search_is_custom = FALSE
 MODEL_NAMES g_attacker_ped_model = PLAYER_ZERO
@@ -420,6 +427,12 @@ INT g_vehicle_dirt_level = 0
 BOOL g_vehicle_hazards = FALSE
 INT g_vehicle_hazards_tick = 0
 BOOL g_skip_cutscenes = FALSE
+BOOL g_skip_cutscene_requested = FALSE
+BOOL g_freecam_previous_invisible = FALSE
+BOOL g_freecam_previous_first_person = FALSE
+BOOL g_freecam_previous_noclip = FALSE
+PED_INDEX g_riot_peds[32]
+INT g_riot_ped_count = 0
 BOOL g_vehicle_preview_enabled = TRUE
 VEHICLE_INDEX g_vehicle_preview_vehicle = NULL
 MODEL_NAMES g_vehicle_preview_model = DUMMY_MODEL_FOR_SCRIPT
@@ -518,6 +531,7 @@ INT g_persist_sd_data[1024]
 //     their values, so the next flush has to restore all of them rather than the
 //     one setting that happens to change next.
 BOOL g_persist_shadow_valid = FALSE
+INT g_persist_shadow_language = 0
 INT g_persist_shadow_bool[PERSIST_BOOL_SLOTS]
 INT g_persist_shadow_int[PERSIST_INT_SLOTS]
 // When the current dirty run began.  MARK_PERSIST_DIRTY restarts the quiet window on
@@ -651,7 +665,7 @@ INT g_chauffeur_armed_scroll = 0
 // pre-init placeholder; INIT_MENU_DEFAULTS() rebinds it to the real catalog
 // entry so the label and the spawned model can never disagree.
 INT g_chauffeur_ped_choice = 0
-STRING g_chauffeur_ped_name = "S_M_M_BOUNCER_01"
+TEXT_LABEL_63 g_chauffeur_ped_name = "S_M_M_BOUNCER_01"
 BOOL g_chauffeur_ped_search_not_found = FALSE
 BOOL g_chauffeur_ped_search_is_custom = FALSE
 MODEL_NAMES g_chauffeur_ped_model = S_M_M_BOUNCER_01
@@ -661,6 +675,8 @@ INT g_chauffeur_style = 0
 BOOL g_chauffeur_ignore_lights = FALSE
 BOOL g_chauffeur_god = FALSE
 BOOL g_chauffeur_bulletproof_tyres = TRUE
+BOOL g_chauffeur_waypoint_active = FALSE
+VECTOR g_chauffeur_waypoint = <<0.0, 0.0, 0.0>>
 BOOL g_chauffeur_armed = FALSE
 INT g_chauffeur_weapon_choice = CHAUFFEUR_DEFAULT_WEAPON_CHOICE
 // The live driving-mode flag set, rebuilt whenever the style or the
@@ -867,16 +883,23 @@ INT g_story_ped_picker_item = 0
 INT g_story_ped_picker_scroll = 0
 INT g_story_ped_active_char = 0
 BOOL g_story_ped_search_not_found = FALSE
-STRING g_story_ped_custom_label = "CUSTOM PED"
+TEXT_LABEL_63 g_story_ped_custom_labels[STORY_CHAR_COUNT]
 INT g_story_ped_choice[STORY_CHAR_COUNT]
 MODEL_NAMES g_story_ped_custom_model[STORY_CHAR_COUNT]
 INT g_story_cs_char[STORY_CS_MAX]
 PED_INDEX g_story_cs_ped[STORY_CS_MAX]
 MODEL_NAMES g_story_cs_model[STORY_CS_MAX]
 BOOL g_story_cs_registered[STORY_CS_MAX]
+ENTITY_INDEX g_story_cs_original[STORY_CS_MAX]
+MODEL_NAMES g_story_cs_original_model[STORY_CS_MAX]
+INT g_story_cs_original_alpha[STORY_CS_MAX]
+INT g_story_cs_request_ms[STORY_CS_MAX]
 BOOL g_story_cs_was_active = FALSE
 INT g_story_proxy_char[STORY_PROXY_MAX]
 PED_INDEX g_story_proxy_real[STORY_PROXY_MAX]
+MODEL_NAMES g_story_proxy_real_model[STORY_PROXY_MAX]
+INT g_story_proxy_real_alpha[STORY_PROXY_MAX]
+INT g_story_proxy_request_ms[STORY_PROXY_MAX]
 PED_INDEX g_story_proxy_ped[STORY_PROXY_MAX]
 MODEL_NAMES g_story_proxy_model[STORY_PROXY_MAX]
 INT g_story_proxy_task_ms[STORY_PROXY_MAX]
@@ -894,6 +917,9 @@ BOOL g_hud_hidden_applied = FALSE
 BOOL g_radar_hidden_applied = FALSE
 BOOL g_seatbelt_applied = FALSE
 BOOL g_accel_applied = FALSE
+VEHICLE_INDEX g_accel_vehicle = NULL
+VEHICLE_INDEX g_bulletproof_vehicle = NULL
+BOOL g_bulletproof_original_can_burst = TRUE
 BOOL g_grip_applied = FALSE
 VEHICLE_INDEX g_grip_vehicle = NULL
 BOOL g_was_menu_open = FALSE
@@ -910,6 +936,8 @@ INT g_saved_veh_selected_index = -1
 INT g_saved_vehicles_count = 0
 INT g_saved_veh_feedback = 0
 INT g_saved_veh_feedback_until = 0
+BOOL g_saved_vehicles_dirty = FALSE
+INT g_saved_vehicles_retry_ms = 0
 
 // Track whether spawn was initiated from a saved vehicle
 BOOL g_spawn_is_saved_vehicle = FALSE

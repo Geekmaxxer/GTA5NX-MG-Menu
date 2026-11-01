@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.1 stability revision - 2026-11-01
+
+- Repair saved NSC character decoding, failed-write retry and settings persistence.
+- Own custom text buffers; correct protagonist profiles and restore freecam state.
+- Repair tyre controls, modification ranges, roof state and spawned-object tracking.
+- Protect mission entities and streaming ownership during cleanup and replacement.
+- Add cleanup and mission suspension to optional Chaos/dealership scripts; make delivery charging transactional.
+- Add a portable source regression suite and a combined Switch acceptance checklist.
+- Preserve all features, repository layout and the pinned runtime. Hardware acceptance remains pending.
+
 ## v1.1 - 2026-11-01
 
 - Remove the fixed plugin display cap and use completed-scan status and stable selection identities.

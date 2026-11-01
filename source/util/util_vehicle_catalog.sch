@@ -1738,13 +1738,13 @@ PROC PROCESS_VEHICLE_PREVIEW()
     ENDIF
     previewPosition = GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(PLAYER_PED_ID(), <<0.0, 8.0, 0.5>>)
     previewHeading = GET_ENTITY_HEADING(PLAYER_PED_ID()) + 90.0
-    SET_ENTITY_COORDS(g_vehicle_preview_vehicle, previewPosition, TRUE, TRUE, TRUE, TRUE)
+    SET_ENTITY_COORDS(g_vehicle_preview_vehicle, previewPosition, TRUE, TRUE, TRUE, FALSE)
     SET_ENTITY_HEADING(g_vehicle_preview_vehicle, previewHeading)
 ENDPROC
 
 PROC START_VEHICLE_MODEL_SPAWN(MODEL_NAMES model)
     IF g_vehicle_spawn_pending OR g_convert_pending EXIT ENDIF
-    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) EXIT ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) OR NOT IS_MODEL_A_VEHICLE(model) EXIT ENDIF
     CLEANUP_VEHICLE_PREVIEW()
     g_pending_vehicle_model = model
     g_spawn_remaining = 1
@@ -1865,7 +1865,7 @@ PROC PROCESS_MENU_KEYBOARD()
                 ENDIF
             ELSE
                 MODEL_NAMES customPedModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
-                IF IS_MODEL_IN_CDIMAGE(customPedModel) AND IS_MODEL_VALID(customPedModel)
+                IF IS_MODEL_IN_CDIMAGE(customPedModel) AND IS_MODEL_VALID(customPedModel) AND IS_MODEL_A_PED(customPedModel)
                     g_ped_search_not_found = FALSE
                     g_ped_search_has_value = TRUE
                     g_ped_search_is_custom = TRUE
@@ -1898,7 +1898,7 @@ PROC PROCESS_MENU_KEYBOARD()
                 // hash, so a bodyguard can be any ped in the game rather than
                 // only the 683 browsable ones.
                 MODEL_NAMES customGuardModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
-                IF IS_MODEL_IN_CDIMAGE(customGuardModel) AND IS_MODEL_VALID(customGuardModel)
+                IF IS_MODEL_IN_CDIMAGE(customGuardModel) AND IS_MODEL_VALID(customGuardModel) AND IS_MODEL_A_PED(customGuardModel)
                     g_guard_ped_name = result
                     g_guard_ped_model = customGuardModel
                     g_guard_ped_search_is_custom = TRUE
@@ -1916,7 +1916,7 @@ PROC PROCESS_MENU_KEYBOARD()
                 g_attacker_ped_search_not_found = FALSE
             ELSE
                 MODEL_NAMES customAttackerModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
-                IF IS_MODEL_IN_CDIMAGE(customAttackerModel) AND IS_MODEL_VALID(customAttackerModel)
+                IF IS_MODEL_IN_CDIMAGE(customAttackerModel) AND IS_MODEL_VALID(customAttackerModel) AND IS_MODEL_A_PED(customAttackerModel)
                     g_attacker_ped_name = result
                     g_attacker_ped_model = customAttackerModel
                     g_attacker_ped_search_is_custom = TRUE
@@ -1938,7 +1938,7 @@ PROC PROCESS_MENU_KEYBOARD()
                 // from the catalog still resolves by hash, so any ped in the
                 // game can drive.
                 MODEL_NAMES customChauffeurModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
-                IF IS_MODEL_IN_CDIMAGE(customChauffeurModel) AND IS_MODEL_VALID(customChauffeurModel)
+                IF IS_MODEL_IN_CDIMAGE(customChauffeurModel) AND IS_MODEL_VALID(customChauffeurModel) AND IS_MODEL_A_PED(customChauffeurModel)
                     g_chauffeur_ped_name = result
                     g_chauffeur_ped_model = customChauffeurModel
                     g_chauffeur_ped_search_is_custom = TRUE
@@ -1956,7 +1956,7 @@ PROC PROCESS_MENU_KEYBOARD()
                 g_item = foundChoice + 2
             ELSE
                 MODEL_NAMES customStoryModel = INT_TO_ENUM(MODEL_NAMES, GET_HASH_KEY(result))
-                IF IS_MODEL_IN_CDIMAGE(customStoryModel) AND IS_MODEL_VALID(customStoryModel)
+                IF IS_MODEL_IN_CDIMAGE(customStoryModel) AND IS_MODEL_VALID(customStoryModel) AND IS_MODEL_A_PED(customStoryModel)
                     SET_STORY_CHAR_CUSTOM_MODEL(g_story_ped_active_char, customStoryModel, result)
                     g_story_ped_search_not_found = FALSE
                 ELSE
@@ -2073,6 +2073,16 @@ PROC PRUNE_SPAWNED_VEHICLE_TRACKING()
 ENDPROC
 
 PROC DELETE_ALL_CUSTOM_CARS()
+    IF g_vehicle_spawn_pending OR g_convert_pending
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_vehicle_model)
+        g_vehicle_spawn_pending = FALSE
+        g_convert_pending = FALSE
+        g_convert_pair = -1
+        g_convert_source_vehicle = NULL
+        g_spawn_is_saved_vehicle = FALSE
+        g_active_spawn_count = 0
+        g_spawn_remaining = 0
+    ENDIF
     INT index = 0
     REPEAT g_spawned_custom_vehicle_count index
         IF DOES_ENTITY_EXIST(g_spawned_custom_vehicles[index])
@@ -2170,12 +2180,25 @@ ENDPROC
 
 // Step 1: resolve the pairing and start the model request.  Every rejection
 // happens here, before any entity exists.
+FUNC BOOL IS_TRACKED_CUSTOM_CAR(VEHICLE_INDEX vehicle)
+    INT index = 0
+    WHILE index < g_spawned_custom_vehicle_count
+        IF g_spawned_custom_vehicles[index] = vehicle RETURN TRUE ENDIF
+        index = index + 1
+    ENDWHILE
+    RETURN FALSE
+ENDFUNC
+
 PROC START_VEHICLE_CONVERSION()
     IF g_convert_pending EXIT ENDIF
     IF g_vehicle_spawn_pending EXIT ENDIF
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) EXIT ENDIF
     VEHICLE_INDEX source = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     IF NOT DOES_ENTITY_EXIST(source) EXIT ENDIF
+    IF GET_MISSION_FLAG() OR (IS_ENTITY_A_MISSION_ENTITY(source) AND NOT IS_TRACKED_CUSTOM_CAR(source))
+        SET_CONVERT_FEEDBACK(4)
+        EXIT
+    ENDIF
     INT pair = BENNYS_PAIR_FOR_MODEL(GET_ENTITY_MODEL(source))
     IF pair < 0
         // Either this car has no Benny's variant at all, or it is already one.
@@ -2204,14 +2227,28 @@ PROC FINISH_VEHICLE_CONVERSION()
         EXIT
     ENDIF
     VEHICLE_INDEX source = g_convert_source_vehicle
-    // The player may have stepped out (or the car may be gone) while the model
-    // streamed.  Abandon rather than converting a car nobody is sitting in - the
-    // source is untouched.
     IF NOT DOES_ENTITY_EXIST(source) OR GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()) != source
         CANCEL_VEHICLE_CONVERSION(4)
         EXIT
     ENDIF
-
+    PRUNE_SPAWNED_VEHICLE_TRACKING()
+    IF GET_MISSION_FLAG() OR NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) OR IS_CUTSCENE_ACTIVE() OR g_spawned_custom_vehicle_count >= MAX_TRACKED_CUSTOM_VEHICLES
+        CANCEL_VEHICLE_CONVERSION(4)
+        EXIT
+    ENDIF
+    IF IS_ENTITY_A_MISSION_ENTITY(source) AND NOT IS_TRACKED_CUSTOM_CAR(source)
+        CANCEL_VEHICLE_CONVERSION(4)
+        EXIT
+    ENDIF
+    // Keep companions in their existing vehicle; conversion replaces only an
+    // unoccupied passenger cabin controlled by the player.
+    IF GET_VEHICLE_NUMBER_OF_PASSENGERS(source) > 0 OR GET_PED_IN_VEHICLE_SEAT(source, VS_DRIVER) != PLAYER_PED_ID()
+        CANCEL_VEHICLE_CONVERSION(4)
+        EXIT
+    ENDIF
+    // The player may have stepped out (or the car may be gone) while the model
+    // streamed.  Abandon rather than converting a car nobody is sitting in - the
+    // source is untouched.
     // Offset by 2.5m, exactly like the spawner's single-vehicle case: creating
     // the replacement on top of the original would leave two solid bodies
     // intersecting for a frame, and that interpenetration is what launches cars
@@ -2227,15 +2264,20 @@ PROC FINISH_VEHICLE_CONVERSION()
 
     COPY_LSC_APPEARANCE(source, converted)
     SET_VEHICLE_ON_GROUND_PROPERLY(converted)
+    SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), converted, VS_DRIVER)
+    IF GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()) != converted
+        DELETE_VEHICLE(converted)
+        CANCEL_VEHICLE_CONVERSION(4)
+        EXIT
+    ENDIF
     // Track it the way the spawner does so "Delete All Custom Cars" still cleans
     // it up, and so a later spawn's auto-delete can find it.
-    IF g_spawned_custom_vehicle_count < 500
+    IF g_spawned_custom_vehicle_count < MAX_TRACKED_CUSTOM_VEHICLES
         g_spawned_custom_vehicles[g_spawned_custom_vehicle_count] = converted
         g_spawned_custom_vehicle_count = g_spawned_custom_vehicle_count + 1
     ENDIF
     g_last_spawned_vehicle = converted
 
-    SET_PED_INTO_VEHICLE(PLAYER_PED_ID(), converted, VS_DRIVER)
     SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_vehicle_model)
     g_convert_pending = FALSE
     g_convert_pair = -1
@@ -2741,6 +2783,7 @@ ENDFUNC
 // is the state that used to be reported for every one of these slots.
 FUNC INT INTERIOR_AVAILABLE()
     IF NOT IS_PED_IN_ANY_VEHICLE(PLAYER_PED_ID()) RETURN 0 ENDIF
+    LSC_KIT_FOR_SLOT(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INTERIOR_SLOT())
     RETURN GET_NUM_VEHICLE_MODS(GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID()), INT_TO_ENUM(MOD_TYPE, INTERIOR_SLOT()))
 ENDFUNC
 
@@ -3049,10 +3092,10 @@ ENDPROC
 PROC APPLY_TYRES_CAN_BURST()
     VEHICLE_INDEX vehicle = GET_VEHICLE_PED_IS_IN(PLAYER_PED_ID())
     SET_VEHICLE_TYRES_CAN_BURST(vehicle, g_wheeltyre_can_burst)
-    IF g_wheeltyre_can_burst
-        g_vehicle_bulletproof_tyres = FALSE
-        g_bulletproof_tyres_applied = FALSE
-    ENDIF
+    // An explicit tyre setting replaces the temporary bulletproof override.
+    g_vehicle_bulletproof_tyres = FALSE
+    g_bulletproof_tyres_applied = FALSE
+    g_bulletproof_vehicle = NULL
 ENDPROC
 
 // "Soft Suspension" (Wheels & Tyres) and "Stance Softness" (Hydraulics) write the
@@ -3079,7 +3122,7 @@ PROC SYNC_WHEELTYRE_STATE()
     ENDIF
     // While the bulletproof toggle is ON the main loop is holding the tyres
     // unburstable, so this row must not claim they can burst.
-    IF g_vehicle_bulletproof_tyres g_wheeltyre_can_burst = FALSE ENDIF
+    g_wheeltyre_can_burst = GET_VEHICLE_TYRES_CAN_BURST(vehicle)
     g_wheeltyre_soft_suspension = g_hydro_soft
 ENDPROC
 
@@ -3314,7 +3357,7 @@ PROC APPLY_BENNYS_SPAWN()
     INT index = g_item
     IF index < 0 OR index >= BENNYS_MENU_ROWS EXIT ENDIF
     MODEL_NAMES model = BENNYS_CUSTOM_MODEL(index)
-    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) EXIT ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) OR NOT IS_MODEL_A_VEHICLE(model) EXIT ENDIF
     START_VEHICLE_MODEL_SPAWN(model)
 ENDPROC
 

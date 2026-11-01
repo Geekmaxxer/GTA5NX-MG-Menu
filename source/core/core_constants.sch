@@ -255,7 +255,7 @@ CONST_INT MAX_SAVED_VEHICLES 16
 CONST_INT PERSIST_VEH_WORDS_PER_RECORD 126
 CONST_INT PERSIST_VEH_BUFFER_WORDS 2048
 CONST_INT PERSIST_VEH_MAGIC 1297040712 // 'MVEH' (0x4D564548)
-CONST_INT PERSIST_VEH_VERSION 1
+CONST_INT PERSIST_VEH_VERSION 2
 
 // Custom NSC Loader submenu (Menu Settings tab Row 1, util_nsc_loader.sch).
 // Switch keyboard .nsc filename entry (filtering out the 1,026 stock script_rel.rpf

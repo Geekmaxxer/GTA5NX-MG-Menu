@@ -1709,23 +1709,23 @@ PROC SAVE_ACTIVE_CHARACTER_PED()
     MODEL_NAMES currentModel = GET_ENTITY_MODEL(PLAYER_PED_ID())
     IF currentModel = PLAYER_ZERO
         g_character_slot = 0
-        g_franklin_ped = currentModel
+        g_michael_ped = currentModel
     ELIF currentModel = PLAYER_ONE
         g_character_slot = 1
-        g_michael_ped = currentModel
+        g_franklin_ped = currentModel
     ELIF currentModel = PLAYER_TWO
         g_character_slot = 2
         g_trevor_ped = currentModel
     ELSE
-        IF g_character_slot = 0 g_franklin_ped = currentModel ENDIF
-        IF g_character_slot = 1 g_michael_ped = currentModel ENDIF
+        IF g_character_slot = 0 g_michael_ped = currentModel ENDIF
+        IF g_character_slot = 1 g_franklin_ped = currentModel ENDIF
         IF g_character_slot = 2 g_trevor_ped = currentModel ENDIF
     ENDIF
 ENDPROC
 
 FUNC MODEL_NAMES SAVED_CHARACTER_PED(INT slot)
-    IF slot = 0 RETURN g_franklin_ped ENDIF
-    IF slot = 1 RETURN g_michael_ped ENDIF
+    IF slot = 0 RETURN g_michael_ped ENDIF
+    IF slot = 1 RETURN g_franklin_ped ENDIF
     RETURN g_trevor_ped
 ENDFUNC
 
@@ -1738,7 +1738,7 @@ FUNC INT PED_CHOICE_FOR_MODEL(MODEL_NAMES model)
     RETURN -1
 ENDFUNC
 
-FUNC STRING CURRENT_PED_SEARCH_LABEL()
+FUNC TEXT_LABEL_63 CURRENT_PED_SEARCH_LABEL()
     RETURN g_current_ped_label
 ENDFUNC
 
@@ -1761,6 +1761,7 @@ FUNC STRING CURRENT_VEHICLE_SEARCH_LABEL()
 ENDFUNC
 
 PROC REQUEST_PED_CHANGE(MODEL_NAMES model)
+    IF NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) OR IS_CUTSCENE_ACTIVE() EXIT ENDIF
     // Changing the player model while seated is unsafe on the Switch port;
     // require the same safe on-foot state used by the native character swap.
     // Custom loader fix: a new search overrides a stale pending request so a
@@ -1769,13 +1770,14 @@ PROC REQUEST_PED_CHANGE(MODEL_NAMES model)
         g_ped_search_error = 1
         EXIT
     ENDIF
-    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) EXIT ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) OR NOT IS_MODEL_A_PED(model) EXIT ENDIF
     IF g_ped_change_pending
         IF g_pending_ped_model = model EXIT ENDIF
         SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_ped_model)
         g_ped_change_pending = FALSE
     ENDIF
     REQUEST_MODEL(model)
+    g_pending_character_slot = g_character_slot
     g_ped_search_error = 0
     g_pending_ped_model = model
     g_ped_change_pending = TRUE
@@ -1787,6 +1789,7 @@ PROC FINISH_PED_CHANGE()
     IF HAS_MODEL_LOADED(g_pending_ped_model)
         SET_PLAYER_MODEL(PLAYER_ID(), g_pending_ped_model)
         SET_PED_DEFAULT_COMPONENT_VARIATION(PLAYER_PED_ID())
+        g_character_slot = g_pending_character_slot
         SAVE_ACTIVE_CHARACTER_PED()
         IF g_ped_search_is_custom
             g_current_ped_label = g_ped_search_value
@@ -1865,27 +1868,28 @@ PROC PROCESS_PED_DEATH_RECOVERY()
 ENDPROC
 
 PROC APPLY_CHARACTER_PROFILE(INT slot)
-    g_character_slot = slot
     REQUEST_PED_CHANGE(SAVED_CHARACTER_PED(slot))
+    IF g_ped_change_pending g_pending_character_slot = slot ENDIF
 ENDPROC
 
 PROC ADJUST_PED_SELECTOR(INT direction)
     INT nextSlot = 0
     IF g_item = 3
-        nextSlot = g_character_slot + direction
+        nextSlot = g_character_profile_choice + direction
         IF nextSlot < 0 nextSlot = 2 ENDIF
         IF nextSlot > 2 nextSlot = 0 ENDIF
-        g_character_slot = nextSlot
+        g_character_profile_choice = nextSlot
     ENDIF
 ENDPROC
 
 PROC DRAW_CHARACTER_PROFILE(FLOAT y, BOOL selected)
-    IF g_character_slot = 0 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Franklin >", "< Franklin >", "< 富兰克林 >", "< Franklin >", "< フランクリン >", "< Франклин >", "< Franklin >", "< Franklin >"), selected, 3) ENDIF
-    IF g_character_slot = 1 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Michael >", "< Michael >", "< 麦克 >", "< Michael >", "< マイケル >", "< Майкл >", "< Michael >", "< Michael >"), selected, 3) ENDIF
-    IF g_character_slot = 2 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Trevor >", "< Trevor >", "< 崔佛 >", "< Trevor >", "< トレバー >", "< Тревор >", "< Trevor >", "< Trevor >"), selected, 3) ENDIF
+    IF g_character_profile_choice = 1 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Franklin >", "< Franklin >", "< 富兰克林 >", "< Franklin >", "< フランクリン >", "< Франклин >", "< Franklin >", "< Franklin >"), selected, 3) ENDIF
+    IF g_character_profile_choice = 0 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Michael >", "< Michael >", "< 麦克 >", "< Michael >", "< マイケル >", "< Майкл >", "< Michael >", "< Michael >"), selected, 3) ENDIF
+    IF g_character_profile_choice = 2 DRAW_OPTION(y, TR("Character Profile:", "Perfil de personaje:", "角色档案:", "Charakterprofil:", "キャラクター:", "Профиль персонажа:", "Perfil de personagem:", "Profil de personnage :"), TR("< Trevor >", "< Trevor >", "< 崔佛 >", "< Trevor >", "< トレバー >", "< Тревор >", "< Trevor >", "< Trevor >"), selected, 3) ENDIF
 ENDPROC
 
 PROC DRAW_PED_PAGE()
+    TEXT_LABEL_63 currentPedLabel = CURRENT_PED_SEARCH_LABEL()
     MENU_TEXT(g_menu_x - 0.130, 0.198, 0.270, 255, 255, 255, TR("PED CHANGER", "CAMBIADOR DE PED", "人物模型更换", "PED-WECHSLER", "PEDチェンジャー", "СМЕНА МОДЕЛИ PED", "TROCADOR DE PED", "CHANGEUR DE PED"))
     DRAW_MENU_VERSION_TAG()
     INT index = g_scroll
@@ -1906,7 +1910,7 @@ PROC DRAW_PED_PAGE()
             ELIF g_ped_search_has_value
                 DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), g_ped_search_value, g_item = index, 1)
             ELSE
-                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), CURRENT_PED_SEARCH_LABEL(), g_item = index, 2)
+                DRAW_OPTION(y, TR("PED Search", "Buscar PED", "搜索人物模型", "PED-Suche", "PED検索", "Поиск PED", "Buscar PED", "Recherche PED"), currentPedLabel, g_item = index, 2)
             ENDIF
         ELIF index = 2
             DRAW_OPTION(y, TR("Random PED", "PED aleatorio", "随机人物模型", "Zufälliger PED", "ランダムPED", "Случайный PED", "PED aleatório", "PED aléatoire"), "APPLY", g_item = index, 2)

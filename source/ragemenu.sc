@@ -76,24 +76,34 @@ SCRIPT
             ENDIF
         ENDIF
         // Smooth 30 FPS Frame Optimization: Cache player identity, coords, vehicle, and death state once per frame.
-        g_cached_player_ped = PLAYER_PED_ID()
-        g_cached_player_id = PLAYER_ID()
-        IF DOES_ENTITY_EXIST(g_cached_player_ped)
-            g_cached_player_dead = IS_ENTITY_DEAD(g_cached_player_ped)
-            g_cached_player_coords = GET_ENTITY_COORDS(g_cached_player_ped)
-            g_cached_player_in_veh = IS_PED_IN_ANY_VEHICLE(g_cached_player_ped)
-            IF g_cached_player_in_veh
-                g_cached_player_veh = GET_VEHICLE_PED_IS_IN(g_cached_player_ped, FALSE)
-            ELSE
-                g_cached_player_veh = NULL
+        CACHE_CURRENT_PLAYER()
+        IF g_cached_player_dead OR NOT IS_PLAYER_CONTROL_ON(g_cached_player_id) OR IS_CUTSCENE_ACTIVE()
+            IF g_vehicle_spawn_pending
+                SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_vehicle_model)
+                g_vehicle_spawn_pending = FALSE
+                g_spawn_is_saved_vehicle = FALSE
+                g_active_spawn_count = 0
+                g_spawn_remaining = 0
             ENDIF
-        ELSE
-            g_cached_player_dead = TRUE
-            g_cached_player_coords = <<0.0, 0.0, 0.0>>
-            g_cached_player_in_veh = FALSE
-            g_cached_player_veh = NULL
+            IF g_convert_pending CANCEL_VEHICLE_CONVERSION(4) ENDIF
+            IF g_bodyguard_spawn_pending
+                SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_bodyguard_model)
+                g_bodyguard_spawn_pending = FALSE
+            ENDIF
+            IF g_attacker_spawn_pending
+                SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_attacker_model)
+                g_attacker_spawn_pending = FALSE
+            ENDIF
+            IF g_stripper_spawn_pending
+                SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_stripper_model)
+                g_stripper_spawn_pending = FALSE
+            ENDIF
+            IF g_spooner_spawn_pending
+                SET_MODEL_AS_NO_LONGER_NEEDED(g_spooner_pending_model)
+                g_spooner_pending_model = DUMMY_MODEL_FOR_SCRIPT
+                g_spooner_spawn_pending = FALSE
+            ENDIF
         ENDIF
-        g_player_in_vehicle = g_cached_player_in_veh
         g_frame_phase = (g_frame_phase + 1) % 4
 
         IF MENU_COMBO_OPEN_PRESSED()
@@ -226,7 +236,7 @@ SCRIPT
                 PROCESS_STRIPPER_SPAWN()
                 PROCESS_AUTO_OBJECTIVE_TELEPORT()
                 IF g_ped_change_pending
-                    IF g_cached_player_in_veh OR g_cached_player_dead OR IS_PED_INJURED(g_cached_player_ped)
+                    IF g_cached_player_in_veh OR g_cached_player_dead OR IS_PED_INJURED(g_cached_player_ped) OR NOT IS_PLAYER_CONTROL_ON(g_cached_player_id) OR IS_CUTSCENE_ACTIVE()
                         SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_ped_model)
                         g_ped_change_pending = FALSE
                     ELSE
@@ -290,6 +300,8 @@ SCRIPT
                 PROCESS_SKIP_CUTSCENES()
                 BREAK
         ENDSWITCH
+
+            IF g_cached_player_ped != PLAYER_PED_ID() CACHE_CURRENT_PLAYER() ENDIF
 
         IF NOT g_respawn_at_death
             g_respawn_pending = FALSE
@@ -416,13 +428,34 @@ SCRIPT
         g_was_in_vehicle = g_player_in_vehicle
         IF NOT g_player_in_vehicle
             g_vehicle_always_max_applied_vehicle = NULL
-            IF g_accel_applied g_accel_applied = FALSE ENDIF
+        IF g_accel_applied AND DOES_ENTITY_EXIST(g_accel_vehicle) AND NOT g_chaos_mod_running
+            SET_VEHICLE_CHEAT_POWER_INCREASE(g_accel_vehicle, 1.0)
+        ENDIF
+        g_accel_applied = FALSE
+        g_accel_vehicle = NULL
             PROCESS_VEHICLE_GRIP(NULL)
-            IF g_bulletproof_tyres_applied g_bulletproof_tyres_applied = FALSE ENDIF
+        IF g_bulletproof_tyres_applied AND DOES_ENTITY_EXIST(g_bulletproof_vehicle)
+            SET_VEHICLE_TYRES_CAN_BURST(g_bulletproof_vehicle, g_bulletproof_original_can_burst)
+        ENDIF
+        g_bulletproof_tyres_applied = FALSE
         ENDIF
         IF g_player_in_vehicle AND DOES_ENTITY_EXIST(g_cached_player_veh) AND NOT IS_ENTITY_DEAD(g_cached_player_veh)
             VEHICLE_INDEX currentVehicle = g_cached_player_veh
             FLOAT currentVehicleSpeed = GET_ENTITY_SPEED(currentVehicle)
+        IF g_accel_vehicle != currentVehicle
+            IF g_accel_applied AND DOES_ENTITY_EXIST(g_accel_vehicle) AND NOT g_chaos_mod_running
+                SET_VEHICLE_CHEAT_POWER_INCREASE(g_accel_vehicle, 1.0)
+            ENDIF
+            g_accel_applied = FALSE
+            g_accel_vehicle = currentVehicle
+        ENDIF
+        IF g_bulletproof_tyres_applied AND g_bulletproof_vehicle != currentVehicle
+            IF DOES_ENTITY_EXIST(g_bulletproof_vehicle)
+                SET_VEHICLE_TYRES_CAN_BURST(g_bulletproof_vehicle, g_bulletproof_original_can_burst)
+            ENDIF
+            g_bulletproof_tyres_applied = FALSE
+        ENDIF
+        PROCESS_VEHICLE_GRIP(currentVehicle)
             IF g_vehicle_auto_repair
                 IF GET_ENTITY_HEALTH(currentVehicle) < 1000 OR GET_VEHICLE_ENGINE_HEALTH(currentVehicle) < 1000.0 OR GET_VEHICLE_BODY_HEALTH(currentVehicle) < 1000.0 OR GET_VEHICLE_PETROL_TANK_HEALTH(currentVehicle) < 1000.0
                     SET_VEHICLE_FIXED(currentVehicle)
@@ -445,8 +478,6 @@ SCRIPT
                 IF g_vehicle_acceleration_level != 100
                     SET_TRAIN_SPEED(currentVehicle, TRAIN_ACCELERATION_SPEED(g_vehicle_acceleration_level))
                     SET_TRAIN_CRUISE_SPEED(currentVehicle, TRAIN_ACCELERATION_SPEED(g_vehicle_acceleration_level))
-                ELSE
-                    SET_TRAIN_CRUISE_SPEED(currentVehicle, 15.0)
                 ENDIF
             ELSE
                 // This only affects torque. Do not use SET_VEHICLE_MAX_SPEED or
@@ -456,26 +487,34 @@ SCRIPT
                 // adding torque before that boundary; otherwise the engine snaps
                 // the vehicle velocity back to zero. Normal vehicle physics remain
                 // active, and the selected multiplier resumes when speed drops.
-                IF g_vehicle_acceleration_level != 100 AND currentVehicleSpeed < 72.0
+            IF g_vehicle_acceleration_level != 100 AND currentVehicleSpeed < 72.0 AND GET_PED_IN_VEHICLE_SEAT(currentVehicle, VS_DRIVER) = g_cached_player_ped AND NOT g_chaos_mod_running
                     SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, TO_FLOAT(g_vehicle_acceleration_level) / 100.0)
                     g_accel_applied = TRUE
                 ELIF g_accel_applied AND NOT g_chaos_mod_running
                     SET_VEHICLE_CHEAT_POWER_INCREASE(currentVehicle, 1.0)
                     g_accel_applied = FALSE
                 ENDIF
-                PROCESS_VEHICLE_GRIP(currentVehicle)
                 // Force the tyres unburstable only while this toggle is ON, and
                 // restore bursting once on the falling edge.  The old ELSE wrote
                 // TRUE every single frame, which silently undid the Wheels & Tyres
                 // "Tyres Can Burst" row one frame after the player set it.
                 IF g_vehicle_bulletproof_tyres
+                IF NOT g_bulletproof_tyres_applied OR g_bulletproof_vehicle != currentVehicle
+                    IF g_bulletproof_tyres_applied AND DOES_ENTITY_EXIST(g_bulletproof_vehicle)
+                        SET_VEHICLE_TYRES_CAN_BURST(g_bulletproof_vehicle, g_bulletproof_original_can_burst)
+                    ENDIF
+                    g_bulletproof_vehicle = currentVehicle
+                    g_bulletproof_original_can_burst = GET_VEHICLE_TYRES_CAN_BURST(currentVehicle)
+                ENDIF
                     SET_VEHICLE_TYRES_CAN_BURST(currentVehicle, FALSE)
                     g_bulletproof_tyres_applied = TRUE
                 ELIF g_bulletproof_tyres_applied
-                    SET_VEHICLE_TYRES_CAN_BURST(currentVehicle, TRUE)
+                IF DOES_ENTITY_EXIST(g_bulletproof_vehicle)
+                    SET_VEHICLE_TYRES_CAN_BURST(g_bulletproof_vehicle, g_bulletproof_original_can_burst)
+                ENDIF
                     g_bulletproof_tyres_applied = FALSE
                     // Keep the Wheels & Tyres row in agreement with the car.
-                    g_wheeltyre_can_burst = TRUE
+                g_wheeltyre_can_burst = g_bulletproof_original_can_burst
                 ENDIF
             ENDIF
         ENDIF
@@ -492,6 +531,7 @@ SCRIPT
         // burst is timed separately inside the proc (g_prof_worst_burst).
         g_prof_t1 = GET_GAME_TIMER()
         PROCESS_PERSISTENCE()
+        PROCESS_SAVED_VEHICLE_STORAGE()
         g_prof_t1 = GET_GAME_TIMER() - g_prof_t1
         IF g_prof_t1 > g_prof_worst_persist
             g_prof_worst_persist = g_prof_t1
@@ -572,6 +612,7 @@ SCRIPT
             DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_CELLPHONE_UP)
             IF g_keyboard_active
                 PROCESS_MENU_KEYBOARD()
+            IF NOT g_keyboard_active MARK_PERSIST_DIRTY() ENDIF
             ELSE
             MENU_CAPTURE_INPUT()
             DISABLE_CONTROL_ACTION(FRONTEND_CONTROL, INPUT_FRONTEND_DOWN, TRUE)
@@ -594,6 +635,7 @@ SCRIPT
                         // row's one-shot native calls. Timed separately so a slow row
                         // can be pinned down by tab and index alone.
                         g_prof_t1 = GET_GAME_TIMER()
+                        MARK_PERSIST_DIRTY()
                         APPLY_SELECTED()
                         g_prof_t1 = GET_GAME_TIMER() - g_prof_t1
                         IF g_prof_t1 > g_prof_worst_apply
@@ -607,9 +649,6 @@ SCRIPT
                         // teleport marks dirty too), which costs one redundant
                         // write-through of values that did not change and cannot miss
                         // a real change - the right trade for a persistence layer.
-                        IF NOT g_keyboard_active
-                            MARK_PERSIST_DIRTY()
-                        ENDIF
                     ENDIF
                     g_menu_nav_dirty = TRUE
                     g_description_dirty = TRUE

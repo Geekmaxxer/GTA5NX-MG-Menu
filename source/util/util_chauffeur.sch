@@ -154,10 +154,13 @@ PROC ISSUE_CHAUFFEUR_DRIVE_TASK()
     // drive; if the player took the wheel or the driver bailed out, stay out
     // of the way instead of fighting the game for control.
     IF GET_PED_IN_VEHICLE_SEAT(g_chauffeur_vehicle, VS_DRIVER) != g_chauffeur_driver EXIT ENDIF
+    g_chauffeur_waypoint_active = FALSE
     IF IS_WAYPOINT_ACTIVE()
         BLIP_INDEX waypointBlip = GET_FIRST_BLIP_INFO_ID(GET_WAYPOINT_BLIP_ENUM_ID())
-        IF waypointBlip != NULL
+        IF DOES_BLIP_EXIST(waypointBlip)
             VECTOR waypointPosition = GET_BLIP_COORDS(waypointBlip)
+            g_chauffeur_waypoint_active = TRUE
+            g_chauffeur_waypoint = waypointPosition
             TASK_VEHICLE_DRIVE_TO_COORD(g_chauffeur_driver, g_chauffeur_vehicle, waypointPosition, CHAUFFEUR_CRUISE_SPEED(), DRIVINGSTYLE_NORMAL, GET_ENTITY_MODEL(g_chauffeur_vehicle), g_chauffeur_driving_mode, CHAUFFEUR_TARGET_RADIUS, CHAUFFEUR_TARGET_RADIUS)
             EXIT
         ENDIF
@@ -209,11 +212,13 @@ PROC PROCESS_CHAUFFEUR_ARMED()
     VECTOR centre = GET_ENTITY_COORDS(g_chauffeur_vehicle)
     IF GET_CLOSEST_PED(centre, CHAUFFEUR_ARMED_RANGE, TRUE, TRUE, target)
         IF target != NULL
-            IF target = g_chauffeur_armed_target EXIT ENDIF
             IF target = PLAYER_PED_ID() OR IS_PED_A_PLAYER(target) EXIT ENDIF
             IF IS_PED_IN_GROUP(target) OR GET_PED_RELATIONSHIP_GROUP_HASH(target) = RELGROUPHASH_PLAYER EXIT ENDIF
             IF IS_PED_INJURED(target) EXIT ENDIF
+            IF IS_ENTITY_A_MISSION_ENTITY(target) EXIT ENDIF
             IF IS_PED_IN_VEHICLE(target, g_chauffeur_vehicle) EXIT ENDIF
+            IF NOT IS_PED_IN_COMBAT(target, PLAYER_PED_ID()) AND NOT IS_PED_IN_COMBAT(target, g_chauffeur_driver) EXIT ENDIF
+            IF target = g_chauffeur_armed_target EXIT ENDIF
             g_chauffeur_armed_target = target
             TASK_VEHICLE_SHOOT_AT_PED(g_chauffeur_driver, target)
         ENDIF
@@ -229,6 +234,12 @@ ENDPROC
 // alive.  DELETE_PED / DELETE_VEHICLE clear the handle themselves, but the
 // globals are nulled anyway so no stale index can survive into a later frame.
 PROC CLEAR_CHAUFFEUR()
+    IF g_chauffeur_spawn_pending
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_chauffeur_ped_model)
+        SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_chauffeur_vehicle_model)
+        g_chauffeur_spawn_pending = FALSE
+    ENDIF
+    g_chauffeur_waypoint_active = FALSE
     IF DOES_ENTITY_EXIST(g_chauffeur_driver)
         IF NOT IS_ENTITY_DEAD(g_chauffeur_driver)
             // Hand the task back before deletion, otherwise the engine keeps a
@@ -259,9 +270,8 @@ PROC START_CHAUFFEUR_SPAWN()
     // Same validation as the bodyguard/attacker spawn: a DLC model that is not
     // streamed on this install is a clean no-op rather than a request that can
     // only time out.
-    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_chauffeur_ped_model) OR NOT IS_MODEL_VALID(g_pending_chauffeur_ped_model) EXIT ENDIF
+    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_chauffeur_ped_model) OR NOT IS_MODEL_VALID(g_pending_chauffeur_ped_model) OR NOT IS_MODEL_A_PED(g_pending_chauffeur_ped_model) EXIT ENDIF
     IF NOT IS_MODEL_IN_CDIMAGE(g_pending_chauffeur_vehicle_model) OR NOT IS_MODEL_VALID(g_pending_chauffeur_vehicle_model) EXIT ENDIF
-    CLEAR_CHAUFFEUR()
     REFRESH_CHAUFFEUR_DRIVING_MODE()
     REQUEST_MODEL(g_pending_chauffeur_ped_model)
     REQUEST_MODEL(g_pending_chauffeur_vehicle_model)
@@ -311,6 +321,10 @@ PROC FINISH_CHAUFFEUR_SPAWN()
     SET_PED_COMBAT_ABILITY(driver, CAL_PROFESSIONAL)
     SET_PED_CAN_BE_DRAGGED_OUT(driver, FALSE)
     SET_ENTITY_INVINCIBLE(driver, g_chauffeur_god)
+    // A replacement is committed only after both new entities exist. Preserve
+    // the loaded-model references until this transaction has finished.
+    g_chauffeur_spawn_pending = FALSE
+    CLEAR_CHAUFFEUR()
     g_chauffeur_driver = driver
     g_chauffeur_vehicle = car
     // The whole point of the feature: the player rides, the driver drives.
@@ -330,6 +344,12 @@ ENDPROC
 // ---------------------------------------------------------------------------
 PROC PROCESS_CHAUFFEUR()
     IF g_chauffeur_spawn_pending
+        IF NOT DOES_ENTITY_EXIST(PLAYER_PED_ID()) OR IS_ENTITY_DEAD(PLAYER_PED_ID()) OR NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) OR IS_CUTSCENE_ACTIVE()
+            SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_chauffeur_ped_model)
+            SET_MODEL_AS_NO_LONGER_NEEDED(g_pending_chauffeur_vehicle_model)
+            g_chauffeur_spawn_pending = FALSE
+            EXIT
+        ENDIF
         IF HAS_MODEL_LOADED(g_pending_chauffeur_ped_model) AND HAS_MODEL_LOADED(g_pending_chauffeur_vehicle_model)
             FINISH_CHAUFFEUR_SPAWN()
         ELIF GET_GAME_TIMER() > g_chauffeur_request_time + CHAUFFEUR_REQUEST_TIMEOUT_MS
@@ -350,6 +370,14 @@ PROC PROCESS_CHAUFFEUR()
         g_chauffeur_tick = GET_GAME_TIMER() + CHAUFFEUR_TICK_MS
         APPLY_CHAUFFEUR_EXTRAS()
         PROCESS_CHAUFFEUR_ARMED()
+        IF IS_WAYPOINT_ACTIVE() AND g_chauffeur_waypoint_active
+            BLIP_INDEX currentWaypoint = GET_FIRST_BLIP_INFO_ID(GET_WAYPOINT_BLIP_ENUM_ID())
+            IF DOES_BLIP_EXIST(currentWaypoint)
+                IF GET_DISTANCE_BETWEEN_COORDS(GET_BLIP_COORDS(currentWaypoint), g_chauffeur_waypoint, TRUE) > 5.0
+                    ISSUE_CHAUFFEUR_DRIVE_TASK()
+                ENDIF
+            ENDIF
+        ENDIF
         // Re-issue the drive task when the driver has none, or when waypoint state
         // changed while cruising/driving.
         IF (IS_WAYPOINT_ACTIVE() AND NOT CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_TO_COORD)) OR (NOT IS_WAYPOINT_ACTIVE() AND CHAUFFEUR_DRIVER_HAS_TASK(SCRIPT_TASK_VEHICLE_DRIVE_TO_COORD))

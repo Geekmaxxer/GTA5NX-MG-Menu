@@ -810,9 +810,12 @@ FUNC BOOL ACQUIRE_SPECIAL_GUN_TARGET_ENTITY(ENTITY_INDEX &outEntity)
     ENDIF
 
     IF DOES_ENTITY_EXIST(outEntity)
+        IF IS_ENTITY_A_MISSION_ENTITY(outEntity) outEntity = NULL ENDIF
+    ENDIF
+    IF DOES_ENTITY_EXIST(outEntity)
         IF IS_ENTITY_A_PED(outEntity)
             hitPed = GET_PED_INDEX_FROM_ENTITY_INDEX(outEntity)
-            IF hitPed = playerPed OR hitPed = g_chauffeur_driver
+            IF IS_MENU_MANAGED_PED(hitPed) OR IS_PED_A_PLAYER(hitPed) OR IS_PED_IN_GROUP(hitPed)
                 outEntity = NULL
             ELIF IS_PED_IN_ANY_VEHICLE(hitPed)
                 outEntity = GET_VEHICLE_PED_IS_IN(hitPed)
@@ -830,7 +833,7 @@ FUNC BOOL ACQUIRE_SPECIAL_GUN_TARGET_ENTITY(ENTITY_INDEX &outEntity)
                 outEntity = NULL
             ENDIF
         ENDIF
-        IF DOES_ENTITY_EXIST(outEntity)
+        IF DOES_ENTITY_EXIST(outEntity) AND NOT IS_ENTITY_A_MISSION_ENTITY(outEntity)
             RETURN TRUE
         ENDIF
     ENDIF
@@ -838,12 +841,12 @@ FUNC BOOL ACQUIRE_SPECIAL_GUN_TARGET_ENTITY(ENTITY_INDEX &outEntity)
     WHILE probeStep <= 3
         probePos = camPos + (camFwd * (TO_FLOAT(probeStep) * 6.0))
         nearVeh = GET_CLOSEST_VEHICLE(probePos, 4.5, ADDER, 70)
-        IF DOES_ENTITY_EXIST(nearVeh) AND nearVeh != playerVeh AND nearVeh != g_vehicle_preview_vehicle AND nearVeh != g_chauffeur_vehicle
+        IF DOES_ENTITY_EXIST(nearVeh) AND NOT IS_ENTITY_A_MISSION_ENTITY(nearVeh) AND nearVeh != playerVeh AND nearVeh != g_vehicle_preview_vehicle AND nearVeh != g_chauffeur_vehicle
             outEntity = nearVeh
             RETURN TRUE
         ENDIF
         IF GET_CLOSEST_PED(probePos, 3.5, TRUE, TRUE, nearPed)
-            IF DOES_ENTITY_EXIST(nearPed) AND nearPed != playerPed AND nearPed != g_chauffeur_driver
+            IF DOES_ENTITY_EXIST(nearPed) AND NOT IS_ENTITY_A_MISSION_ENTITY(nearPed) AND NOT IS_MENU_MANAGED_PED(nearPed) AND NOT IS_PED_A_PLAYER(nearPed) AND NOT IS_PED_IN_GROUP(nearPed)
                 outEntity = nearPed
                 RETURN TRUE
             ENDIF
@@ -956,7 +959,7 @@ PROC PROCESS_GRAVITY_GUN()
         ENDIF
     ENDIF
 
-    IF NOT g_gravity_gun_holding OR NOT DOES_ENTITY_EXIST(g_gravity_gun_entity)
+    IF NOT g_gravity_gun_holding OR NOT DOES_ENTITY_EXIST(g_gravity_gun_entity) OR IS_ENTITY_A_MISSION_ENTITY(g_gravity_gun_entity)
         RELEASE_GRAVITY_GUN_ENTITY()
         EXIT
     ENDIF
@@ -1008,6 +1011,15 @@ PROC PROCESS_SPECIAL_GUN()
     VECTOR strikePos = <<0.0, 0.0, 0.0>>
     VECTOR pushVel = <<0.0, 0.0, 0.0>>
     INT cleanIdx = 0
+    IF NOT DOES_ENTITY_EXIST(playerPed) OR IS_ENTITY_DEAD(playerPed) OR g_special_gun_mode = 0 OR NOT IS_PLAYER_CONTROL_ON(PLAYER_ID()) OR IS_CUTSCENE_ACTIVE()
+        g_airstrike_bursts_left = 0
+        IF g_special_gun_spawn_pending
+            SET_MODEL_AS_NO_LONGER_NEEDED(g_special_gun_spawn_model)
+            g_special_gun_spawn_pending = FALSE
+        ENDIF
+        RELEASE_GRAVITY_GUN_ENTITY()
+        IF g_special_gun_mode != 0 EXIT ENDIF
+    ENDIF
 
     // Drain any active airstrike barrage even if the player stops shooting.
     IF g_airstrike_bursts_left > 0 AND GET_GAME_TIMER() >= g_airstrike_next_ms
@@ -1127,12 +1139,12 @@ PROC PROCESS_SPECIAL_GUN()
             ENDIF
             IF GET_PED_LAST_WEAPON_IMPACT_COORD(playerPed, impactPos)
                 targetVeh = GET_CLOSEST_VEHICLE(impactPos, 8.0, ADDER, 70)
-                IF DOES_ENTITY_EXIST(targetVeh) AND targetVeh != g_vehicle_preview_vehicle AND targetVeh != g_chauffeur_vehicle AND ( NOT IS_PED_IN_ANY_VEHICLE(playerPed) OR targetVeh != GET_VEHICLE_PED_IS_IN(playerPed) )
+                IF DOES_ENTITY_EXIST(targetVeh) AND NOT IS_ENTITY_A_MISSION_ENTITY(targetVeh) AND targetVeh != g_vehicle_preview_vehicle AND targetVeh != g_chauffeur_vehicle AND ( NOT IS_PED_IN_ANY_VEHICLE(playerPed) OR targetVeh != GET_VEHICLE_PED_IS_IN(playerPed) )
                     SET_ENTITY_VELOCITY(targetVeh, pushVel)
                     APPLY_FORCE_TO_ENTITY_CENTER_OF_MASS(targetVeh, APPLY_TYPE_EXTERNAL_IMPULSE, pushVel, 0, FALSE, TRUE)
                 ENDIF
                 IF GET_CLOSEST_PED(impactPos, 8.0, TRUE, TRUE, targetPed)
-                    IF DOES_ENTITY_EXIST(targetPed) AND targetPed != playerPed AND targetPed != g_chauffeur_driver
+                    IF DOES_ENTITY_EXIST(targetPed) AND NOT IS_ENTITY_A_MISSION_ENTITY(targetPed) AND NOT IS_MENU_MANAGED_PED(targetPed) AND NOT IS_PED_A_PLAYER(targetPed) AND NOT IS_PED_IN_GROUP(targetPed)
                         SET_PED_TO_RAGDOLL(targetPed, 4000, 4000, TASK_NM_SCRIPT, TRUE, TRUE, FALSE)
                         SET_ENTITY_VELOCITY(targetPed, pushVel)
                     ENDIF

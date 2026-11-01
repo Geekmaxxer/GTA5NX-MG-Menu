@@ -305,7 +305,7 @@ PROC START_SELECTED_VEHICLE_SPAWN()
     g_spawn_warp_index = -1
     IF g_spawn_teleport_into_vehicle g_spawn_warp_index = 0 ENDIF
     g_spawn_heading = GET_ENTITY_HEADING(PLAYER_PED_ID())
-    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_vehicle_model) OR NOT IS_MODEL_VALID(g_pending_vehicle_model)
+    IF NOT IS_MODEL_IN_CDIMAGE(g_pending_vehicle_model) OR NOT IS_MODEL_VALID(g_pending_vehicle_model) OR NOT IS_MODEL_A_VEHICLE(g_pending_vehicle_model)
         EXIT
     ENDIF
     REQUEST_MODEL(g_pending_vehicle_model)
@@ -352,6 +352,9 @@ PROC FINISH_SELECTED_VEHICLE_SPAWN()
     FLOAT spawnHeading = g_spawn_heading + (TO_FLOAT(g_spawn_facing) * 90.0)
     spawnedVehicle = CREATE_VEHICLE(g_pending_vehicle_model, spawnPosition, spawnHeading, FALSE)
     IF DOES_ENTITY_EXIST(spawnedVehicle)
+        IF g_delete_previous_spawned_vehicle AND g_spawn_index = 0
+            DELETE_PREVIOUS_CUSTOM_CAR()
+        ENDIF
         SET_VEHICLE_ON_GROUND_PROPERLY(spawnedVehicle)
         IF g_spawn_is_saved_vehicle
             APPLY_SAVED_VEHICLE_CONFIG(spawnedVehicle, g_spawn_saved_vehicle_index)
@@ -472,20 +475,20 @@ PROC PROCESS_MENU_DIRECTION_INPUT()
 
     IF NOT g_home AND IS_SELECTOR_ACTIVE()
         IF IS_DISABLED_CONTROL_JUST_PRESSED(PLAYER_CONTROL, INPUT_FRONTEND_LEFT)
-            ADJUST_SELECTOR(-1) MARK_PERSIST_DIRTY()
+            ADJUST_SELECTOR(-1) MARK_PERSIST_DIRTY(g_tab = 7 AND g_persist_open AND g_item = 0)
             MENU_PLAY_SOUND("NAV_LEFT_RIGHT")
             g_next_left_repeat = now + 280
         ELIF IS_DISABLED_CONTROL_PRESSED(PLAYER_CONTROL, INPUT_FRONTEND_LEFT) AND now >= g_next_left_repeat
-            ADJUST_SELECTOR(-1) MARK_PERSIST_DIRTY()
+            ADJUST_SELECTOR(-1) MARK_PERSIST_DIRTY(g_tab = 7 AND g_persist_open AND g_item = 0)
             MENU_PLAY_SOUND("NAV_LEFT_RIGHT")
             g_next_left_repeat = now + 70
         ENDIF
         IF IS_DISABLED_CONTROL_JUST_PRESSED(PLAYER_CONTROL, INPUT_FRONTEND_RIGHT)
-            ADJUST_SELECTOR(1) MARK_PERSIST_DIRTY()
+            ADJUST_SELECTOR(1) MARK_PERSIST_DIRTY(g_tab = 7 AND g_persist_open AND g_item = 0)
             MENU_PLAY_SOUND("NAV_LEFT_RIGHT")
             g_next_right_repeat = now + 280
         ELIF IS_DISABLED_CONTROL_PRESSED(PLAYER_CONTROL, INPUT_FRONTEND_RIGHT) AND now >= g_next_right_repeat
-            ADJUST_SELECTOR(1) MARK_PERSIST_DIRTY()
+            ADJUST_SELECTOR(1) MARK_PERSIST_DIRTY(g_tab = 7 AND g_persist_open AND g_item = 0)
             MENU_PLAY_SOUND("NAV_LEFT_RIGHT")
             g_next_right_repeat = now + 70
         ENDIF
@@ -628,7 +631,7 @@ PROC APPLY_SELECTED()
             APPLY_RANDOM_PED()
         ELIF g_item = 3
             SAVE_ACTIVE_CHARACTER_PED()
-            APPLY_CHARACTER_PROFILE(g_character_slot)
+                APPLY_CHARACTER_PROFILE(g_character_profile_choice)
         ELIF g_item > 3
             SAVE_ACTIVE_CHARACTER_PED()
             g_ped_choice = g_item - 4
@@ -885,7 +888,10 @@ PROC APPLY_SELECTED()
                 CASE 3
                     g_invisible = NOT g_invisible
                     SET_ENTITY_VISIBLE(playerPed, NOT g_invisible)
-                    IF NOT g_invisible g_player_freecam = FALSE ENDIF
+                    IF NOT g_invisible
+                        g_freecam_previous_invisible = FALSE
+                        SET_PLAYER_FREECAM_ENABLED(FALSE)
+                    ENDIF
                 BREAK
                 CASE 4
                     g_page_item[0] = g_item
@@ -1231,9 +1237,18 @@ PROC APPLY_SELECTED()
                 SWITCH g_item
                     CASE 3 APPLY_WHEEL_FAMILY() BREAK
                     CASE 4 APPLY_WHEEL_VARIATION() BREAK
-                    CASE 7 APPLY_WHEEL_TYRE_SMOKE() BREAK
-                    CASE 8 APPLY_TYRES_CAN_BURST() BREAK
-                    CASE 9 APPLY_SOFT_SUSPENSION() BREAK
+                    CASE 7
+                        g_wheeltyre_smoke = NOT g_wheeltyre_smoke
+                        APPLY_WHEEL_TYRE_SMOKE()
+                    BREAK
+                    CASE 8
+                        g_wheeltyre_can_burst = NOT g_wheeltyre_can_burst
+                        APPLY_TYRES_CAN_BURST()
+                    BREAK
+                    CASE 9
+                        g_wheeltyre_soft_suspension = NOT g_wheeltyre_soft_suspension
+                        APPLY_SOFT_SUSPENSION()
+                    BREAK
                 ENDSWITCH
                 ENDIF
             ELIF g_lsc_extras_open
@@ -1781,14 +1796,14 @@ PROC APPLY_SELECTED()
                 CASE 4 g_low_population = NOT g_low_population BREAK
                 CASE 5 APPLY_NPC_DENSITY() BREAK
                 CASE 6
-                    CLEAR_AREA_OF_VEHICLES(GET_ENTITY_COORDS(playerPed), 50.0)
+                    CLEAR_NEARBY_AMBIENT_ENTITIES(TRUE)
                     // The native has no flag to spare script vehicles, so tracked
                     // cars inside the radius are gone.  Drop the dead handles, keep
                     // the ones still parked outside it.
                     PRUNE_SPAWNED_VEHICLE_TRACKING()
                 BREAK
                 CASE 7
-                    CLEAR_AREA_OF_PEDS(GET_ENTITY_COORDS(playerPed), 50.0)
+                    CLEAR_NEARBY_AMBIENT_ENTITIES(FALSE)
                     CLEAR_MENU_ATTACKERS()
                     // Same reason for the guard and brawler arrays, which the
                     // native cannot spare either.
@@ -1801,7 +1816,10 @@ PROC APPLY_SELECTED()
                 CASE 8 EXPLODE_ALL_NEARBY_VEHICLES() BREAK
                 CASE 9
                     g_first_person = NOT g_first_person
-                    IF NOT g_first_person g_player_freecam = FALSE ENDIF
+                    IF NOT g_first_person
+                        g_freecam_previous_first_person = FALSE
+                        SET_PLAYER_FREECAM_ENABLED(FALSE)
+                    ENDIF
                 BREAK
                 CASE 10 g_hud_hidden = NOT g_hud_hidden BREAK
                 CASE 11 g_radar_hidden = NOT g_radar_hidden BREAK
@@ -2569,10 +2587,10 @@ ENDPROC
 
 PROC DRAW_TELEPORT_ROW(INT index, FLOAT y)
     SWITCH index
-        CASE 0 DRAW_OPTION(y, TR("Teleport to Waypoint", "TP al marcador", "传送到导航点", "Zum Wegpunkt teleportieren", "ウェイポイントへテレポート", "ТП к метке на карте", "Teleportar ao Marcador", "Téléporter au repère"), "APPLY", g_item = index, 2) BREAK
+        CASE 0 DRAW_OPTION(y, TR("Teleport to Waypoint", "TP al marcador", "传送到导航点", "Zum Wegpunkt teleportieren", "ウェイポイントへテレポート", "ТП к метке на карте", "Teleportar ao Marcador", "Téléporter au repère"), TELEPORT_ACTION_LABEL(), g_item = index, 2) BREAK
         CASE 1 IF g_auto_waypoint DRAW_OPTION(y, TR("Auto Teleport Waypoint", "Auto TP al marcador", "自动传送到导航点", "Auto-TP zum Wegpunkt", "自動ウェイポイントTP", "Авто-ТП к метке", "Auto TP ao Marcador", "TP auto au repère"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Auto Teleport Waypoint", "Auto TP al marcador", "自动传送到导航点", "Auto-TP zum Wegpunkt", "自動ウェイポイントTP", "Авто-ТП к метке", "Auto TP ao Marcador", "TP auto au repère"), "OFF", g_item = index, 0) ENDIF BREAK
         CASE 2 DRAW_OPTION(y, TR("Robbable Stores", "Tiendas atracables", "可抢劫商店", "Ausraubbare Läden", "強盗可能な店舗", "Магазины для ограбления", "Lojas Assaltáveis", "Magasins braquables"), "OPEN", g_item = index, 2) BREAK
-        CASE 3 DRAW_OPTION(y, TR("Teleport to Objective", "TP al objetivo", "传送到任务目标", "Zum Ziel teleportieren", "目的地へテレポート", "ТП к цели задания", "Teleportar ao Objetivo", "Téléporter à l'objectif"), "APPLY", g_item = index, 2) BREAK
+        CASE 3 DRAW_OPTION(y, TR("Teleport to Objective", "TP al objetivo", "传送到任务目标", "Zum Ziel teleportieren", "目的地へテレポート", "ТП к цели задания", "Teleportar ao Objetivo", "Téléporter à l'objectif"), TELEPORT_ACTION_LABEL(), g_item = index, 2) BREAK
         CASE 4 IF g_auto_objective DRAW_OPTION(y, TR("Auto Teleport Objective", "Auto TP al objetivo", "自动传送到任务目标", "Auto-TP zum Ziel", "自動目的地TP", "Авто-ТП к цели", "Auto TP ao Objetivo", "TP auto à l'objectif"), "ON", g_item = index, 1) ELSE DRAW_OPTION(y, TR("Auto Teleport Objective", "Auto TP al objetivo", "自动传送到任务目标", "Auto-TP zum Ziel", "自動目的地TP", "Авто-ТП к цели", "Auto TP ao Objetivo", "TP auto à l'objectif"), "OFF", g_item = index, 0) ENDIF BREAK
         CASE 5 DRAW_OPTION(y, TR("Locations", "Ubicaciones", "地点列表", "Orte", "ロケーション", "Локации", "Locais", "Lieux"), "OPEN", g_item = index, 2) BREAK
         CASE 6 DRAW_OPTION(y, TR("Nudge Forward", "Mover adelante", "向前微移", "Nach vorne rücken", "少し前へ移動", "Сдвиг вперед", "Mover para Frente", "Avancer légèrement"), "APPLY", g_item = index, 2) BREAK
@@ -2582,7 +2600,7 @@ PROC DRAW_TELEPORT_ROW(INT index, FLOAT y)
         CASE 10 DRAW_FLOAT_OPTION(y, TR("Coordinate X", "Coordenada X", "X 坐标", "Koordinate X", "X座標", "Координата X", "Coordenada X", "Coordonnée X"), g_teleport_x, g_item = index) BREAK
         CASE 11 DRAW_FLOAT_OPTION(y, TR("Coordinate Y", "Coordenada Y", "Y 坐标", "Koordinate Y", "Y座標", "Координата Y", "Coordenada Y", "Coordonnée Y"), g_teleport_y, g_item = index) BREAK
         CASE 12 DRAW_FLOAT_OPTION(y, TR("Coordinate Z", "Coordenada Z", "Z 坐标", "Koordinate Z", "Z座標", "Координата Z", "Coordenada Z", "Coordonnée Z"), g_teleport_z, g_item = index) BREAK
-        CASE 13 DRAW_OPTION(y, TR("Teleport to Coordinates", "TP a coordenadas", "传送到指定坐标", "Zu Koordinaten teleportieren", "座標へテレポート", "ТП по координатам", "Teleportar às Coordenadas", "Téléporter aux coordonnées"), "APPLY", g_item = index, 2) BREAK
+        CASE 13 DRAW_OPTION(y, TR("Teleport to Coordinates", "TP a coordenadas", "传送到指定坐标", "Zu Koordinaten teleportieren", "座標へテレポート", "ТП по координатам", "Teleportar às Coordenadas", "Téléporter aux coordonnées"), TELEPORT_ACTION_LABEL(), g_item = index, 2) BREAK
     ENDSWITCH
 ENDPROC
 

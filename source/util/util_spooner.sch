@@ -747,8 +747,10 @@ ENDFUNC
 PROC COMPACT_SPOONER_POOL()
     INT writeIdx = 0
     INT readIdx = 0
+    INT selectedSlot = -1
     WHILE readIdx < g_spooner_object_count
         IF DOES_ENTITY_EXIST(g_spooner_objects[readIdx])
+            IF readIdx = g_spooner_selected_index selectedSlot = writeIdx ENDIF
             IF writeIdx != readIdx
                 g_spooner_objects[writeIdx]   = g_spooner_objects[readIdx]
                 g_spooner_obj_flags[writeIdx] = g_spooner_obj_flags[readIdx]
@@ -758,11 +760,13 @@ PROC COMPACT_SPOONER_POOL()
         ENDIF
         readIdx = readIdx + 1
     ENDWHILE
+    INT liveCount = writeIdx
     WHILE writeIdx < g_spooner_object_count
         g_spooner_objects[writeIdx] = NULL
         writeIdx = writeIdx + 1
     ENDWHILE
-    g_spooner_object_count = writeIdx
+    g_spooner_object_count = liveCount
+    IF selectedSlot >= 0 g_spooner_selected_index = selectedSlot ENDIF
     IF g_spooner_selected_index >= g_spooner_object_count
         g_spooner_selected_index = g_spooner_object_count - 1
     ENDIF
@@ -897,7 +901,7 @@ PROC PROCESS_SPOONER_PREVIEW()
     ENDIF
     IF g_spooner_spawn_pending EXIT ENDIF
     SYNC_SPOONER_PREVIEW_MODEL()
-    IF NOT IS_MODEL_IN_CDIMAGE(g_spooner_preview_model) OR NOT IS_MODEL_VALID(g_spooner_preview_model)
+    IF NOT IS_MODEL_IN_CDIMAGE(g_spooner_preview_model) OR NOT IS_MODEL_VALID(g_spooner_preview_model) OR IS_MODEL_A_PED(g_spooner_preview_model) OR IS_MODEL_A_VEHICLE(g_spooner_preview_model)
         EXIT
     ENDIF
 
@@ -954,7 +958,7 @@ PROC QUEUE_SPOONER_OBJECT_SPAWN(MODEL_NAMES model)
         g_spooner_feedback_until = GET_GAME_TIMER() + SPOONER_FEEDBACK_MS
         EXIT
     ENDIF
-    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model)
+    IF NOT IS_MODEL_IN_CDIMAGE(model) OR NOT IS_MODEL_VALID(model) OR IS_MODEL_A_PED(model) OR IS_MODEL_A_VEHICLE(model)
         g_spooner_feedback_code = 2
         g_spooner_feedback_until = GET_GAME_TIMER() + SPOONER_FEEDBACK_MS
         EXIT
